@@ -1,0 +1,22 @@
+[project]
+name = "openclaw-verl-agent-rl"
+version = "0.1.0"
+description = "Minimal task16 email triage RL reproduction with veRL, OpenClaw, and PinchBench."
+requires-python = "==3.12.*"
+dependencies = [
+  "pandas",
+  "pyarrow",
+  "pyyaml",
+  "aiohttp",
+  "packaging",
+  "torch",
+  "transformers==4.57.1",
+  "accelerate",
+  "peft",
+  "vllm==0.10.2",
+  "verl==0.7.1",
+  "tensorboard",
+]
+
+[tool.ruff]
+line-length = 100

@@ -1,0 +1,5 @@
+# OpenClaw Agent Loop configuration for veRL
+# Loaded by veRL's AgentLoopWorker via agent_loop_config_path
+
+- name: openclaw_agent
+  _target_: agent_loop.openclaw_agent_loop.OpenClawAgentLoop

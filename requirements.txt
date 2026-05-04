@@ -1,0 +1,12 @@
+pandas
+pyarrow
+pyyaml
+aiohttp
+packaging
+torch
+transformers==4.57.1
+accelerate
+peft
+vllm==0.10.2
+verl==0.7.1
+tensorboard
