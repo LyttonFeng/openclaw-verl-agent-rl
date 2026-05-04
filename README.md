@@ -12,7 +12,7 @@ This repo reproduces task16 email triage RL training using:
 The repo is intentionally narrow: task16 RL only. It does not include agent team,
 wolfpack, DPO, task18, slides, history, or exploration notes.
 
-## What Engineers Should Read
+## Start Here
 
 1. `README.md`
 2. `docs/reproduction.md`

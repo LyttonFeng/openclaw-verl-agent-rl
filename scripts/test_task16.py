@@ -2,7 +2,7 @@
 """Standalone smoke test for task16 data and event reward logic.
 
 This does not start veRL, vLLM, or OpenClaw. It verifies the pieces that should
-work on any engineer machine before launching RL:
+work on any machine before launching RL:
 
 - canonical task16 markdown exists
 - generated parquet files have the expected 91/11 rows plus synthetic split

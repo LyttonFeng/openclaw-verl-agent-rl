@@ -179,7 +179,7 @@ HELDOUT_VAL_PROMPT_GROUPS: dict[str, list[str]] = {
         "Late-position alert emails may be operationally central. Include them and link them when they belong to the outage.",
     ],
     "heldout_actionability": [
-        "The final report should let another engineer take over immediately: clear severity, owner-facing rationale, and next action.",
+        "The final report should let another teammate take over immediately: clear severity, owner-facing rationale, and next action.",
         "Write a concise but actionable handoff that preserves both the incident grouping and complete per-email coverage.",
     ],
 }
@@ -311,7 +311,7 @@ def _synthetic_instance(case_idx: int, case: tuple[str, ...]) -> tuple[list[dict
         release_blocker,
     ) = case
     workspace_files = [
-        _email(1, "incident-manager@example.com", f"P0: {company} {surface} outage", f"{company}'s {surface} is failing because the {component} is unhealthy. Customer-facing users report {impact}. War room is active and engineering needs immediate incident response."),
+        _email(1, "incident-manager@example.com", f"P0: {company} {surface} outage", f"{company}'s {surface} is failing because the {component} is unhealthy. Customer-facing users report {impact}. War room is active and immediate incident response is needed."),
         _email(2, "marketing@example.com", "Draft webinar blurb for next week", "Please review the draft webinar announcement by Wednesday. This is useful but not urgent."),
         _email(3, "dependabot@example.com", "Dependency update passed CI", "Automated dependency update for a minor library version. CI is green and this can be reviewed later."),
         _email(4, "people-ops@example.com", "Benefits enrollment reminder", "Reminder to finish benefits enrollment before the end of the month."),

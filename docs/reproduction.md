@@ -1,7 +1,7 @@
 # Reproduction
 
-This document expands the README checklist. The intended audience is an engineer
-who needs to run, inspect, and port the task16 RL path.
+This document expands the README checklist for anyone who needs to run, inspect,
+or port the task16 RL path.
 
 ## 1. Environment
 
