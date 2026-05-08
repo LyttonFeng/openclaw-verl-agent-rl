@@ -2057,7 +2057,7 @@ class OpenClawAgentLoop(AgentLoopBase):
             from lib_grading import resolve_judge_backend_from_env, preflight_judge_connection
             judge_cfg = resolve_judge_backend_from_env(
                 default_backend="api",
-                default_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+                default_base_url="https://api.deepseek.com/v1",
             )
             if judge_cfg["judge_backend"] == "api" and judge_cfg["judge_api_key"]:
                 preflight_judge_connection(
@@ -2106,7 +2106,7 @@ class OpenClawAgentLoop(AgentLoopBase):
 
             judge_cfg = resolve_judge_backend_from_env(
                 default_backend="api",
-                default_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+                default_base_url="https://api.deepseek.com/v1",
             )
             if judge_cfg["judge_backend"] == "api" and judge_cfg["judge_api_key"]:
                 preflight_judge_connection(

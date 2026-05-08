@@ -29,8 +29,10 @@
 #   TASKS_DIR=...              # default $REPO_ROOT/pinchbench_tasks/meeting_analysis
 #
 # Environment:
-#   DEEPSEEK_API_KEY   — for DSv4 PRM judge AND meeting_reward judge
-#   DASHSCOPE_API_KEY  — only if using qwen-plus terminal judge (default DSv4)
+#   DEEPSEEK_API_KEY   — required, used by both PRM judge and terminal LLM judge.
+#                        Must be set in shell (or sourced from ~/.pinchbench_env);
+#                        scripts/lib_grading.py reads it directly (do NOT rely on
+#                        OPENAI_API_KEY — the resolution chain does not check it).
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -38,7 +40,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 # ── Load API keys from env file ────────────────────────────────────────
-# Holds DEEPSEEK_API_KEY (and optionally DASHSCOPE_API_KEY).
+# Holds DEEPSEEK_API_KEY (only key needed for the default judge config).
 if [ -f "$HOME/.pinchbench_env" ]; then
     set -a
     # shellcheck disable=SC1091

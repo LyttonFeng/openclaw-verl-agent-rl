@@ -93,9 +93,11 @@ EOF
 chmod 600 ~/.pinchbench_env
 ```
 
-`DASHSCOPE_API_KEY` is only needed if you switch the terminal judge to
-`qwen-plus` via `MEETING_JUDGE_PROVIDER=dashscope JUDGE_MODEL=qwen-plus`.
-Otherwise it's optional.
+DeepSeek is the only judge provider this repo configures by default. Other
+OpenAI-compatible endpoints can be swapped in by overriding
+`MEETING_JUDGE_BASE_URL` + `MEETING_JUDGE_MODEL` (and providing the matching
+key as `DEEPSEEK_API_KEY` env var — that name is what the judge resolution
+chain reads).
 
 ## 2. Data
 
@@ -208,7 +210,7 @@ All overridable via environment variable.
 | `N_RESPONSES` | `2` | rollouts per prompt (GRPO group size) |
 | `NUM_WORKERS` | `4` | parallel rollout workers |
 | `MAX_SEQ_LEN` | `81920` | training sequence cap (must match vLLM `--max-model-len`) |
-| `MEETING_JUDGE_PROVIDER` | `deepseek` | `deepseek` (default) or `dashscope` (qwen-plus) for terminal judge |
+| `MEETING_JUDGE_PROVIDER` | `deepseek` | reserved for future providers; only `deepseek` is wired by default |
 | `TASKS_DIR` | `pinchbench_tasks/meeting_analysis` | task `.md` lookup root |
 | `VLLM_BASE_URL` | `http://127.0.0.1:8021/v1` | vLLM endpoint |
 | `SERVED_MODEL` | `Qwen3-4B` | model id served by vLLM |
@@ -232,8 +234,10 @@ curl -X POST http://127.0.0.1:8021/v1/load_lora_adapter \
     -H "Content-Type: application/json" \
     -d '{"lora_name":"meeting-r1","lora_path":"<lora_path>"}'
 
-OPENAI_API_KEY=$DEEPSEEK_API_KEY \
-OPENAI_BASE_URL=https://api.deepseek.com/v1 \
+# DEEPSEEK_API_KEY must be in env — the judge resolution chain
+# (scripts/lib_grading.py:resolve_judge_backend_from_env) reads it directly.
+# `--api-key dummy` below is for the vLLM endpoint, NOT the judge.
+DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY \
 python scripts/benchmark.py \
     --suite "task_meeting_advisory_stakeholders,task_meeting_council_votes,task_meeting_gov_speaker_summary,task_meeting_tech_action_items,task_meeting_sentiment_analysis" \
     --model "custom/meeting-r1" \
@@ -243,6 +247,12 @@ python scripts/benchmark.py \
     --output-dir /workspace/bench_meeting_r1 \
     --runs 3
 ```
+
+> **Common 401 trap.** Setting only `OPENAI_API_KEY=$DEEPSEEK_API_KEY` is
+> NOT enough — the judge resolution chain in `lib_grading.py` does not read
+> `OPENAI_API_KEY`. It checks `PINCHBENCH_GRADE_JUDGE_API_KEY` →
+> `JUDGE_API_KEY` → `DEEPSEEK_API_KEY`. The simplest fix is to ensure
+> `DEEPSEEK_API_KEY` is exported (as in `~/.pinchbench_env`).
 
 ## 6. Diagnose the run
 

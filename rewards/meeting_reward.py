@@ -12,9 +12,10 @@ Usage in veRL config:
     reward.custom_reward_function.name=compute_score
 
 Environment variables:
-    DASHSCOPE_API_KEY       - Required for qwen-plus LLM judge
-    MEETING_JUDGE_MODEL     - Judge model (default: openai/qwen-plus)
-    MEETING_JUDGE_BASE_URL  - Judge API base URL (default: DashScope OpenAI-compatible)
+    DEEPSEEK_API_KEY        - Required for the LLM judge (default provider: DeepSeek)
+    MEETING_JUDGE_MODEL     - Judge model (default: deepseek-chat)
+    MEETING_JUDGE_BASE_URL  - Judge API base URL (default: https://api.deepseek.com/v1)
+    MEETING_JUDGE_PROVIDER  - "deepseek" (default) — kept as a switch for future providers
     MEETING_REWARD_JUDGE_ONLY - If "1", skip automated checks, only use judge (for debugging)
     MEETING_REWARD_AUTO_ONLY  - If "1", skip judge, only use automated checks (fast mode)
 """
@@ -41,25 +42,13 @@ if str(_SCRIPTS_DIR) not in sys.path:
 def _get_judge_config() -> tuple[str, str, str]:
     """Return (model, base_url, api_key) for the judge.
 
-    Supports two providers via MEETING_JUDGE_PROVIDER env var:
-      - "dashscope" (default): qwen-plus via DashScope
-      - "deepseek": deepseek-chat via DeepSeek API
+    Default provider is DeepSeek (deepseek-chat). Override via env vars if you
+    point at a different OpenAI-compatible endpoint.
     """
-    provider = os.environ.get("MEETING_JUDGE_PROVIDER", "dashscope").lower()
-    if provider == "deepseek":
-        return (
-            os.environ.get("MEETING_JUDGE_MODEL", "deepseek-chat"),
-            "https://api.deepseek.com/v1",
-            os.environ.get("DEEPSEEK_API_KEY", ""),
-        )
-    # Default: DashScope
     return (
-        os.environ.get("MEETING_JUDGE_MODEL", "qwen-plus"),
-        os.environ.get(
-            "MEETING_JUDGE_BASE_URL",
-            "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        ),
-        os.environ.get("DASHSCOPE_API_KEY", ""),
+        os.environ.get("MEETING_JUDGE_MODEL", "deepseek-chat"),
+        os.environ.get("MEETING_JUDGE_BASE_URL", "https://api.deepseek.com/v1"),
+        os.environ.get("DEEPSEEK_API_KEY", ""),
     )
 
 

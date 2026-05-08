@@ -1944,8 +1944,9 @@ def call_judge_api(
     if base_url:
         resolved_key = (
             api_key
-            or os.environ.get("DASHSCOPE_API_KEY")
+            or os.environ.get("DEEPSEEK_API_KEY")
             or os.environ.get("PINCHBENCH_GRADE_JUDGE_API_KEY")
+            or os.environ.get("JUDGE_API_KEY")
             or os.environ.get("OPENAI_API_KEY", "")
         )
         if not resolved_key:
