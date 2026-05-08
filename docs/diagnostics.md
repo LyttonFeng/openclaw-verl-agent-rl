@@ -97,11 +97,29 @@ To support a new family (e.g. `task_email_*`), add a new file under
 
 ## Layered design
 
-| Layer | What it knows |
-|---|---|
-| **L1 — structural** | What the trajectory did (turns, tool calls, files written/read, thinking chars) |
-| **L2 — budget** | Where the output chars went (file vs chat reply, read truncation) |
-| **L3 — grading** | Consume what's already computed (automated breakdown, PRM scores) — does NOT re-grade |
+| Layer | What it knows | Why it's its own layer |
+|---|---|---|
+| **L1 — structural** | What the trajectory did (turns, tool calls, files written/read, thinking chars) | Computable from the transcript alone, no grading or model needed. Catches "trajectory is broken" before spending judge calls (timeouts, empty responses, etc.). |
+| **L2 — budget** | Where the output chars went (file vs chat reply, read truncation) | Catches reward-hacking patterns where the trajectory looks structurally healthy (L1 happy) but the model has learned to put work into the wrong artifact. Distinct from L1 because L1 doesn't compare locations. |
+| **L3 — grading** | Consume what's already computed (automated breakdown, PRM scores) — does NOT re-grade | Surfaces existing signals at trajectory level so per-task patterns become visible. Distinct because L3 has no opinion of its own; it's a viewport on already-paid-for grading. |
 
 `fatal=True` only triggers on L1 fatal tags. L2/L3 surface warnings in the
-report but don't break the training loop.
+report but don't break the training loop. This split was driven by a real
+incident: R2 reward hacking was healthy at L1 (file written, no timeout,
+no empty response) and only visible at L2 (output_budget_ratio dropped from
+0.92 to 0.64). The layers are how we made that detectable.
+
+## Threshold origins
+
+The numeric thresholds are **operationally chosen** from observed runs in
+this setup, not theoretically derived. They are tunable per task family.
+
+| Threshold | Value | Origin |
+|---|---|---|
+| `output_budget_ratio` flag | `< 0.70` | R1 healthy runs cluster at 0.75-0.92; R2 regressed runs dropped to 0.47-0.64. 0.70 sits in the gap. |
+| `transcript_read_truncated` | read result `≥ 39900` chars and only 1 read call | The OpenClaw `read` tool returns at most 40000 chars; ≥39900 indicates the model hit the cap. The "only 1 read call" guard distinguishes "model ignored truncation" from "model paginated through a long file". |
+| `excessive_thinking` | `> 5000` chars of `<think>...</think>` content | Empirical bound from our v3 rollout diagnostics — beyond this, the trajectory tends to run out of token budget for actual output. |
+| `output_too_short` | `< 50` chars in expected output file | Sanity check for "wrote the file but the file is essentially empty". |
+
+Adjust these in your fork if your tasks have different artifact sizes or
+if your tools have different read caps.

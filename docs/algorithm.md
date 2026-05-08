@@ -74,8 +74,17 @@ else:
 ```
 
 `prm_turn_score[k] ∈ {-1, 0, +1}` is the roadmap judge's score on the assistant
-turn that produced token `k`. With **pos-only clip** (recommended), -1 is set
-to 0 — only encourage progress, never penalize exploration.
+turn that produced token `k`.
+
+**Pos-only clip** (recommended, on by default): -1 is treated as 0 — only
+encourage progress, never penalize. Rationale: per-turn judges have
+non-negligible false-negative rate on hard tasks (the judge sees a partial
+trajectory and can't always tell if a turn is a wrong path or just a slow
+exploration step). Letting -1 directly subtract from advantage punishes
+exploration steps the judge mis-classified, hurting the very tasks where
+PRM should help most. Empirically (`experiment_report.md` §"Judge-gate
+ablation"), pos-only clip is the single largest design lever in our setup
+(+3.1pp over the no-clip variant, holding everything else fixed).
 
 ## Roadmap PRM design
 
