@@ -132,7 +132,7 @@ def _run_llm_judge(task, workspace_path: str, transcript: list) -> float:
             {"role": "system", "content": "You are a strict grading function. Respond with ONLY a JSON object, no prose, no markdown fences, no extra text."},
             {"role": "user", "content": judge_prompt},
         ],
-        "temperature": 0.3,
+        "temperature": 0.0,
         "max_tokens": 2048,
     }).encode("utf-8")
 
