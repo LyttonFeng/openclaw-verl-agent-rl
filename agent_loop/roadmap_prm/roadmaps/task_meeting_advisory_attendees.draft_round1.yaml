@@ -1,0 +1,50 @@
+task_id: task_meeting_advisory_attendees
+goal: Create a structured attendee list from a meeting transcript, categorizing each person by role, organization, attendance mode, and speaking role.
+inputs:
+  - meeting-transcript.md
+output: attendees.md
+milestones:
+  - id: M1_read_transcript
+    desc: The agent reads the meeting transcript file to extract attendee information.
+    signals:
+      - tool call to read('meeting-transcript.md')
+      - tool call to read('meeting-transcript.md') with result containing 'Members Present'
+  - id: M2_identify_committee_members
+    desc: The agent identifies the full list of committee members from the 'Members Present' sections, including their names and affiliations.
+    signals:
+      - output text or tool call result listing names like 'Fontes', 'Borth', 'Calabrese', 'Dombrowsky', 'Donovan', 'Feldman', 'Furchtgott', 'Gibson', 'Hatfield', 'Kahn', 'McGinnis', 'McHenry', 'Obuchowski', 'Povelites', 'Reaser', 'Rush', 'Stancil', 'Tramont', 'Warren'
+      - output text or tool call result containing 'Committee Members' or 'Members Present'
+  - id: M3_identify_non_member_officials_and_public
+    desc: The agent identifies non-member officials (Strickling, Nebbia, Power, Washington) and the public participant (Snider) from the 'Also Present' section and dialogue.
+    signals:
+      - output text or tool call result containing 'Strickling', 'Nebbia', 'Power', 'Washington'
+      - output text or tool call result containing 'Snider'
+  - id: M4_determine_attendance_mode
+    desc: The agent correctly identifies which attendees were remote/phone (Hatfield, Feldman, McGinnis, Stancil, Reaser, Donovan) using the asterisk notation and roll call.
+    signals:
+      - output text or tool call result associating 'Hatfield', 'Feldman', 'McGinnis', 'Stancil', 'Reaser', 'Donovan' with 'phone', 'remote', or 'virtual'
+      - output text or tool call result referencing asterisk notation for remote attendees
+  - id: M5_write_structured_attendees_file
+    desc: The agent writes the final `attendees.md` file with the correct sections, details, and summary count.
+    signals:
+      - tool call to write('attendees.md', ...)
+      - file 'attendees.md' exists in workspace
+      - content of 'attendees.md' includes sections 'Committee Leadership', 'Committee Members (In-Person)', 'Committee Members (Remote)', 'Non-Member Officials', 'Public Participants'
+      - content of 'attendees.md' includes a total count of attendees (e.g., '24 attendees')
+pitfalls:
+  - id: P1_miss_remote_attendees
+    desc: The agent fails to identify the remote/phone attendees (Hatfield, Feldman, McGinnis, Stancil, Reaser, Donovan) or incorrectly marks them as in-person.
+    severity: high
+  - id: P2_miss_public_participant
+    desc: The agent overlooks Mr. Snider, the public participant who spoke during the public comment period.
+    severity: medium
+  - id: P3_incomplete_member_list
+    desc: The agent identifies fewer than 15 of the ~19 committee members by name.
+    severity: high
+  - id: P4_no_summary_count
+    desc: The agent fails to include a summary count of total attendees at the end of the document.
+    severity: low
+  - id: P5_incorrect_organization_or_title
+    desc: The agent assigns incorrect organizations or titles to attendees (e.g., misattributing NENA to someone else).
+    severity: medium
+notes: The transcript uses an asterisk (*) to denote remote/phone attendees. The agent must cross-reference the 'Members Present' list, 'Also Present' section, and dialogue to capture all attendees.

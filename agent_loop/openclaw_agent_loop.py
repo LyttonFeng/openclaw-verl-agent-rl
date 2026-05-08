@@ -26,10 +26,12 @@ Environment variables:
 from __future__ import annotations
 
 import asyncio
+import aiohttp
 import json
 import logging
 import os
 import random
+import re
 import sys
 import shlex
 import shutil
@@ -115,15 +117,6 @@ DEFAULT_WEB_FETCH_SKILLS = (
     "safe-smart-web-fetch",
     "webfetch",
 )
-
-
-def _task_markdown_dir(repo_root: str | Path) -> Path:
-    root = Path(repo_root)
-    for name in ("pinchbench_tasks", "tasks"):
-        candidate = root / name
-        if candidate.is_dir():
-            return candidate
-    return root / "tasks"
 
 TASK18_TEACHER_HINT = (
     "When the task includes an .xlsx workbook, do not use the read tool on the .xlsx file. "
@@ -224,7 +217,7 @@ def _resolve_pinchbench_dir() -> str:
     if pb:
         return pb
     here = Path(__file__).resolve()
-    inferred = here.parents[2]  # rl/agent_loop/this.py -> repo root
+    inferred = here.parents[2]  # agent_loop/this.py -> repo root
     if (inferred / "tasks").is_dir() and (inferred / "assets").is_dir():
         return str(inferred)
     return ""
@@ -329,6 +322,30 @@ def _task16_episode_tags(trajectory: list[dict[str, Any]], workspace_path: str) 
         if ok
     ]
     return tags
+
+
+def _task16_inbox_read_count(trajectory: list[dict[str, Any]]) -> int:
+    count = 0
+    for turn in trajectory:
+        if turn.get("role") != "assistant":
+            continue
+        for tc in turn.get("tool_calls") or []:
+            fn = tc.get("function") if isinstance(tc, dict) else None
+            if isinstance(fn, dict):
+                name = str(fn.get("name", ""))
+                args = fn.get("arguments", "")
+            else:
+                name = str(tc.get("name", ""))
+                args = tc.get("arguments", "")
+            if name != "read":
+                continue
+            try:
+                parsed = json.loads(args) if isinstance(args, str) else (args or {})
+            except Exception:
+                parsed = {}
+            if _task16_is_inbox_path(str(parsed.get("path", ""))):
+                count += 1
+    return count
 
 
 @dataclass
@@ -683,6 +700,14 @@ class OpenClawAgentLoop(AgentLoopBase):
                     logger.info("[run] Applying chat template (messages=%d, tools=%s)...", len(chat_messages), bool(req.tools))
                     prompt_token_ids = await self.apply_chat_template(chat_messages, tools=req.tools)
                     logger.info("[run] Chat template done, prompt_ids=%d", len(prompt_token_ids))
+                    self._dump_prompt_debug(
+                        session_id=session_id,
+                        task_id=task_id,
+                        turn_count=turn_count,
+                        req=req,
+                        chat_messages=chat_messages,
+                        prompt_token_ids=prompt_token_ids,
+                    )
                 except Exception as e:
                     logger.error("Chat template failed: %s", e)
                     req.response_error = str(e)
@@ -740,27 +765,59 @@ class OpenClawAgentLoop(AgentLoopBase):
 
                 gen_sampling_params = dict(sampling_params)
                 gen_sampling_params["max_tokens"] = effective_max_tokens
+                gen_sampling_params["temperature"] = req.temperature
+                if req.top_p is not None:
+                    gen_sampling_params["top_p"] = req.top_p
+                if req.top_k is not None:
+                    gen_sampling_params["top_k"] = req.top_k
 
-                logger.info(
-                    "[run] Calling server_manager.generate (turn=%d, prompt_ids=%d, max_tokens=%d, openclaw_req_max=%s, sampling_max=%s)...",
-                    turn_count,
-                    len(prompt_token_ids),
-                    effective_max_tokens,
-                    openclaw_max_tokens or None,
-                    sampling_max_tokens,
-                )
-                gen_output = await self.server_manager.generate(
-                    request_id=uuid.uuid4().hex,
-                    prompt_ids=prompt_token_ids,
-                    sampling_params=gen_sampling_params,
-                )
-                logger.info("[run] Generate done, got %d tokens", len(gen_output.token_ids) if gen_output.token_ids else 0)
+                http_generation = None
+                if _env_flag("PINCHBENCH_RL_USE_VLLM_HTTP_TOOL_PARSER"):
+                    http_generation = await self._generate_via_vllm_http_tool_parser(
+                        req=req,
+                        max_tokens=effective_max_tokens,
+                    )
 
-                response_ids = list(gen_output.token_ids)
-                response_logprobs = list(gen_output.log_probs) if gen_output.log_probs else [0.0] * len(response_ids)
+                if http_generation is not None:
+                    response_ids = http_generation["response_ids"]
+                    response_logprobs = http_generation["response_logprobs"]
+                    response_text = http_generation["response_text"]
+                    clean_text = http_generation["clean_text"]
+                    tool_calls = http_generation["tool_calls"]
+                    content_for_openclaw = http_generation["content_for_openclaw"]
+                    logger.info(
+                        "[run] HTTP tool-parser generation done turn=%d tokens=%d tool_calls=%s content_len=%d",
+                        turn_count,
+                        len(response_ids),
+                        bool(tool_calls),
+                        len(content_for_openclaw),
+                    )
+                else:
+                    logger.info(
+                        "[run] Calling server_manager.generate (turn=%d, prompt_ids=%d, max_tokens=%d, openclaw_req_max=%s, sampling_max=%s, temp=%s, top_p=%s, top_k=%s)...",
+                        turn_count,
+                        len(prompt_token_ids),
+                        effective_max_tokens,
+                        openclaw_max_tokens or None,
+                        sampling_max_tokens,
+                        gen_sampling_params.get("temperature"),
+                        gen_sampling_params.get("top_p"),
+                        gen_sampling_params.get("top_k"),
+                    )
+                    gen_output = await self.server_manager.generate(
+                        request_id=uuid.uuid4().hex,
+                        prompt_ids=prompt_token_ids,
+                        sampling_params=gen_sampling_params,
+                    )
+                    logger.info("[run] Generate done, got %d tokens", len(gen_output.token_ids) if gen_output.token_ids else 0)
 
-                response_text = self.tokenizer.decode(response_ids, skip_special_tokens=False)
-                clean_text = self.tokenizer.decode(response_ids, skip_special_tokens=True)
+                    response_ids = list(gen_output.token_ids)
+                    response_logprobs = list(gen_output.log_probs) if gen_output.log_probs else [0.0] * len(response_ids)
+
+                    response_text = self.tokenizer.decode(response_ids, skip_special_tokens=False)
+                    clean_text = self.tokenizer.decode(response_ids, skip_special_tokens=True)
+                    tool_calls = self._parse_tool_calls(response_text)
+                    content_for_openclaw = self._strip_tool_tags(clean_text)
 
                 # Env tokens = everything added by environment between turns
                 if turn_count > 0:
@@ -782,9 +839,6 @@ class OpenClawAgentLoop(AgentLoopBase):
                     response_logprobs=response_logprobs,
                 ))
 
-                tool_calls = self._parse_tool_calls(response_text)
-
-                content_for_openclaw = self._strip_tool_tags(clean_text)
                 logger.info("[run] Turn %d: tool_calls=%s, finish=%s, content_len=%d",
                             turn_count, bool(tool_calls),
                             "tool_calls" if tool_calls else "stop",
@@ -851,12 +905,20 @@ class OpenClawAgentLoop(AgentLoopBase):
 
         finally:
             if reverse_tunnel_proc is not None and reverse_tunnel_proc.returncode is None:
-                reverse_tunnel_proc.terminate()
                 try:
+                    reverse_tunnel_proc.terminate()
                     await asyncio.wait_for(reverse_tunnel_proc.wait(), timeout=5)
+                except ProcessLookupError:
+                    pass
                 except asyncio.TimeoutError:
-                    reverse_tunnel_proc.kill()
-                    await reverse_tunnel_proc.wait()
+                    try:
+                        reverse_tunnel_proc.kill()
+                    except ProcessLookupError:
+                        pass
+                    try:
+                        await reverse_tunnel_proc.wait()
+                    except (ProcessLookupError, asyncio.TimeoutError):
+                        pass
             await proxy.drain()
             await proxy.stop()
 
@@ -887,6 +949,20 @@ class OpenClawAgentLoop(AgentLoopBase):
         terminal_reward = terminal_reward_weight * terminal_reward_raw
 
         trajectory_for_reward = self._transcript_to_messages(transcript_raw) or messages
+        if (
+            task_id == "task_16_email_triage"
+            and messages
+            and _task16_inbox_read_count(trajectory_for_reward) == 0
+            and _task16_inbox_read_count(messages) > 0
+        ):
+            logger.warning(
+                "Task16 transcript parser found no inbox reads; using proxy model messages "
+                "for reward/diagnostics (transcript_len=%d proxy_messages=%d proxy_inbox_reads=%d)",
+                len(transcript_raw),
+                len(messages),
+                _task16_inbox_read_count(messages),
+            )
+            trajectory_for_reward = list(messages)
         if turns:
             trajectory_for_reward = _trim_trajectory_to_last_turns(
                 trajectory_for_reward,
@@ -912,7 +988,7 @@ class OpenClawAgentLoop(AgentLoopBase):
 
         if task_id == "task_18_spreadsheet_summary":
             try:
-                from rl.agent_loop.task18_event_reward.reward_task18_event_only import (
+                from agent_loop.task18_event_reward.reward_task18_event_only import (
                     extract_tool_calls as _extract_t18_tool_calls,
                     task18_event_breakdown as _task18_event_breakdown,
                 )
@@ -1075,7 +1151,7 @@ class OpenClawAgentLoop(AgentLoopBase):
             sys.path.insert(0, str(scripts_dir))
         from lib_tasks import Task, TaskLoader, resolve_task_markdown_path
 
-        tasks_dir = _task_markdown_dir(self.oc_config.pinchbench_dir)
+        tasks_dir = Path(self.oc_config.pinchbench_dir) / "tasks"
         task_file = resolve_task_markdown_path(tasks_dir, task_id)
         base_task = TaskLoader(tasks_dir).load_task(task_file)
         workspace_files = self._workspace_files_from_extra_info(extra_info) or list(base_task.workspace_files)
@@ -1727,7 +1803,7 @@ class OpenClawAgentLoop(AgentLoopBase):
             if str(scripts_dir) not in sys.path:
                 sys.path.insert(0, str(scripts_dir))
             from lib_tasks import TaskLoader, resolve_task_markdown_path
-            tasks_dir = _task_markdown_dir(self.oc_config.pinchbench_dir)
+            tasks_dir = Path(self.oc_config.pinchbench_dir) / "tasks"
             loader = TaskLoader(tasks_dir)
             task_file = resolve_task_markdown_path(tasks_dir, task_id)
             if not task_file.exists():
@@ -1892,9 +1968,20 @@ class OpenClawAgentLoop(AgentLoopBase):
     def _transcript_to_messages(self, transcript: list[dict]) -> list[dict]:
         msgs = []
         for entry in transcript:
-            if entry.get("type") != "message":
+            msg: dict[str, Any]
+            if entry.get("type") == "message" and isinstance(entry.get("message"), dict):
+                msg = entry.get("message", {})
+            elif entry.get("role") in ("user", "assistant", "tool", "system"):
+                msg = entry
+            elif isinstance(entry.get("message"), dict) and entry["message"].get("role") in (
+                "user",
+                "assistant",
+                "tool",
+                "system",
+            ):
+                msg = entry["message"]
+            else:
                 continue
-            msg = entry.get("message", {})
             role = msg.get("role")
             if role in ("user", "assistant", "tool", "system"):
                 msgs.append({
@@ -1919,7 +2006,7 @@ class OpenClawAgentLoop(AgentLoopBase):
                 sys.path.insert(0, str(scripts_dir))
             from lib_tasks import TaskLoader, resolve_task_markdown_path
             from lib_grading import grade_task
-            tasks_dir = _task_markdown_dir(self.oc_config.pinchbench_dir)
+            tasks_dir = Path(self.oc_config.pinchbench_dir) / "tasks"
             loader = TaskLoader(tasks_dir)
             task_file = resolve_task_markdown_path(tasks_dir, task_id)
             if not task_file.exists():
@@ -1973,7 +2060,7 @@ class OpenClawAgentLoop(AgentLoopBase):
                 and os.environ.get("PINCHBENCH_PER_INSTANCE_VERIFIER", "").strip().lower()
                 in {"1", "true", "yes", "on"}
             ):
-                from rl.agent_loop.per_instance_verifier import verify_task16_per_instance
+                from agent_loop.per_instance_verifier import verify_task16_per_instance
 
                 threshold = float(os.environ.get("PINCHBENCH_PER_INSTANCE_VERIFIER_THRESHOLD", "0.72"))
                 result = verify_task16_per_instance(
@@ -2041,7 +2128,7 @@ class OpenClawAgentLoop(AgentLoopBase):
             from lib_tasks import TaskLoader, resolve_task_markdown_path
             from lib_grading import grade_task, resolve_judge_backend_from_env, preflight_judge_connection
 
-            tasks_dir = _task_markdown_dir(self.oc_config.pinchbench_dir)
+            tasks_dir = Path(self.oc_config.pinchbench_dir) / "tasks"
             task_file = resolve_task_markdown_path(tasks_dir, task_id)
             if not task_file.exists():
                 return False
@@ -2054,7 +2141,7 @@ class OpenClawAgentLoop(AgentLoopBase):
                 and os.environ.get("PINCHBENCH_PER_INSTANCE_VERIFIER", "").strip().lower()
                 in {"1", "true", "yes", "on"}
             ):
-                from rl.agent_loop.per_instance_verifier import verify_task16_per_instance
+                from agent_loop.per_instance_verifier import verify_task16_per_instance
 
                 result = verify_task16_per_instance(
                     workspace_path=Path(str(execution_result.get("workspace", ""))),
@@ -2297,6 +2384,142 @@ class OpenClawAgentLoop(AgentLoopBase):
             add_call(fn.group(1), args)
         return tool_calls if tool_calls else None
 
+    def _vllm_http_base_url(self) -> str | None:
+        configured = os.environ.get("PINCHBENCH_RL_VLLM_HTTP_BASE_URL", "").strip()
+        if configured:
+            return configured.rstrip("/")
+        server_map = getattr(self.server_manager, "_server_id_to_handle", None)
+        if isinstance(server_map, dict) and server_map:
+            server_id = next(iter(server_map.keys()))
+            if isinstance(server_id, str) and server_id:
+                base = server_id if server_id.startswith(("http://", "https://")) else f"http://{server_id}"
+                return base.rstrip("/") + "/v1"
+        return None
+
+    def _tool_calls_to_xml_text(self, tool_calls: list[dict[str, Any]]) -> str:
+        blocks: list[str] = []
+        for tc in tool_calls:
+            func = tc.get("function") if isinstance(tc, dict) else None
+            if not isinstance(func, dict):
+                continue
+            args_raw = func.get("arguments", "{}")
+            try:
+                args_obj = json.loads(args_raw) if isinstance(args_raw, str) else args_raw
+            except Exception:
+                args_obj = args_raw
+            blocks.append(
+                "<tool_call>\n"
+                + json.dumps(
+                    {"name": str(func.get("name", "")), "arguments": args_obj},
+                    ensure_ascii=False,
+                )
+                + "\n</tool_call>"
+            )
+        return "\n".join(blocks)
+
+    async def _generate_via_vllm_http_tool_parser(
+        self,
+        req: ModelRequest,
+        max_tokens: int,
+    ) -> dict[str, Any] | None:
+        base_url = self._vllm_http_base_url()
+        if not base_url:
+            logger.warning("PINCHBENCH_RL_USE_VLLM_HTTP_TOOL_PARSER=1 but no vLLM HTTP base URL found")
+            return None
+
+        payload: dict[str, Any] = {
+            "model": os.environ.get(
+                "PINCHBENCH_RL_VLLM_HTTP_MODEL",
+                os.environ.get("PINCHBENCH_BENCHMARK_MODEL_ID", os.environ.get("VERL_MODEL", "Qwen/Qwen3-4B")),
+            ),
+            "messages": req.messages,
+            "max_tokens": max_tokens,
+            "temperature": req.temperature,
+            "stream": False,
+            "chat_template_kwargs": {"enable_thinking": False},
+        }
+        if req.top_p is not None:
+            payload["top_p"] = req.top_p
+        if req.top_k is not None:
+            payload["top_k"] = req.top_k
+        if req.tools:
+            payload["tools"] = req.tools
+        if req.tool_choice is not None:
+            payload["tool_choice"] = req.tool_choice
+
+        dump_dir_raw = os.environ.get("PINCHBENCH_RL_VLLM_HTTP_DEBUG_DIR", "").strip()
+        dump_prefix = None
+        if dump_dir_raw:
+            try:
+                dump_dir = Path(dump_dir_raw)
+                dump_dir.mkdir(parents=True, exist_ok=True)
+                safe_req = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(req.request_id or "request"))
+                dump_prefix = dump_dir / safe_req
+                (dump_prefix.with_suffix(".payload.json")).write_text(
+                    json.dumps(
+                        {
+                            "base_url": base_url,
+                            "payload": payload,
+                        },
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+            except Exception as exc:
+                logger.warning("Failed to dump vLLM HTTP payload: %s", exc)
+                dump_prefix = None
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{base_url}/chat/completions",
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(
+                        total=float(os.environ.get("PINCHBENCH_RL_VLLM_HTTP_TIMEOUT", "240"))
+                    ),
+                ) as resp:
+                    body_text = await resp.text()
+                    if resp.status >= 400:
+                        logger.warning(
+                            "vLLM HTTP tool-parser request failed status=%s body=%.500s",
+                            resp.status,
+                            body_text,
+                        )
+                        return None
+        except Exception as exc:
+            logger.warning("vLLM HTTP tool-parser request failed: %s", exc)
+            return None
+
+        if dump_prefix is not None:
+            try:
+                dump_prefix.with_suffix(".response.json").write_text(body_text, encoding="utf-8")
+            except Exception as exc:
+                logger.warning("Failed to dump vLLM HTTP response: %s", exc)
+
+        try:
+            body = json.loads(body_text)
+            choice = (body.get("choices") or [{}])[0]
+            msg = choice.get("message") or {}
+        except Exception as exc:
+            logger.warning("vLLM HTTP tool-parser response parse failed: %s body=%.500s", exc, body_text)
+            return None
+
+        tool_calls = msg.get("tool_calls") or []
+        if not isinstance(tool_calls, list):
+            tool_calls = []
+        content = str(msg.get("content") or "")
+        response_text = self._tool_calls_to_xml_text(tool_calls) if tool_calls else content
+        response_ids = list(self.tokenizer.encode(response_text, add_special_tokens=False))
+        return {
+            "response_ids": response_ids,
+            "response_logprobs": [0.0] * len(response_ids),
+            "response_text": response_text,
+            "clean_text": response_text,
+            "tool_calls": tool_calls or None,
+            "content_for_openclaw": content if tool_calls else self._strip_tool_tags(content),
+        }
+
     def _prepare_messages(self, messages: list[dict], tools: list[dict] | None) -> list[dict]:
         """Prepare OpenClaw messages for Qwen's apply_chat_template.
 
@@ -2341,6 +2564,49 @@ class OpenClawAgentLoop(AgentLoopBase):
                     break
 
         return out
+
+    def _dump_prompt_debug(
+        self,
+        session_id: str,
+        task_id: str,
+        turn_count: int,
+        req: ModelRequest,
+        chat_messages: list[dict],
+        prompt_token_ids: list[int],
+    ) -> None:
+        """Persist the exact training-side prompt for runtime parity debugging."""
+        debug_dir_raw = os.environ.get("PINCHBENCH_RL_PROMPT_DEBUG_DIR", "").strip()
+        if not debug_dir_raw:
+            return
+        try:
+            debug_dir = Path(debug_dir_raw)
+            debug_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                prompt_text = self.tokenizer.decode(prompt_token_ids, skip_special_tokens=False)
+            except Exception as exc:
+                prompt_text = f"<decode failed: {exc}>"
+            payload = {
+                "task_id": task_id,
+                "session_id": session_id,
+                "turn": turn_count,
+                "request_id": req.request_id,
+                "request_temperature": req.temperature,
+                "request_top_p": req.top_p,
+                "request_top_k": req.top_k,
+                "request_max_tokens": req.max_tokens,
+                "request_tool_choice": req.tool_choice,
+                "request_tools": req.tools or [],
+                "request_messages": req.messages,
+                "prepared_messages": chat_messages,
+                "prompt_token_count": len(prompt_token_ids),
+                "prompt_text": prompt_text,
+            }
+            path = debug_dir / f"{task_id}__{session_id}__turn{turn_count}.json"
+            tmp = path.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            tmp.replace(path)
+        except Exception as exc:
+            logger.warning("Failed to dump prompt debug for %s turn=%d: %s", task_id, turn_count, exc)
 
     def _strip_tool_tags(self, text: str) -> str:
         """Strip <tool_call>...</tool_call> and <think>...</think> from text for OpenClaw content field."""

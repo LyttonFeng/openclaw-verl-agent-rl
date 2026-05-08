@@ -1,0 +1,53 @@
+task_id: task_meeting_tech_product_features
+goal: Create a prioritized list of product features from a meeting transcript, including top 5 picks, methodology, and deprioritized items.
+inputs:
+  - meeting_transcript.md
+output: feature_priorities.md
+milestones:
+  - id: M1_transcript_parsed
+    desc: The agent has read the meeting transcript and identified all feature discussions.
+    signals:
+      - read('meeting_transcript.md') or equivalent file read tool call
+      - agent output references specific features from the transcript (e.g., UX, vulnerability management, GitOps)
+  - id: M2_features_cataloged
+    desc: At least 8 distinct features or feature bundles are listed with name, stage, excitement level, description, and notes.
+    signals:
+      - file write contains 8 or more distinct feature entries
+      - each entry has a name, stage, excitement level (1-3), description, and notes section
+  - id: M3_top5_identified
+    desc: The top 5 overall picks for the Commit keynote are explicitly listed, including UX, vulnerability management, GitOps, pipeline editor, and a Plan item.
+    signals:
+      - section titled "Top 5" or "Top 5 Overall Picks" present
+      - UX improvements listed as a top pick
+      - Vulnerability management listed as a top pick
+      - GitOps/Kubernetes agent listed as a top pick
+      - Pipeline editor mentioned for CI/CD
+  - id: M4_methodology_documented
+    desc: The methodology for evaluating features is documented, including bundling MVCs, excitement levels as stack rank, and targeting top 5 for PR.
+    signals:
+      - section or paragraph describing methodology present
+      - keywords: "bundle", "MVC", "excitement level", "stack rank", "top 5"
+      - mentions reusing GitLab 14.0 announcements
+  - id: M5_deprioritized_noted
+    desc: Features explicitly deprioritized are listed with reasons, such as fuzzing due to prior press coverage.
+    signals:
+      - section or entry for deprioritized features
+      - fuzzing mentioned as deprioritized due to prior press coverage
+      - reason for deprioritization stated
+pitfalls:
+  - id: P1_missing_features
+    desc: Agent lists fewer than 8 features or misses major features like UX, vulnerability management, GitOps, or pipeline editor.
+    severity: high
+  - id: P2_no_top5_section
+    desc: Agent fails to include a dedicated top 5 picks section or omits key top picks (UX, vulnerability management, GitOps).
+    severity: high
+  - id: P3_no_methodology
+    desc: Agent does not document the bundling methodology, excitement level stack ranking, or the top 5 targeting approach.
+    severity: medium
+  - id: P4_ignores_deprioritized
+    desc: Agent fails to mention fuzzing as deprioritized or does not explain why it was deprioritized.
+    severity: medium
+  - id: P5_inaccurate_stages
+    desc: Agent assigns incorrect stages to features (e.g., UX to Create only, or GitOps to CI/CD).
+    severity: low
+notes: The roadmap focuses on extracting structured data from the transcript and organizing it into a prioritized list with methodology. The expert trajectory completed in 3 turns with a single read and write.

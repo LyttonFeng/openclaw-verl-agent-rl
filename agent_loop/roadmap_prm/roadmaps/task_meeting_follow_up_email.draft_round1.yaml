@@ -1,0 +1,58 @@
+task_id: task_meeting_follow_up_email
+goal: Write a professional follow-up email capturing decisions, action items, and open questions from the meeting transcript.
+inputs:
+  - meeting_transcript.md
+output: follow_up_email.md
+milestones:
+  - id: M1_read_transcript
+    desc: The agent reads the meeting transcript file to extract key information.
+    signals:
+      - tool call to read('meeting_transcript.md')
+      - tool result contains "GitLab Product Marketing" or "2021-06-28"
+  - id: M2_identify_decisions
+    desc: The agent identifies the key decisions made during the meeting (event assignments, tagline, competitive approach, top announcement, assembly tagline).
+    signals:
+      - text mentions "Platform" and "re:Invent" in same context
+      - text mentions "more speed, less risk"
+      - text mentions "green" and "color scheme" or "no red"
+      - text mentions "vulnerability management" as lead security story
+  - id: M3_identify_action_items
+    desc: The agent identifies action items with owners and deadlines from the transcript.
+    signals:
+      - text mentions "Cormac" and "top 5 features" or "Plan stage"
+      - text mentions "Samia" and "competitive sheets" or "tier 1 competitors"
+      - text mentions "Tuesday" as a deadline
+      - text mentions "confirm event commitments" or "campaign managers"
+  - id: M4_identify_open_items
+    desc: The agent identifies items that still need resolution from the transcript.
+    signals:
+      - text mentions "open items" or "still need resolution" or "TBD"
+      - text mentions "top 5 product announcements" across stages
+      - text mentions "UX improvements" as a category
+      - text mentions "VS Code integration" features
+  - id: M5_write_email
+    desc: The agent writes the follow-up email to the output file with all required sections.
+    signals:
+      - file write to 'follow_up_email.md' or similar
+      - output contains "Subject:" or a subject line
+      - output contains a greeting addressing the team
+      - output contains a "Decisions" or "Key Outcomes" section
+      - output contains an "Action Items" section with owners
+      - output contains an "Open Items" section
+pitfalls:
+  - id: P1_skips_reading
+    desc: The agent tries to write the email without reading the transcript first.
+    severity: high
+  - id: P2_fabricates_content
+    desc: The agent invents decisions, action items, or owners not present in the transcript.
+    severity: high
+  - id: P3_missing_sections
+    desc: The email omits one or more required sections (decisions, action items, open items).
+    severity: medium
+  - id: P4_ignores_deadlines
+    desc: The agent fails to include the Tuesday deadline for the product announcement spreadsheet.
+    severity: medium
+  - id: P5_too_verbose
+    desc: The email is overly long or includes irrelevant tangents from the meeting, exceeding ~600 words.
+    severity: low
+notes: The agent should extract specific names and commitments from the transcript, not generic placeholders.

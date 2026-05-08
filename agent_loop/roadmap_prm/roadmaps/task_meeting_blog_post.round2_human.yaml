@@ -1,0 +1,70 @@
+task_id: task_meeting_blog_post
+goal: |
+  Read the GitLab PMM meeting transcript, internalize the core dilemma
+  (announcing in continuous-delivery / public-roadmap world), and produce a
+  standalone blog post saved to blog_post.md — not a meeting recap.
+
+inputs:
+  - meeting_transcript.md
+
+output: blog_post.md
+
+# Milestones are TURN-level events. Each is "did THIS turn cause this state to
+# become true for the first time (or substantially advance it)". Not "is the
+# final output good" — that is a different question.
+milestones:
+  - id: M1_read_transcript
+    desc: This turn issues a `read` tool call against meeting_transcript.md (or includes a successful read result for it). First successful read = +1.
+    signals:
+      - tool_call name == "read" with path argument matching transcript file
+      - tool_result for read returns >2000 chars of transcript content (no error)
+
+  - id: M2_internalize_content
+    desc: After reading, this turn shows evidence in thinking / text that the agent has digested specific transcript content (concrete topics from the meeting), preparing for blog post structure.
+    signals:
+      - thinking or text references SPECIFIC topics from this transcript (e.g. event ownership, MVC bundling, narrative themes, messaging tagline, competitive infographic, public roadmap, continuous delivery dilemma)
+      - thinking outlines a structure / angle / takeaway for the post
+      - thinking explicitly draws a distinction between meeting recap and standalone blog
+
+  - id: M3_write_blog_post
+    desc: This turn issues a `write` tool call to blog_post.md with substantive content (>= 400 words, has at least one markdown heading, prose-like).
+    signals:
+      - tool_call name == "write" with path == "blog_post.md"
+      - content argument starts with a heading and has multiple paragraphs
+      - content argument word count between 400 and 1500
+      - tool_result returns success (no error)
+
+  - id: M4_close_cleanly
+    desc: This turn ends the trajectory cleanly — either a brief confirmation of what was written or no further output. The agent has stopped; it does NOT continue producing more prose AFTER the file is written.
+    signals:
+      - turn comes after M3 was hit
+      - text is either empty, very short (<300 chars), or a clean handoff sentence
+      - no second `write` call that overwrites blog_post.md with different content
+
+# Pitfalls are TURN-level anti-patterns the judge can detect. Each is a
+# concrete behavior in THIS turn that justifies -1.
+pitfalls:
+  - id: P1_write_without_reading
+    desc: This turn issues a `write` to blog_post.md while NO prior turn has performed a successful read of meeting_transcript.md. The agent is hallucinating content. (-1, high severity)
+    severity: high
+
+  - id: P2_post_write_rambling
+    desc: After the agent has already written blog_post.md (M3 is hit), this turn produces another long wall of assistant text (> 1500 chars) that duplicates / re-paraphrases the blog post outside of any tool call. This is wasted budget and produces nothing the grader looks at.
+    severity: high
+
+  - id: P3_excessive_thinking_no_action
+    desc: This turn's thinking is >2500 chars AND the turn produces no tool call AND no substantive text. Pure thinking with no advance. (-1, medium)
+    severity: medium
+
+  - id: P4_meeting_recap_in_output
+    desc: This turn writes blog_post.md whose content explicitly opens like a meeting recap ("In this meeting", "The team discussed", "Meeting summary", "Recap of the PMM call"). The output is mis-framed.
+    severity: medium
+
+  - id: P5_read_loop
+    desc: This turn issues a 3rd or later `read` of meeting_transcript.md without intervening progress (no extraction, no draft attempt). The agent is stuck re-reading.
+    severity: medium
+
+notes: |
+  GitLab PMM transcript is ~34K chars (4000+ words). Single read fits.
+  Expert pattern (DSv4): T0 read → T1 write → T2 short close. ~3 turns total.
+  Common 4B failure: skip read, write hallucinated content, then ramble more text.

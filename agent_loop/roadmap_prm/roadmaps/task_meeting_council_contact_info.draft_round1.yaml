@@ -1,0 +1,58 @@
+task_id: task_meeting_council_contact_info
+goal: Extract all named individuals from a Tampa City Council meeting transcript and produce a categorized contacts report.
+inputs:
+  - transcript.md
+output: contacts_report.md
+milestones:
+  - id: M1_transcript_read
+    desc: The agent has read the full transcript file.
+    signals:
+      - tool call to read('transcript.md') or read('transcript.md', ...)
+      - text mentions reading or having the full transcript
+  - id: M2_council_members_extracted
+    desc: All 7 council members (Clendenin, Miranda, Maniscalco, Hurtak, Young, Viera, Carlson) are identified.
+    signals:
+      - output contains "Clendenin", "Miranda", "Maniscalco", "Hurtak", "Young", "Viera", "Carlson"
+      - output contains section heading "Council Members"
+  - id: M3_city_staff_extracted
+    desc: Key city staff (Shelby, Perry, Baird, Johns, Brody, DeManche, Kopesky) are identified with roles.
+    signals:
+      - output contains "Shelby" with "Attorney" or "Council Attorney"
+      - output contains "Perry", "Baird", "Johns", "Brody", "DeManche", "Kopesky"
+      - output contains section heading "City Staff"
+  - id: M4_presenters_and_experts_extracted
+    desc: Presenters (Hamilton/Raftelis, Guyette/Colliers, Chief Bercaw, TPD promotions) are identified.
+    signals:
+      - output contains "Hamilton" with "Raftelis"
+      - output contains "Bercaw" with "Chief" or "Police Chief"
+      - output contains "DeFelice", "Messmer", "Purcell", "McCormick"
+      - output contains section heading "Presenters and Experts"
+  - id: M5_public_speakers_and_others_extracted
+    desc: At least 12 public speakers and other notable individuals (McNeil, Milo) are identified.
+    signals:
+      - output contains at least 12 of: Jeraldine, Iman, Hych, Cannella, Cornell, Citro, Morrow, Bennett, Poole, Michelini, Adair, Lockett, Bullock, Poynor, Randolph, Rodriguez
+      - output contains "McNeil" with "Officer of the Month" or "award"
+      - output contains "Milo" with "Related Urban"
+      - output contains section heading "Community Members / Public Speakers" or "Other People Mentioned"
+  - id: M6_report_written
+    desc: The final contacts_report.md file is created with all sections.
+    signals:
+      - tool call to write('contacts_report.md', ...)
+      - file contacts_report.md exists in workspace
+pitfalls:
+  - id: P1_incomplete_read
+    desc: Agent stops reading before reaching the end of the transcript, missing later sections with public speakers or promotions.
+    severity: high
+  - id: P2_missing_sections
+    desc: Report lacks one or more of the required five sections (Council Members, City Staff, Presenters and Experts, Community Members / Public Speakers, Other People Mentioned).
+    severity: high
+  - id: P3_role_errors
+    desc: Individuals are listed without correct titles/affiliations (e.g., Shelby without Attorney, Bercaw without Chief, Hamilton without Raftelis).
+    severity: medium
+  - id: P4_insufficient_public_speakers
+    desc: Fewer than 12 public speakers are identified from the transcript.
+    severity: medium
+  - id: P5_no_context
+    desc: Report lists names without any brief context or description of their role in the meeting.
+    severity: low
+notes: The transcript is long (~120k chars) and requires multiple read calls. The agent must read the entire file to capture all names, especially public speakers and promotions mentioned near the end.

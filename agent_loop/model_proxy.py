@@ -16,6 +16,7 @@ import asyncio
 import errno
 import json
 import logging
+import os
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -25,6 +26,28 @@ from aiohttp import web
 from aiohttp.client_exceptions import ClientConnectionResetError
 
 logger = logging.getLogger(__name__)
+
+
+def _env_float(name: str) -> float | None:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning("Invalid %s=%r; ignoring", name, raw)
+        return None
+
+
+def _env_int(name: str) -> int | None:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning("Invalid %s=%r; ignoring", name, raw)
+        return None
 
 
 def _is_client_disconnect(exc: BaseException) -> bool:
@@ -43,6 +66,8 @@ class ModelRequest:
     request_id: str
     messages: list[dict[str, Any]]
     temperature: float = 0.7
+    top_p: Optional[float] = None
+    top_k: Optional[int] = None
     max_tokens: int = 4096
     tools: Optional[list[dict]] = None
     tool_choice: Optional[Any] = None
@@ -149,10 +174,18 @@ class ModelProxy:
                 {"error": {"message": "invalid JSON"}}, status=400
             )
 
+        env_temperature = _env_float("PINCHBENCH_MODEL_TEMPERATURE")
+        env_top_p = _env_float("PINCHBENCH_MODEL_TOP_P")
+        env_top_k = _env_int("PINCHBENCH_MODEL_TOP_K")
+        body_temperature = body.get("temperature") if "temperature" in body else None
+        body_top_p = body.get("top_p")
+        body_top_k = body.get("top_k")
         req = ModelRequest(
             request_id=f"proxy-{uuid.uuid4().hex[:12]}",
             messages=body.get("messages", []),
-            temperature=body.get("temperature", 0.7),
+            temperature=env_temperature if env_temperature is not None else (body_temperature if body_temperature is not None else 0.7),
+            top_p=env_top_p if env_top_p is not None else body_top_p,
+            top_k=env_top_k if env_top_k is not None else body_top_k,
             max_tokens=body.get("max_tokens", body.get("max_completion_tokens", 4096)),
             tools=body.get("tools"),
             tool_choice=body.get("tool_choice"),

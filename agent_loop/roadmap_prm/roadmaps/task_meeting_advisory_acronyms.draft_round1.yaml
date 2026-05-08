@@ -1,0 +1,52 @@
+task_id: task_meeting_advisory_acronyms
+goal: Create a comprehensive, alphabetically sorted acronym glossary from a government meeting transcript with correct expansions, meeting-specific context, and category labels.
+inputs:
+  - meeting-transcript.md
+output: acronym_glossary.md
+milestones:
+  - id: M1_transcript_read
+    desc: The agent reads the meeting transcript file to understand its content and structure.
+    signals:
+      - read('meeting-transcript.md') or read('meeting_transcript.md')
+      - tool call with 'read' and file path containing 'transcript'
+  - id: M2_initial_glossary_draft
+    desc: The agent writes a first draft of the glossary file containing at least 15 acronyms with expansions and categories.
+    signals:
+      - write('acronym_glossary.md') or write('glossary.md')
+      - file content includes at least 15 lines matching pattern like '| [A-Z]{2,} |'
+      - file content includes category keywords like 'Government Agency' or 'Spectrum/Technical'
+  - id: M3_expansion_verification
+    desc: The agent verifies or corrects acronym expansions using domain knowledge or additional transcript analysis, especially for domain-specific terms like CSEA, CMRS, ISART, TSB.
+    signals:
+      - exec command containing 'grep' or 'search' for specific acronyms
+      - content includes correct expansions for 'CSEA' (Commercial Spectrum Enhancement Act) and 'CMRS' (Commercial Mobile Radio Service)
+      - content includes correct expansion for 'ISART' (International Symposium on Advanced Radio Technologies)
+  - id: M4_comprehensive_coverage
+    desc: The glossary includes 25+ acronyms covering all major categories (Government, Technical, Regulatory, Industry, Military, Other) including less common ones like TMI, NFL, IP.
+    signals:
+      - file contains at least 25 unique acronym entries
+      - entries include 'TMI' and 'NFL' with appropriate context
+      - entries include 'IP' with context about intellectual property
+  - id: M5_final_cleanup_and_sort
+    desc: The agent ensures the glossary is alphabetically sorted, formatted consistently, and contains a total count at the end.
+    signals:
+      - file content ends with a line containing 'Total' or '**Total' followed by a number
+      - acronym entries appear in alphabetical order (A-Z)
+      - no duplicate entries or malformed table rows
+pitfalls:
+  - id: P1_missing_domain_acronyms
+    desc: The agent fails to identify domain-specific acronyms that are not explicitly expanded in the transcript (e.g., CSEA, CMRS, ISART, TSB).
+    severity: high
+  - id: P2_incorrect_expansions
+    desc: The agent fabricates or guesses incorrect expansions for acronyms, especially for technical or regulatory terms.
+    severity: high
+  - id: P3_no_context_or_generic_context
+    desc: The agent provides only the expansion without meeting-specific context, or uses generic boilerplate descriptions.
+    severity: medium
+  - id: P4_poor_organization
+    desc: The glossary is not alphabetically sorted, lacks categories, or has inconsistent formatting (e.g., missing table separators, duplicate rows).
+    severity: medium
+  - id: P5_incomplete_coverage
+    desc: The agent stops after finding only obvious government acronyms (CSMAC, NTIA, FCC) and misses technical, industry, or humorous acronyms.
+    severity: high
+notes: The expert trajectory shows the agent iteratively refining the glossary through multiple reads, exec commands to grep for missed acronyms, and a final rewrite to fix formatting issues. The roadmap should reward thoroughness and domain knowledge application.

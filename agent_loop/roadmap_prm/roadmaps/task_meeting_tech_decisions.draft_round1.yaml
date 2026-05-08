@@ -1,0 +1,48 @@
+task_id: task_meeting_tech_decisions
+goal: Extract all decisions and consensus points from the meeting transcript and write them to a structured file.
+inputs:
+  - meeting_transcript.md
+output: decisions.md
+milestones:
+  - id: M1_read_transcript
+    desc: The agent reads the meeting transcript file.
+    signals:
+      - "Tool call to read('meeting_transcript.md') or similar"
+      - "Agent text references reading the file"
+  - id: M2_identify_decisions
+    desc: The agent identifies at least 5 distinct decisions from the transcript.
+    signals:
+      - "Agent text lists or enumerates multiple decisions"
+      - "Agent mentions specific decisions like event assignments, tagline, or competitive methodology"
+  - id: M3_write_decisions_file
+    desc: The agent writes the decisions to the output file.
+    signals:
+      - "Tool call to write('decisions.md', ...) or similar"
+      - "Agent text confirms file written"
+  - id: M4_include_summary
+    desc: The output file includes a summary at the top with total number of decisions and which need follow-up.
+    signals:
+      - "File content starts with a summary section"
+      - "Summary mentions total count and follow-up status"
+  - id: M5_include_context_and_status
+    desc: Each decision includes context and status (final, tentative, needs follow-up).
+    signals:
+      - "Each decision entry has a 'Context' or 'Background' field"
+      - "Each decision entry has a 'Status' field with values like final, tentative, or needs follow-up"
+pitfalls:
+  - id: P1_skip_reading
+    desc: The agent writes the output file without first reading the transcript.
+    severity: high
+  - id: P2_miss_key_decisions
+    desc: The agent fails to capture major decisions like event assignments, tagline, or competitive methodology.
+    severity: high
+  - id: P3_conflate_discussion
+    desc: The agent includes items that were discussed but not decided as decisions.
+    severity: medium
+  - id: P4_no_context
+    desc: The agent lists decisions without any context or background.
+    severity: medium
+  - id: P5_no_status
+    desc: The agent omits status indicators for decisions.
+    severity: low
+notes: The transcript contains 7 key decisions; the agent should capture at least 5.

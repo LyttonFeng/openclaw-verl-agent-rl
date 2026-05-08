@@ -1,0 +1,50 @@
+task_id: task_meeting_gov_qa_extract
+goal: Extract all Q&A exchanges from a NASA UAP hearing transcript into a structured, chronologically organized file with correct speaker attribution.
+inputs:
+  - transcript.md
+output: qa_exchanges.md
+milestones:
+  - id: M1_read_transcript
+    desc: Agent reads the full transcript file to understand the meeting structure and content.
+    signals:
+      - "tool call to read('transcript.md') or read('transcript.md', ...) with offset"
+      - "text_preview contains 'transcript' or 'meeting' or 'NASA'"
+  - id: M2_identify_qa_sections
+    desc: Agent identifies the two distinct Q&A sections (panel-to-presenter and public Q&A) in the transcript.
+    signals:
+      - "text_preview mentions 'panel' and 'public' or 'curated' Q&A sections"
+      - "text_preview references 'Q&A' or 'question' and 'answer' patterns"
+  - id: M3_extract_panel_qa
+    desc: Agent extracts at least 10 panel-to-presenter Q&A exchanges with correct speaker names and topics.
+    signals:
+      - "output file contains 'Spergel' and 'Fox' in a Q&A context"
+      - "output file contains 'Drake' and 'Kirkpatrick' with database numbers (800, 2-5%)"
+      - "output file contains 'Freie' with FAA-related topics (radar, reporting)"
+  - id: M4_extract_public_qa
+    desc: Agent extracts the curated public Q&A session, including the non-human intelligence question.
+    signals:
+      - "output file contains a section titled 'Public Q&A' or 'Curated Public Q&A'"
+      - "output file contains 'non-human intelligence' or 'extraterrestrial' in a Q&A entry"
+  - id: M5_write_output_file
+    desc: Agent writes the final structured output file with numbered exchanges, topic labels, and clear section separation.
+    signals:
+      - "tool call to write('qa_exchanges.md', ...)"
+      - "output file contains at least 10 numbered exchanges"
+      - "output file contains '---' or '##' section separators"
+pitfalls:
+  - id: P1_miss_public_qa
+    desc: Agent fails to separate or extract the public Q&A session, treating all exchanges as one section.
+    severity: high
+  - id: P2_wrong_attribution
+    desc: Agent attributes questions or answers to incorrect speakers (e.g., mixing up Spergel and Fox).
+    severity: high
+  - id: P3_too_few_exchanges
+    desc: Agent extracts fewer than 10 Q&A exchanges, missing key ones like Drake-Kirkpatrick or FAA-related.
+    severity: medium
+  - id: P4_raw_quotes_no_summary
+    desc: Agent copies raw transcript quotes without summarizing questions and answers concisely.
+    severity: medium
+  - id: P5_no_numbering
+    desc: Agent fails to number or clearly delineate individual exchanges, making the output hard to reference.
+    severity: low
+notes: The transcript has two distinct Q&A formats. The expert trajectory required 6 turns including multiple reads and one write. Key exchanges to catch include Spergel-Fox, Drake-Kirkpatrick (800 cases, 2-5%), and public Q&A on non-human intelligence.

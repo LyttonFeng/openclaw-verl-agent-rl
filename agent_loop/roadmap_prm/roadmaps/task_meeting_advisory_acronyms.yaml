@@ -1,0 +1,125 @@
+task_id: task_meeting_advisory_acronyms
+
+goal: |
+  Create a comprehensive, alphabetically sorted acronym glossary from a government meeting transcript with correct expansions, meeting-specific context, and category labels.
+
+inputs:
+  - meeting-transcript.md
+
+output: acronym_glossary.md
+
+# ROUND 3 (auto-promoted from R1 draft):
+#   - DSv4-flash drafted task-specific milestones (kept).
+#   - Added PRECONDITION to write milestone.
+#   - Appended generic M_close_cleanly.
+#   - Replaced pitfalls with the 5 canonical turn-level pitfalls
+#     validated on pilot A (blog_post) + pilot B (council_budget).
+#   - DSv4's task-specific pitfalls preserved as informational notes.
+
+milestones:
+  - id: M1_transcript_read
+    desc: |
+      The agent reads the meeting transcript file to understand its content and structure.
+    signals:
+      - "read('meeting-transcript.md') or read('meeting_transcript.md')"
+      - "tool call with 'read' and file path containing 'transcript'"
+
+  - id: M2_initial_glossary_draft
+    desc: |
+      The agent writes a first draft of the glossary file containing at least 15 acronyms with expansions and categories.
+    signals:
+      - "write('acronym_glossary.md') or write('glossary.md')"
+      - "file content includes at least 15 lines matching pattern like '| [A-Z]{2,} |'"
+      - "file content includes category keywords like 'Government Agency' or 'Spectrum/Technical'"
+      - "PRECONDITION: a prior turn in this trajectory has performed a successful read of meeting-transcript.md (returned substantial content without is_error). If no such prior read exists, this milestone does NOT fire (the turn is P2_write_without_reading instead)."
+
+  - id: M3_expansion_verification
+    desc: |
+      The agent verifies or corrects acronym expansions using domain knowledge or additional transcript analysis, especially for domain-specific terms like CSEA, CMRS, ISART, TSB.
+    signals:
+      - "exec command containing 'grep' or 'search' for specific acronyms"
+      - "content includes correct expansions for 'CSEA' (Commercial Spectrum Enhancement Act) and 'CMRS' (Commercial Mobile Radio Service)"
+      - "content includes correct expansion for 'ISART' (International Symposium on Advanced Radio Technologies)"
+
+  - id: M4_comprehensive_coverage
+    desc: |
+      The glossary includes 25+ acronyms covering all major categories (Government, Technical, Regulatory, Industry, Military, Other) including less common ones like TMI, NFL, IP.
+    signals:
+      - file contains at least 25 unique acronym entries
+      - "entries include 'TMI' and 'NFL' with appropriate context"
+      - "entries include 'IP' with context about intellectual property"
+
+  - id: M5_final_cleanup_and_sort
+    desc: |
+      The agent ensures the glossary is alphabetically sorted, formatted consistently, and contains a total count at the end.
+    signals:
+      - "file content ends with a line containing 'Total' or '**Total' followed by a number"
+      - acronym entries appear in alphabetical order (A-Z)
+      - no duplicate entries or malformed table rows
+
+  - id: M_close_cleanly
+    desc: |
+      The final turn of the trajectory, after the write milestone has fired,
+      produces a brief confirmation or empty text and no further write that
+      would replace the main output.
+    signals:
+      - this is the last turn of the trajectory
+      - the write milestone has already fired in a prior turn
+      - this turn has no tool call OR a non-write tool call
+      - if there is any text, it is < 400 chars
+
+pitfalls:
+  - id: P1_no_output_written
+    desc: |
+      This is the LAST turn of the trajectory AND no `write` to the expected
+      output file has occurred in any turn so far. The agent ran out of budget
+      without producing the required output. (4B's dominant failure mode.)
+    severity: high
+
+  - id: P2_write_without_reading
+    desc: |
+      LITERAL CHECK ONLY. This turn issues a `write` tool_call to the expected
+      output file AND no prior turn in this trajectory contains a `read`
+      tool_call whose tool_result returned `is_error: false` with content
+      length > 1000 chars on the input file. Do NOT infer hallucination from
+      content style or formatting — only check whether a successful prior read
+      tool_call exists in the trajectory history. If one does exist, this
+      pitfall does NOT fire even if the written content is long and polished.
+    severity: high
+
+  - id: P3_post_write_rambling
+    desc: |
+      LITERAL CHECK ONLY. A prior turn already produced a `write` tool_call to
+      the expected output file. THIS turn produces an assistant text block
+      (`type: text`, OUTSIDE any tool_call) longer than 500 chars. Length
+      check only — do NOT judge whether the trailing text "looks like" a
+      paraphrase or restatement. If the trailing text is < 500 chars, this
+      pitfall does NOT fire.
+    severity: high
+
+  - id: P4_excessive_thinking_no_action
+    desc: |
+      This turn's thinking is > 2500 chars AND no tool call is issued AND no
+      substantive text (> 200 chars) is produced. Burning budget on thinking
+      without any progress. (Note: thinking PAIRED with a meaningful tool call
+      in the same turn is NOT a pitfall — Qwen3 requires thinking.)
+    severity: high
+
+  - id: P5_read_loop
+    desc: |
+      This turn issues a `read` of the input file with arguments identical to
+      a previous read in the trajectory, AND no `write`, no extraction-thinking
+      that names new content, and no extraction-text has occurred between the
+      two reads. The agent is stuck re-reading the same chunk.
+    severity: medium
+
+notes: |
+  The expert trajectory shows the agent iteratively refining the glossary through multiple reads, exec commands to grep for missed acronyms, and a final rewrite to fix formatting issues. The roadmap should reward thoroughness and domain knowledge application.
+
+  DSv4 also flagged these task-specific quality concerns
+  (kept here for reference, not enforced by the judge):
+    - P1_missing_domain_acronyms: The agent fails to identify domain-specific acronyms that are not explicitly expanded in the transcript (e.g., CSEA, CMRS, ISART, TSB).
+    - P2_incorrect_expansions: The agent fabricates or guesses incorrect expansions for acronyms, especially for technical or regulatory terms.
+    - P3_no_context_or_generic_context: The agent provides only the expansion without meeting-specific context, or uses generic boilerplate descriptions.
+    - P4_poor_organization: The glossary is not alphabetically sorted, lacks categories, or has inconsistent formatting (e.g., missing table separators, duplicate rows).
+    - P5_incomplete_coverage: The agent stops after finding only obvious government acronyms (CSMAC, NTIA, FCC) and misses technical, industry, or humorous acronyms.

@@ -1,0 +1,55 @@
+task_id: task_meeting_advisory_technical
+goal: Extract all technical discussions from the CSMAC meeting transcript into a structured report covering frequency bands, federal systems, technical challenges, proposed solutions, working group assignments, and the commercial deployment parameters debate.
+inputs:
+  - meeting-transcript.md
+output: technical_discussions.md
+milestones:
+  - id: M1_read_transcript
+    desc: The agent reads the meeting transcript file to understand the content.
+    signals:
+      - tool call to read('meeting-transcript.md') or equivalent
+      - tool result contains text from the transcript
+  - id: M2_identify_working_groups
+    desc: The agent identifies and lists the five proposed working groups with their scope and co-chair assignments.
+    signals:
+      - text mentions "Working Group 1" through "Working Group 5"
+      - text includes co-chair names (e.g., Yvonne Navarro, John Hunter) or NTIA reps (e.g., Ed Drocella, Rich Orsulak)
+      - text describes scope of each working group
+  - id: M3_extract_technical_topics
+    desc: The agent extracts at least four of the key technical topics (weather satellites, law enforcement, satellite uplinks, electronic warfare, tactical radio relay, airborne operations) with frequency bands and technical challenges.
+    signals:
+      - text includes "1695-1710 MHz" or "weather satellite" with "exclusion area"
+      - text includes "law enforcement" with "wideband" or "three-step transition"
+      - text includes "satellite uplink" or "satellite control" with "interference into industry"
+      - text includes "electronic warfare" with "training" or "cell phone"
+      - text includes "airborne operations" with "UAV" or "precision-guided munitions"
+      - text includes "tactical radio relay" or "fixed microwave"
+  - id: M4_capture_parameters_debate
+    desc: The agent captures the commercial deployment parameters debate about LTE standards, macrocells vs small cells, and power levels.
+    signals:
+      - text mentions "LTE" or "Long Term Evolution" in context of parameters
+      - text mentions "macrocell" or "small cell" in context of deployment
+      - text mentions "power levels" or "uniform parameters"
+      - text references Rush, Warren, Kahn, or Calabrese in context of parameters
+  - id: M5_write_report
+    desc: The agent writes the structured report to the output file.
+    signals:
+      - tool call to write('technical_discussions.md', ...) or equivalent
+      - tool result confirms file was written
+pitfalls:
+  - id: P1_missed_working_groups
+    desc: The agent fails to identify or describe all five working groups, omitting their scope or co-chair assignments.
+    severity: high
+  - id: P2_incorrect_interference_direction
+    desc: The agent mischaracterizes the direction of interference for satellite uplinks (e.g., saying industry interferes with satellites instead of satellites interfering with industry).
+    severity: high
+  - id: P3_omitted_parameters_debate
+    desc: The agent fails to capture the commercial deployment parameters debate, missing the discussion about LTE standards, macrocells, small cells, and power levels.
+    severity: medium
+  - id: P4_missing_sta_measurement
+    desc: The agent does not mention the T-Mobile/CTIA STA measurement request or special temporary authorization for airborne operations.
+    severity: medium
+  - id: P5_vague_technical_details
+    desc: The agent extracts topics but provides vague or incomplete technical details (e.g., missing frequency bands, system descriptions, or specific MHz ranges).
+    severity: medium
+notes: The roadmap focuses on the key extraction steps and common failure modes for this technical analysis task. The agent must separate technical substance from policy discussion.

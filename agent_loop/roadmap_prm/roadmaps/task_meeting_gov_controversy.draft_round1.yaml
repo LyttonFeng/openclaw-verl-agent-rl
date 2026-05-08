@@ -1,0 +1,66 @@
+task_id: task_meeting_gov_controversy
+goal: Identify and analyze controversial, surprising, or debate-generating statements from a NASA UAP hearing transcript, including multi-perspective interpretations and tone/framing analysis, in a file called controversy_analysis.md.
+inputs:
+  - transcript.md
+output: controversy_analysis.md
+milestones:
+  - id: M1_read_transcript
+    desc: The agent reads the full transcript file to understand the content.
+    signals:
+      - Agent calls read on transcript.md
+      - Agent acknowledges reading the transcript content
+  - id: M2_identify_harassment
+    desc: The agent identifies the panelist harassment statements as a notable/controversial element.
+    signals:
+      - Output mentions "harassment" or "online abuse" or "threats" related to panelists
+      - References Dan Evans or Nicola Fox discussing harassment
+  - id: M3_identify_core_controversies
+    desc: The agent identifies at least 5 of the key controversial statements (e.g., 2-5% anomalous, no ET evidence, classified data tension, DOD sensors not scientific, debunked case, FAA report rate, budget question).
+    signals:
+      - Mentions "2-5%" or "single-digit percent" anomalous
+      - Mentions "no conclusive evidence of extraterrestrial origin" or similar
+      - Mentions classified data limitations or the fighter jet/Statue of Liberty analogy
+      - Mentions DOD sensors not being scientific or designed for weapons
+      - Mentions a resolved/debunked case (e.g., commercial aircraft, going into water)
+  - id: M4_analyze_audience_perspectives
+    desc: The agent analyzes how different audiences (scientists, public, media, UFO community) would interpret the identified statements.
+    signals:
+      - Output contains sections or phrases referencing "scientists", "public", "media", "UFO community", or "skeptics"
+      - At least three distinct audience perspectives are discussed
+  - id: M5_provide_context_and_nuance
+    desc: The agent provides surrounding context and notes diplomatic tensions or unstated implications for the identified statements.
+    signals:
+      - Output includes "context" sections or paragraphs explaining surrounding discussion
+      - Notes tensions or disagreements between speakers
+      - Mentions unstated implications (e.g., no formal NASA UAP program)
+  - id: M6_analyze_tone_and_framing
+    desc: The agent includes a section analyzing the overall tone and framing choices of the panel.
+    signals:
+      - Output contains a section titled "Tone" or "Framing" or "Overall tone"
+      - Discusses what the panel emphasized or avoided
+      - Mentions balance between skepticism and openness, or destigmatization
+  - id: M7_write_output_file
+    desc: The agent writes the complete analysis to the output file controversy_analysis.md.
+    signals:
+      - Agent calls write with path containing "controversy_analysis.md"
+      - Output file exists in the workspace
+pitfalls:
+  - id: P1_skips_transcript_reading
+    desc: The agent attempts to write the analysis without fully reading the transcript, missing key details.
+    severity: high
+  - id: P2_superficial_list_only
+    desc: The agent only lists controversial statements without providing analysis, context, or audience perspectives.
+    severity: high
+  - id: P3_misses_harassment_element
+    desc: The agent fails to identify the panelist harassment discussion as a notable controversial element.
+    severity: medium
+  - id: P4_no_multi_perspective_analysis
+    desc: The agent analyzes statements from only one viewpoint (e.g., only scientific) without considering public, media, or UFO community interpretations.
+    severity: medium
+  - id: P5_ignores_tone_and_framing
+    desc: The agent does not include any analysis of the panel's overall tone, framing choices, or what was deliberately avoided.
+    severity: medium
+  - id: P6_writes_to_wrong_filename
+    desc: The agent writes the analysis to a file with a different name than controversy_analysis.md, causing automated checks to fail.
+    severity: high
+notes: The task requires higher-order analysis of social and political dynamics around UAP discourse, not just information extraction. The agent must read the full transcript (it is long, may require multiple reads) before writing.

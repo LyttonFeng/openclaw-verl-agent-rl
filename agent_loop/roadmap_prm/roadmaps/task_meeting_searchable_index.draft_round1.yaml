@@ -1,0 +1,63 @@
+task_id: task_meeting_searchable_index
+goal: Create a structured, searchable index file (meeting_index.md) from a meeting transcript that includes metadata, topic index, people index, keyword index, decisions log, and action items log.
+inputs:
+  - meeting_transcript.md
+output: meeting_index.md
+milestones:
+  - id: M1_read_transcript
+    desc: The agent reads the full meeting transcript file to understand its content.
+    signals:
+      - Tool call to read('meeting_transcript.md') or equivalent
+      - Agent text references reading the file
+  - id: M2_metadata_extracted
+    desc: The agent identifies and records the meeting title, date, and participant names.
+    signals:
+      - Output contains "GitLab Product Marketing Meeting" or similar title
+      - Output contains "2021-06-28" or "June 28, 2021"
+      - Output lists at least three participant names (e.g., William, Cindy, Cormac)
+  - id: M3_topic_index_created
+    desc: The agent creates a numbered list of at least five distinct topics discussed, each with a one-sentence description.
+    signals:
+      - A section titled "Topic Index" or "Topics" with numbered items
+      - At least five distinct topic entries, each with a descriptive sentence
+      - Topics include event sponsorship, Commit conference, competitive infographic, messaging framework, or similar
+  - id: M4_people_index_created
+    desc: The agent creates a section listing at least three people and what they contributed or were assigned.
+    signals:
+      - A section titled "People Index" or "People"
+      - At least three named individuals with descriptions of their contributions
+      - Entries like "William: led meeting, proposed messaging taglines"
+  - id: M5_keyword_index_created
+    desc: The agent creates an alphabetical list of at least ten key terms with brief context notes.
+    signals:
+      - A section titled "Keyword Index" or "Keywords"
+      - At least ten entries, alphabetically ordered
+      - Entries include terms like KubeCon, Commit, Azure DevOps, vulnerability management
+  - id: M6_decisions_and_actions_logged
+    desc: The agent creates a numbered decisions log (at least 3) and an action items log (at least 2) with owners and deadlines.
+    signals:
+      - A section titled "Decisions Log" or "Decisions" with numbered items
+      - A section titled "Action Items" or "Actions" with owners and deadlines
+      - At least three decision entries and two action item entries
+  - id: M7_file_written
+    desc: The agent writes the complete index to meeting_index.md.
+    signals:
+      - Tool call to write('meeting_index.md', ...)
+      - Final text confirms the file is written
+pitfalls:
+  - id: P1_skipped_transcript
+    desc: The agent attempts to write the index without first reading the transcript file.
+    severity: high
+  - id: P2_incomplete_sections
+    desc: The agent omits one or more required sections (metadata, topic index, people index, keyword index, decisions log, action items log).
+    severity: high
+  - id: P3_too_few_entries
+    desc: The agent creates sections but with fewer than the required number of entries (e.g., less than 5 topics, less than 10 keywords).
+    severity: medium
+  - id: P4_no_alphabetization
+    desc: The keyword index is not alphabetized or clearly organized, reducing searchability.
+    severity: medium
+  - id: P5_verbose_or_vague_entries
+    desc: Index entries are either too verbose (full paragraphs) or too vague (just terms with no context), failing the index quality criterion.
+    severity: low
+notes: The roadmap milestones are designed to be sequential but not strictly ordered; the agent may interleave creation of sections. The key is that all sections are present and meet minimum counts.

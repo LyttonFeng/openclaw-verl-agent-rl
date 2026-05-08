@@ -1,0 +1,49 @@
+task_id: task_meeting_council_public_comment
+goal: Produce a structured summary of each public speaker's comments from the Tampa City Council meeting transcript, with a thematic grouping at the end.
+inputs:
+  - transcript.md
+output: public_comments_report.md
+milestones:
+  - id: M1_transcript_read
+    desc: The agent reads the transcript file and identifies the public comment section.
+    signals:
+      - "read('transcript.md')"
+      - "public comment" in tool results or text
+  - id: M2_speakers_extracted
+    desc: The agent extracts the names and remarks of at least 12 of the 16 listed public speakers.
+    signals:
+      - Speaker names like Jeraldine, Reva, Daryl, Pam, David, Joseph, Ashley, Carroll Ann, Tiffany, Steve, James, Robin, Valerie, Stephanie, Michael, Adrian appear in agent output
+      - At least 12 distinct speaker names mentioned
+  - id: M3_report_drafted
+    desc: The agent writes a draft of the report with speaker-by-speaker summaries including name, topic, key points, and requests.
+    signals:
+      - "write('public_comments_report.md')" or similar filename
+      - Content includes "Speaker name", "Topic", "Key points", "Requests" for multiple speakers
+  - id: M4_thematic_summary
+    desc: The report includes a thematic summary grouping comments by topic area and noting which topics had the most speakers.
+    signals:
+      - "thematic summary" or "topic" section in report
+      - Grouping by areas like infrastructure, housing, historical preservation, policing, transportation
+      - Mention of which topic had most public interest
+  - id: M5_report_finalized
+    desc: The final report is complete, well-formatted, and saved to the workspace.
+    signals:
+      - "public_comments_report.md" exists in workspace
+      - Report contains all required sections (speaker summaries + thematic summary)
+pitfalls:
+  - id: P1_missed_section
+    desc: Agent fails to locate the public comment section in the transcript and produces a report based on other parts of the meeting.
+    severity: high
+  - id: P2_incomplete_speakers
+    desc: Agent identifies fewer than 8 speakers or misses key speakers like Jeraldine Williams, Reva Iman, Pam Cannella, Tiffany Poole, or Stephanie Poynor.
+    severity: high
+  - id: P3_no_thematic_grouping
+    desc: Agent produces speaker summaries but omits the required thematic summary at the end.
+    severity: medium
+  - id: P4_incorrect_facts
+    desc: Agent misattributes topics or requests to speakers (e.g., wrong dollar amount, wrong agenda item).
+    severity: medium
+  - id: P5_wrong_output_file
+    desc: Agent writes the report to a different filename or location, causing automated checks to fail.
+    severity: low
+notes: The transcript is a realtime captioning transcript, so speaker names may be misspelled or inconsistent. The agent should be flexible with name matching.

@@ -1,0 +1,121 @@
+task_id: task_meeting_gov_recommendations
+
+goal: |
+  Extract all recommendations from the NASA UAP hearing transcript, categorize them, attribute them to speakers, and write a structured summary to recommendations.md.
+
+inputs:
+  - transcript.md
+
+output: recommendations.md
+
+# ROUND 3 (auto-promoted from R1 draft):
+#   - DSv4-flash drafted task-specific milestones (kept).
+#   - Added PRECONDITION to write milestone.
+#   - Appended generic M_close_cleanly.
+#   - Replaced pitfalls with the 5 canonical turn-level pitfalls
+#     validated on pilot A (blog_post) + pilot B (council_budget).
+#   - DSv4's task-specific pitfalls preserved as informational notes.
+
+milestones:
+  - id: M1_transcript_loaded
+    desc: |
+      The agent has read the full transcript.md file into its context.
+    signals:
+      - "Agent tool call to read('transcript.md') or read('transcript.md', offset=...) returns content"
+      - Agent text mentions reading or parsing the transcript
+
+  - id: M2_recommendations_identified
+    desc: |
+      The agent has identified at least 12 distinct recommendations from the transcript content.
+    signals:
+      - Agent text lists or enumerates multiple recommendations from the transcript
+      - Agent text references specific speaker names (e.g., Kirkpatrick, Bianco, Spergel) in the context of recommendations
+
+  - id: M3_categories_defined
+    desc: |
+      The agent has defined the category groups (e.g., Data Collection, Data Standards, Sensor Technology) for organizing the recommendations.
+    signals:
+      - "Agent text mentions or lists category names like \"Data Collection\" or \"Partnerships\""
+      - Agent text describes grouping recommendations by category
+
+  - id: M4_recommendations_written
+    desc: |
+      The agent has written the recommendations.md file with recommendations grouped by category and attributed to speakers.
+    signals:
+      - "Agent tool call to write('recommendations.md', content) or similar file write"
+      - Agent text confirms file creation or shows file content with categories and speaker attributions
+      - "PRECONDITION: a prior turn in this trajectory has performed a successful read of transcript.md (returned substantial content without is_error). If no such prior read exists, this milestone does NOT fire (the turn is P2_write_without_reading instead)."
+
+  - id: M5_summary_included
+    desc: |
+      The agent has included a concluding summary of the most emphasized or repeated recommendations in the output file.
+    signals:
+      - "Output file content contains a section titled \"Summary\" or \"Key Themes\" or similar"
+      - Agent text mentions synthesizing or summarizing the most common recommendations
+
+  - id: M_close_cleanly
+    desc: |
+      The final turn of the trajectory, after the write milestone has fired,
+      produces a brief confirmation or empty text and no further write that
+      would replace the main output.
+    signals:
+      - this is the last turn of the trajectory
+      - the write milestone has already fired in a prior turn
+      - this turn has no tool call OR a non-write tool call
+      - if there is any text, it is < 400 chars
+
+pitfalls:
+  - id: P1_no_output_written
+    desc: |
+      This is the LAST turn of the trajectory AND no `write` to the expected
+      output file has occurred in any turn so far. The agent ran out of budget
+      without producing the required output. (4B's dominant failure mode.)
+    severity: high
+
+  - id: P2_write_without_reading
+    desc: |
+      LITERAL CHECK ONLY. This turn issues a `write` tool_call to the expected
+      output file AND no prior turn in this trajectory contains a `read`
+      tool_call whose tool_result returned `is_error: false` with content
+      length > 1000 chars on the input file. Do NOT infer hallucination from
+      content style or formatting — only check whether a successful prior read
+      tool_call exists in the trajectory history. If one does exist, this
+      pitfall does NOT fire even if the written content is long and polished.
+    severity: high
+
+  - id: P3_post_write_rambling
+    desc: |
+      LITERAL CHECK ONLY. A prior turn already produced a `write` tool_call to
+      the expected output file. THIS turn produces an assistant text block
+      (`type: text`, OUTSIDE any tool_call) longer than 500 chars. Length
+      check only — do NOT judge whether the trailing text "looks like" a
+      paraphrase or restatement. If the trailing text is < 500 chars, this
+      pitfall does NOT fire.
+    severity: high
+
+  - id: P4_excessive_thinking_no_action
+    desc: |
+      This turn's thinking is > 2500 chars AND no tool call is issued AND no
+      substantive text (> 200 chars) is produced. Burning budget on thinking
+      without any progress. (Note: thinking PAIRED with a meaningful tool call
+      in the same turn is NOT a pitfall — Qwen3 requires thinking.)
+    severity: high
+
+  - id: P5_read_loop
+    desc: |
+      This turn issues a `read` of the input file with arguments identical to
+      a previous read in the trajectory, AND no `write`, no extraction-thinking
+      that names new content, and no extraction-text has occurred between the
+      two reads. The agent is stuck re-reading the same chunk.
+    severity: medium
+
+notes: |
+  The transcript is long (~120k chars) so the agent may need multiple read calls. The agent must distinguish between observations and actionable recommendations.
+
+  DSv4 also flagged these task-specific quality concerns
+  (kept here for reference, not enforced by the judge):
+    - P1_incomplete_read: The agent stops reading the transcript before reaching the end, missing recommendations from later sections.
+    - P2_no_categorization: The agent outputs a flat list of recommendations without grouping them into the required categories.
+    - P3_missing_attribution: The agent fails to attribute recommendations to specific speakers or attributes them incorrectly.
+    - P4_implicit_recommendations_missed: The agent only extracts explicitly framed recommendations (e.g., "I recommend...") and misses implicit ones (e.g., "We need to...").
+    - P5_no_summary: The agent completes the file without including a summary of the most emphasized themes.

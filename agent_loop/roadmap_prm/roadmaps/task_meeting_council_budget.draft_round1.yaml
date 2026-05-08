@@ -1,0 +1,56 @@
+task_id: task_meeting_council_budget
+goal: Extract all budget-related discussions with dollar amounts, context, council actions, and concerns from the transcript into a structured budget report with a financial summary.
+inputs:
+  - transcript.md
+output: budget_report.md
+milestones:
+  - id: M1_read_transcript
+    desc: The agent has read the full transcript content, including any truncated portions.
+    signals:
+      - tool call to read('transcript.md') with offset parameter
+      - total characters read across reads exceeds 100,000
+  - id: M2_identify_capacity_fees
+    desc: The agent has extracted the water/wastewater capacity fee amounts, investment, and revenue impact.
+    signals:
+      - mentions "$3 billion" or "3B" investment
+      - mentions "$1,020" or "$1,237" current fees and "$1,530" or "$1,847" proposed fees
+      - mentions "$1.5-2 million" or "1.5 million" annual revenue
+  - id: M3_identify_rome_yard
+    desc: The agent has extracted the Rome Yard Phase 4 cost and developer investment.
+    signals:
+      - mentions "$94 million" or "94M" for Rome Yard
+      - mentions "$3 million" developer investment
+  - id: M4_identify_annex
+    desc: The agent has extracted the Howard Avenue Annex total cost, Phase 1 spent, and Phase 2 cost.
+    signals:
+      - mentions "$34.2 million" or "34.2M" total
+      - mentions "$7 million" or "7M" Phase 1 spent
+      - mentions "Phase 2" and "$27.2 million"
+  - id: M5_identify_other_items
+    desc: The agent has extracted the remaining key financial items: Fire Station 24, gas settlement, Zion Cemetery, and pipes program.
+    signals:
+      - mentions "Fire Station 24" and "GMP" or "May 15"
+      - mentions "$650,000" or "650K" gas settlement
+      - mentions "Zion" and "$8 million" or "8M"
+      - mentions "pipes program" and "$8" per month
+  - id: M6_write_report
+    desc: The agent has written the budget report file with all extracted data and a financial summary.
+    signals:
+      - write tool call to 'budget_report.md' or an alternative filename
+      - file content includes "financial summary" or "budget summary" section
+pitfalls:
+  - id: P1_truncated_read
+    desc: The agent reads only the beginning of the transcript and misses budget discussions in later sections.
+    severity: high
+  - id: P2_missing_summary
+    desc: The agent extracts individual items but omits the required financial summary at the end of the report.
+    severity: high
+  - id: P3_incorrect_amounts
+    desc: The agent misreports dollar amounts (e.g., confusing $3B with $3M, or $94M with $9.4M).
+    severity: medium
+  - id: P4_no_context
+    desc: The agent lists dollar amounts without explaining the context, council actions, or concerns for each item.
+    severity: medium
+  - id: P5_premature_write
+    desc: The agent writes the report before reading the full transcript, resulting in incomplete extraction.
+    severity: high

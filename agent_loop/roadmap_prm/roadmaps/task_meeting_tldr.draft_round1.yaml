@@ -1,0 +1,51 @@
+task_id: task_meeting_tldr
+goal: Write an extremely concise TL;DR of a meeting transcript to meeting_tldr.md with a one-line summary, 3-5 bullet points, and any deadlines.
+inputs:
+  - meeting_transcript.md
+output: meeting_tldr.md
+milestones:
+  - id: M1_read_transcript
+    desc: Agent reads the meeting transcript file.
+    signals:
+      - tool call to read('meeting_transcript.md')
+      - tool call to read with path containing 'meeting_transcript'
+  - id: M2_first_draft
+    desc: Agent writes an initial version of meeting_tldr.md with a one-line summary and bullet points.
+    signals:
+      - tool call to write('meeting_tldr.md', ...)
+      - file meeting_tldr.md created in workspace
+  - id: M3_word_count_check
+    desc: Agent checks the word count of the draft to ensure it meets the 150-word target.
+    signals:
+      - tool call to exec with command containing 'wc' or 'word count'
+      - tool call to exec with command containing 'meeting_tldr.md'
+  - id: M4_revision
+    desc: Agent revises the TL;DR to reduce word count or improve conciseness.
+    signals:
+      - second tool call to write('meeting_tldr.md', ...)
+      - tool call to write with content shorter than previous write
+  - id: M5_final_output
+    desc: Agent produces a final meeting_tldr.md under 150 words with all required elements.
+    signals:
+      - final tool call to write('meeting_tldr.md', ...) after word count check
+      - text_preview mentions 'done' or 'written' and word count under 150
+pitfalls:
+  - id: P1_no_file_created
+    desc: Agent fails to create meeting_tldr.md or creates it with a wrong filename.
+    severity: high
+  - id: P2_exceeds_word_limit
+    desc: Agent writes a TL;DR that exceeds 150 words without revising.
+    severity: high
+  - id: P3_missing_structure
+    desc: Agent omits the one-line summary at the top or does not use 3-5 bullet points.
+    severity: medium
+  - id: P4_adds_filler
+    desc: Agent includes preamble phrases like 'In this meeting, the team discussed...' or other unnecessary context.
+    severity: medium
+  - id: P5_skips_deadline
+    desc: Agent fails to mention the Tuesday deadline for the product announcements spreadsheet.
+    severity: low
+notes: |
+  The transcript is ~4000 words; the agent must compress to ~150 words.
+  Key signals to include - event assignments (re:Invent, Google Next, KubeCon),
+  messaging decision ('more speed, less risk'), and the Tuesday deadline.

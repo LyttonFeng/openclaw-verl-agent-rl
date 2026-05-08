@@ -1,0 +1,48 @@
+task_id: task_meeting_council_upcoming
+goal: Extract all upcoming events, deadlines, and future dates from the Tampa City Council transcript into a chronologically ordered markdown report with a highlights section.
+inputs:
+  - transcript.md
+output: upcoming_events.md
+milestones:
+  - id: M1_transcript_read
+    desc: The full transcript has been read and is available for analysis.
+    signals:
+      - Agent has called read() on transcript.md
+      - Agent's context contains text from the transcript file
+  - id: M2_events_extracted
+    desc: Key upcoming events and deadlines have been identified from the transcript content.
+    signals:
+      - Agent mentions or lists specific dates like April 16, April 20, May 7, May 15, August 3/10/17, March 2027, September 2028
+      - Agent references specific events like Veterans Committee, East Tampa Town Hall, ethics report, Fire Station 24 GMP, budget workshops, capacity fees, Rome Yard
+  - id: M3_report_drafted
+    desc: A draft of the upcoming_events.md file has been written to the workspace.
+    signals:
+      - Agent calls write() with a path ending in upcoming_events.md
+      - The written content includes a chronological list of events with dates
+  - id: M4_highlights_added
+    desc: The report includes a "What to watch" or equivalent highlights section.
+    signals:
+      - The written content contains a section header like "What to watch", "Highlights", "Key items", or similar
+      - The highlights section summarizes the most important upcoming events
+  - id: M5_report_complete
+    desc: The final report is complete and the agent confirms the task is done.
+    signals:
+      - Agent's final turn text confirms the report is written and summarizes its contents
+      - No further tool calls are made after the write
+pitfalls:
+  - id: P1_incomplete_read
+    desc: Agent fails to read the entire transcript, missing events from later portions.
+    severity: high
+  - id: P2_wrong_output_file
+    desc: Agent writes the report to a file name other than upcoming_events.md.
+    severity: medium
+  - id: P3_missing_highlights
+    desc: Agent produces a list of events but omits the required "What to watch" highlights section.
+    severity: high
+  - id: P4_non_chronological
+    desc: Agent lists events in the order they appear in the transcript rather than chronologically by date.
+    severity: medium
+  - id: P5_incorrect_dates
+    desc: Agent misattributes dates to events or includes events that are not actually upcoming.
+    severity: high
+notes: The transcript is large and may require multiple read() calls to capture fully. The automated checks are strict about file name and content patterns.

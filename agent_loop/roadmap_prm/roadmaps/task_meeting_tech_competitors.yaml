@@ -1,0 +1,142 @@
+task_id: task_meeting_tech_competitors
+
+goal: |
+  Extract a structured competitor analysis from a meeting transcript, covering competitors, positioning, stage mapping, methodology, and insights.
+
+inputs:
+  - meeting_transcript.md
+
+output: competitor_analysis.md
+
+# ROUND 3 (auto-promoted from R1 draft):
+#   - DSv4-flash drafted task-specific milestones (kept).
+#   - Added PRECONDITION to write milestone.
+#   - Appended generic M_close_cleanly.
+#   - Replaced pitfalls with the 5 canonical turn-level pitfalls
+#     validated on pilot A (blog_post) + pilot B (council_budget).
+#   - DSv4's task-specific pitfalls preserved as informational notes.
+
+milestones:
+  - id: M1_transcript_read
+    desc: |
+      The agent reads the meeting transcript file.
+    signals:
+      - "tool call to read('meeting_transcript.md')"
+      - tool result contains the full transcript text
+
+  - id: M2_competitors_listed
+    desc: |
+      All six tier 1 competitors are explicitly named in the output file.
+    signals:
+      - "'Azure DevOps' or 'ADO' appears in competitor_analysis.md"
+      - "'Atlassian' appears"
+      - "'GitHub' appears"
+      - "'Jenkins' appears"
+      - "'JFrog' appears"
+      - "'CloudBees' appears"
+
+  - id: M3_tier_system_documented
+    desc: |
+      The tier classification system (tier 1, 2, 3) is mentioned.
+    signals:
+      - "'tier 1' or 'tier one' appears"
+      - "'tier 2' or 'tier two' appears"
+      - "'tier 3' or 'tier three' appears"
+
+  - id: M4_stage_mapping_discussed
+    desc: |
+      The analysis notes that not all competitors apply to all product stages.
+    signals:
+      - "'stage' and 'not all' or 'relevant' or 'applicable' appear in proximity"
+      - "specific example like 'CloudBees' and 'Monitor' appear together"
+
+  - id: M5_methodology_decisions_captured
+    desc: |
+      Key methodology decisions (tier 1 focus, market lens, GitLab row, green-only infographic) are documented.
+    signals:
+      - "'focus' or 'only' appears near 'tier 1'"
+      - "'market lens' or 'buyer' or 'customer' appears"
+      - "'GitLab' and 'row' or 'line' appear together"
+      - "'green' and 'comparison' or 'no red' appear together"
+
+  - id: M6_platform_distinction_made
+    desc: |
+      The distinction between platform and non-platform competitors is captured.
+    signals:
+      - "'platform' appears"
+      - "'Jenkins' or 'CloudBees' is described as 'not a platform' or similar"
+
+  - id: M7_output_file_created
+    desc: |
+      The output file competitor_analysis.md is written to the workspace.
+    signals:
+      - "tool call to write('competitor_analysis.md', ...)"
+      - tool result confirms successful write
+      - "PRECONDITION: a prior turn in this trajectory has performed a successful read of meeting_transcript.md (returned substantial content without is_error). If no such prior read exists, this milestone does NOT fire (the turn is P2_write_without_reading instead)."
+
+  - id: M_close_cleanly
+    desc: |
+      The final turn of the trajectory, after the write milestone has fired,
+      produces a brief confirmation or empty text and no further write that
+      would replace the main output.
+    signals:
+      - this is the last turn of the trajectory
+      - the write milestone has already fired in a prior turn
+      - this turn has no tool call OR a non-write tool call
+      - if there is any text, it is < 400 chars
+
+pitfalls:
+  - id: P1_no_output_written
+    desc: |
+      This is the LAST turn of the trajectory AND no `write` to the expected
+      output file has occurred in any turn so far. The agent ran out of budget
+      without producing the required output. (4B's dominant failure mode.)
+    severity: high
+
+  - id: P2_write_without_reading
+    desc: |
+      LITERAL CHECK ONLY. This turn issues a `write` tool_call to the expected
+      output file AND no prior turn in this trajectory contains a `read`
+      tool_call whose tool_result returned `is_error: false` with content
+      length > 1000 chars on the input file. Do NOT infer hallucination from
+      content style or formatting — only check whether a successful prior read
+      tool_call exists in the trajectory history. If one does exist, this
+      pitfall does NOT fire even if the written content is long and polished.
+    severity: high
+
+  - id: P3_post_write_rambling
+    desc: |
+      LITERAL CHECK ONLY. A prior turn already produced a `write` tool_call to
+      the expected output file. THIS turn produces an assistant text block
+      (`type: text`, OUTSIDE any tool_call) longer than 500 chars. Length
+      check only — do NOT judge whether the trailing text "looks like" a
+      paraphrase or restatement. If the trailing text is < 500 chars, this
+      pitfall does NOT fire.
+    severity: high
+
+  - id: P4_excessive_thinking_no_action
+    desc: |
+      This turn's thinking is > 2500 chars AND no tool call is issued AND no
+      substantive text (> 200 chars) is produced. Burning budget on thinking
+      without any progress. (Note: thinking PAIRED with a meaningful tool call
+      in the same turn is NOT a pitfall — Qwen3 requires thinking.)
+    severity: high
+
+  - id: P5_read_loop
+    desc: |
+      This turn issues a `read` of the input file with arguments identical to
+      a previous read in the trajectory, AND no `write`, no extraction-thinking
+      that names new content, and no extraction-text has occurred between the
+      two reads. The agent is stuck re-reading the same chunk.
+    severity: medium
+
+notes: |
+  The agent should read the transcript first, then write the analysis. The output file must be named competitor_analysis.md.
+
+  DSv4 also flagged these task-specific quality concerns
+  (kept here for reference, not enforced by the judge):
+    - P1_skipped_reading: Agent writes the analysis without first reading the transcript.
+    - P2_incomplete_competitor_list: Agent lists fewer than 5 of the 6 tier 1 competitors.
+    - P3_no_methodology: Agent extracts facts but fails to document the team's methodology decisions (tier focus, market lens, GitLab row, infographic design).
+    - P4_no_stage_relevance: Agent lists competitors without noting that not all apply to all stages.
+    - P5_ignores_platform_distinction: Agent fails to note which competitors are platforms and which are not.

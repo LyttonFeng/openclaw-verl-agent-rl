@@ -1,0 +1,50 @@
+task_id: task_meeting_blog_post
+goal: Write a standalone blog post that transforms insights from a meeting transcript about continuous delivery into actionable advice for product marketing professionals.
+inputs:
+  - meeting_transcript.md
+output: blog_post.md
+milestones:
+  - id: M1_read_transcript
+    desc: The agent reads the meeting transcript to understand the source material.
+    signals:
+      - tool call to read('meeting_transcript.md')
+      - tool result contains content from the meeting transcript
+  - id: M2_identify_core_challenge
+    desc: The agent identifies the core challenge of announcing features in a continuous delivery model with a public roadmap.
+    signals:
+      - text mentions "continuous delivery", "incremental", "iterative", "public roadmap", or "MVC"
+      - text contrasts "big-bang releases" with continuous shipping
+  - id: M3_extract_strategies
+    desc: The agent extracts at least two concrete strategies from the meeting (e.g., bundling MVCs, looking back over a year, narrative buckets, event timing).
+    signals:
+      - text references "bundling", "narrative themes", "maturity", "GA-ready", "stack ranking", "excitement levels", "narrative buckets", or "event timing"
+      - text lists or describes at least two distinct strategies
+  - id: M4_write_blog_post
+    desc: The agent writes the blog post to the output file with a compelling title, appropriate length, and standalone tone.
+    signals:
+      - tool call to write('blog_post.md', ...)
+      - output file blog_post.md exists
+      - content starts with a heading (# Title)
+      - word count is between 400 and 1200
+  - id: M5_ensure_standalone_tone
+    desc: The blog post reads as a standalone article, not a meeting recap, and is written for the target audience.
+    signals:
+      - no phrases like "in the meeting", "the team discussed", or "meeting recap"
+      - text uses terms like "product marketing", "DevOps", "launch strategy", or "go-to-market"
+pitfalls:
+  - id: P1_meeting_recap
+    desc: The agent writes a summary or recap of the meeting instead of a standalone blog post.
+    severity: high
+  - id: P2_no_strategies
+    desc: The blog post fails to include at least two concrete strategies or lessons for the audience.
+    severity: high
+  - id: P3_wrong_length
+    desc: The blog post is too short (under 400 words) or too long (over 1200 words).
+    severity: medium
+  - id: P4_generic_title
+    desc: The blog post has a generic or misleading title like "Meeting Summary" or "Blog Post".
+    severity: medium
+  - id: P5_no_core_challenge
+    desc: The blog post does not address the core challenge of announcing in a continuous delivery model.
+    severity: high
+notes: The agent should transform the meeting content into generalizable advice, avoiding GitLab-specific jargon unless it serves the broader audience.

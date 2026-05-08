@@ -1,0 +1,95 @@
+task_id: task_meeting_blog_post
+
+goal: |
+  Read the GitLab PMM meeting transcript, then produce a standalone blog post
+  saved to blog_post.md (not a meeting recap).
+
+inputs:
+  - meeting_transcript.md
+
+output: blog_post.md
+
+# ROUND 3 (final). Round 2 (human) had M2_internalize_content; DSv4 audit
+# correctly noted experts often skip explicit internalization in thinking,
+# so it would false-positive. Dropped. Kept simple: read → write → close.
+
+milestones:
+  - id: M1_read_transcript
+    desc: |
+      This turn issues a `read` tool call against meeting_transcript.md AND
+      it is the first successful read of that file in the trajectory.
+    signals:
+      - tool_call name == "read" and path argument equals "meeting_transcript.md" (or matches transcript filename)
+      - tool_result for that read returns >2000 chars without is_error
+      - this is the first such successful read in the trajectory
+
+  - id: M2_write_blog_post
+    desc: |
+      This turn issues a `write` tool call to blog_post.md with substantive
+      content AND a prior turn has already performed a successful read of
+      meeting_transcript.md. (If no prior read happened, this turn is NOT
+      M2 — it is P1_write_without_reading instead.)
+    signals:
+      - tool_call name == "write" with path == "blog_post.md"
+      - content argument starts with a markdown heading and has multiple paragraphs
+      - content word count between 400 and 1500
+      - tool_result returns success (no is_error)
+      - "PRECONDITION: a prior turn in this trajectory has a successful read of meeting_transcript.md (>2000 chars returned)"
+
+  - id: M3_close_cleanly
+    desc: |
+      This is the final turn. After M2 has fired, this turn produces no new
+      tool calls and either no text or only a short confirmation.
+    signals:
+      - this is the last turn of the trajectory
+      - M2 has already fired in a prior turn
+      - this turn has no tool calls
+      - if this turn has any text, it is < 400 chars and reads as a brief confirmation
+
+pitfalls:
+  - id: P1_write_without_reading
+    desc: |
+      This turn issues a `write` to blog_post.md while NO prior turn has
+      performed a successful read of meeting_transcript.md. The agent is
+      hallucinating content from the task prompt alone.
+    severity: high
+
+  - id: P2_post_write_rambling
+    desc: |
+      A prior turn has already written blog_post.md (whether legitimately under
+      M2, or illegitimately under P1). THIS turn produces another block of
+      assistant text > 500 chars OUTSIDE any tool call, that paraphrases /
+      restates / reproduces / expands the blog content. Wasted budget; the
+      grader does not score this trailing text.
+    severity: high
+
+  - id: P3_excessive_thinking_no_action
+    desc: |
+      This turn's thinking is >2500 chars AND it produces no tool call AND
+      no substantive text (<200 chars). Pure thinking with no progress.
+    severity: medium
+
+  - id: P4_meeting_recap_in_output
+    desc: |
+      This turn writes blog_post.md with content that opens like a meeting
+      recap — phrases such as "In this meeting", "The team discussed",
+      "Meeting summary", "Recap of the PMM call" appear in the first 500
+      chars of the written content.
+    severity: medium
+
+  - id: P5_read_loop
+    desc: |
+      This turn issues a `read` of meeting_transcript.md AND a prior turn
+      has ALSO read meeting_transcript.md AND no tool call other than read
+      has occurred between them AND no thinking longer than 100 chars
+      discusses writing/extracting/structuring. The agent is stuck re-reading.
+    severity: medium
+
+notes: |
+  Expert (DSv4 V4-flash) trajectory: T0 read → T1 write → T2 short close
+  (3 turns, <1.5K thinking).
+
+  4B failure modes seen (round 2-5 graded_trajectories.jsonl):
+    - Skip read entirely, write hallucinated blog content (transcript_not_read tag)
+    - After successful write, produce another 5K-char wall of text (post_write_rambling)
+    - Do all the work in 3K-char thinking, then no tool call (excessive_thinking)

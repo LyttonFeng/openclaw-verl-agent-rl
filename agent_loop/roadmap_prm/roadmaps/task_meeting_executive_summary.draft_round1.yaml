@@ -1,0 +1,57 @@
+task_id: task_meeting_executive_summary
+goal: Generate a concise executive summary of a meeting transcript, capturing key topics, decisions, and action items for a busy executive.
+inputs:
+  - meeting_transcript.md
+output: executive_summary.md
+milestones:
+  - id: M1_read_transcript
+    desc: The agent reads the meeting transcript file.
+    signals:
+      - "Tool call to read('meeting_transcript.md') or similar"
+      - "Agent text references reading the file"
+  - id: M2_identify_attendees_and_date
+    desc: The agent identifies the meeting date and attendee names from the transcript.
+    signals:
+      - "Output mentions '2021-06-28' or 'June 28, 2021'"
+      - "Output lists names like Brian, Cindy, Cormac, Samia, William"
+  - id: M3_extract_key_topics
+    desc: The agent identifies at least 3 of the main discussion topics (events, announcements, competitive, messaging, security).
+    signals:
+      - "Output mentions 'corporate events' or 're:Invent' or 'KubeCon' or 'Google Next'"
+      - "Output mentions 'Commit conference' or 'product announcements' or 'top 5 features'"
+      - "Output mentions 'competitive infographic' or 'messaging framework' or 'vulnerability management'"
+  - id: M4_document_decisions
+    desc: The agent captures at least 2 specific decisions made during the meeting.
+    signals:
+      - "Output states decision like 'Platform → re:Invent' or 'CI/CD → Google Next' or 'GitOps → KubeCon'"
+      - "Output states decision like 'tagline: more speed, less risk'"
+      - "Output states decision like 'green-only colors for infographic'"
+      - "Output states decision like 'vulnerability management as top security announcement'"
+  - id: M5_list_action_items
+    desc: The agent extracts action items or next steps with owners where identifiable.
+    signals:
+      - "Output contains a section titled 'Action Items' or 'Next Steps'"
+      - "Output mentions specific person (e.g., Cormac) with a task (e.g., 'add top 5 for Plan')"
+      - "Output mentions 'confirm with campaign managers' or similar follow-up"
+  - id: M6_write_summary_file
+    desc: The agent writes the final executive summary to the output file.
+    signals:
+      - "Tool call to write('executive_summary.md', ...)"
+      - "File executive_summary.md exists in workspace"
+pitfalls:
+  - id: P1_verbatim_transcript
+    desc: The agent copies large portions of the transcript verbatim instead of summarizing.
+    severity: high
+  - id: P2_missing_attendees_or_date
+    desc: The summary omits the meeting date or attendee names.
+    severity: medium
+  - id: P3_no_actionable_content
+    desc: The summary lacks action items or next steps, making it non-actionable for an executive.
+    severity: high
+  - id: P4_overly_detailed_or_long
+    desc: The summary exceeds ~800 words or includes tangential details (e.g., Talladega Nights, school assemblies).
+    severity: medium
+  - id: P5_factual_inaccuracy
+    desc: The summary introduces incorrect information, such as wrong event assignments or false decisions.
+    severity: high
+notes: The transcript contains informal conversation and tangents; the agent must separate signal from noise.

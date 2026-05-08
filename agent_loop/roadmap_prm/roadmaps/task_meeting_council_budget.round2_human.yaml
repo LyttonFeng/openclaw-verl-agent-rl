@@ -1,0 +1,83 @@
+task_id: task_meeting_council_budget
+goal: |
+  Read the Tampa City Council transcript (~206KB, requires chunked reads),
+  extract every budget-related discussion with dollar amounts, context, and
+  council action, then write a structured budget_report.md ending with a
+  financial summary.
+
+inputs:
+  - transcript.md
+
+output: budget_report.md
+
+milestones:
+  - id: M1_first_read
+    desc: This turn issues the first `read` tool call against transcript.md. First successful read = +1.
+    signals:
+      - tool_call name == "read" with path == "transcript.md" (or matching transcript file)
+      - tool_result returns substantial content (>5000 chars) without error
+
+  - id: M2_continue_reading
+    desc: Because transcript is >100K chars, the agent must read multiple chunks. This turn issues a follow-up `read` with an offset / line-range parameter, OR otherwise advances coverage of the transcript.
+    signals:
+      - tool_call name == "read" with offset / start_line / line argument set, OR a different chunk range
+      - this is the 2nd or later read of transcript.md
+      - thinking acknowledges that more content remains to be read
+
+  - id: M3_extract_budget_items
+    desc: This turn (in thinking or text) identifies / names specific budget items from what has been read. Demonstrates extraction is happening, not just bulk reading.
+    signals:
+      - thinking or text mentions concrete budget items by name (e.g. "Rome Yard", "Howard Avenue Annex", "Fire Station 24", "capacity fee", "Zion Cemetery", "gas settlement", "pipes program")
+      - thinking or text contains specific dollar figures from transcript ($94M, $34.2M, $7M, $1,020, $1,530, $3B, $650K, etc.)
+      - the model is enumerating / structuring items, not just paraphrasing prose
+
+  - id: M4_write_report
+    desc: This turn issues `write` to budget_report.md (or accepted alternative) with substantive content covering multiple budget items.
+    signals:
+      - tool_call name == "write" with path matching ^(budget_report|budget|report)\.md$
+      - content has multiple distinct budget items (>=3) each with a dollar figure and context
+      - content includes a financial summary section ("summary", "totals", "financial summary", "key totals")
+      - content >= 1500 chars and has markdown structure
+
+  - id: M5_close_cleanly
+    desc: After write, this turn cleanly ends the task — short confirmation or empty.
+    signals:
+      - turn comes after M4
+      - text is a brief confirmation (<400 chars) or empty
+      - no further write that overwrites with different content
+
+pitfalls:
+  - id: P1_no_output_written
+    desc: The trajectory is the LAST turn before timeout / end, AND no `write` to budget_report has occurred yet. The agent ran out of budget without ever producing a report. This is the dominant 4B failure mode.
+    severity: high
+
+  - id: P2_premature_write_short
+    desc: This turn writes budget_report.md before the transcript has been substantively read (only 1 read of <10K chars), so the report cannot have meaningful content. Or the write contains <500 chars with no concrete budget items.
+    severity: high
+
+  - id: P3_excessive_thinking_no_action
+    desc: This turn's thinking is >3000 chars AND no tool call is issued AND no substantive text is produced. Burning budget on thinking without action.
+    severity: high
+
+  - id: P4_read_loop
+    desc: This turn issues a `read` of transcript.md with the same arguments as a prior read (or no offset advance), without any intervening extraction step. Stuck re-reading.
+    severity: medium
+
+  - id: P5_no_summary
+    desc: This turn writes budget_report.md but the content lacks any "summary" / "totals" / "financial summary" section at the end. Missing required closing section.
+    severity: low
+
+  - id: P6_hallucinated_amounts
+    desc: This turn writes content containing dollar figures that do NOT appear in the transcript content read so far (e.g. invented numbers, or numbers that contradict what was read). Hard to detect from rubric alone — judge should flag obvious cases.
+    severity: medium
+
+notes: |
+  Tampa Council transcript is ~206KB (well over single-read limit at 40K context;
+  needs offsets). Expert pattern (DSv4 V4-flash): 5 chunked reads + write +
+  short close = 7 turns. Trajectory length itself is informative — a 1-turn
+  trajectory that read once and stopped is a clear failure.
+
+  4B-specific note: 4B often produces 3-5K thinking content before any action.
+  In contexts where thinking is necessary (Qwen3 with thinking required), do
+  NOT punish thinking that is paired with a meaningful tool call in the same
+  turn — only punish thinking that occurs alone.

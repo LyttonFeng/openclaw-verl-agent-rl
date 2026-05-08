@@ -1,0 +1,126 @@
+task_id: task_meeting_council_budget
+
+goal: |
+  Read the long Tampa City Council transcript (~206KB) via chunked reads,
+  extract every budget-related discussion with dollar amounts and context,
+  then write a structured budget_report.md ending with a financial summary.
+
+inputs:
+  - transcript.md
+
+output: budget_report.md
+
+# ROUND 3 (final). DSv4 audit incorporated:
+#   - dropped P6_hallucinated_amounts (truly undetectable from rubric alone)
+#   - tightened P2_premature_write thresholds
+#   - simplified M5_close (DSv4's >50%-different-content idea was overengineered)
+# Kept M2_continue_reading without M2.5 substantial_coverage: that requires
+# the judge to track cumulative offsets across turns, which is fragile.
+# Instead, we let M2 fire repeatedly per chunked read — that's expected
+# expert behavior (5 reads in 5 turns) and the judge gives 0 for re-reads.
+
+milestones:
+  - id: M1_first_read
+    desc: |
+      This turn issues the first successful `read` of transcript.md in the
+      trajectory.
+    signals:
+      - tool_call name == "read" with path matching transcript filename
+      - tool_result returns >5000 chars without is_error
+      - this is the first such successful read
+
+  - id: M2_continue_reading
+    desc: |
+      This turn issues a `read` of transcript.md with an offset / line-range
+      argument that advances coverage of the transcript (different chunk than
+      any prior read in this trajectory).
+    signals:
+      - tool_call name == "read" with offset / start_line / line argument set
+      - this is the 2nd or later read of transcript.md
+      - the offset / range differs from all prior reads in this trajectory
+      - tool_result returns substantial content without is_error
+
+  - id: M3_extract_budget_items
+    desc: |
+      This turn (in thinking, text, or write content) names specific budget
+      items and dollar figures from what has been read so far. Demonstrates
+      extraction is happening.
+    signals:
+      - mentions concrete budget item names found in the transcript content already read (e.g. "Rome Yard", "Howard Avenue Annex", "Fire Station 24", "capacity fee", "Zion Cemetery", "gas settlement", "pipes program")
+      - includes specific dollar figures from the transcript ($94M, $34.2M, $7M, $1,020, $1,530, $3B, $650K, etc.)
+      - the content is enumerative / structured, not just paraphrased prose
+
+  - id: M4_write_report
+    desc: |
+      This turn issues `write` to budget_report.md (or accepted alias) with
+      substantive content covering multiple budget items AND prior turns have
+      collectively read >= 30,000 chars of transcript content. (If write occurs
+      with insufficient prior reading, this turn is P2_premature_write, not M4.)
+    signals:
+      - tool_call name == "write" with path matching ^(budget_report|budget|report)\.md$
+      - content >= 1500 chars with markdown structure
+      - content has >= 3 distinct budget items each with a dollar figure and brief context
+      - content includes a summary / totals section near the end
+      - "PRECONDITION: cumulative read tool_results across prior turns total >= 30,000 chars of transcript content"
+
+  - id: M5_close_cleanly
+    desc: |
+      The final turn of the trajectory, after M4 has fired, produces a brief
+      confirmation or empty text and no further write that would replace
+      budget_report.md.
+    signals:
+      - this is the last turn of the trajectory
+      - M4 has already fired in a prior turn
+      - this turn has no tool call OR a non-write tool call
+      - if there is any text, it is < 400 chars
+
+pitfalls:
+  - id: P1_no_output_written
+    desc: |
+      This is the LAST turn of the trajectory AND no `write` to budget_report
+      has occurred in any turn so far. The agent ran out of budget without
+      producing a report. This is the dominant 4B failure mode (output_not_written).
+    severity: high
+
+  - id: P2_premature_write
+    desc: |
+      This turn issues a `write` to budget_report.md AND cumulative successful
+      reads of transcript.md so far in this trajectory total < 30,000 chars
+      (i.e. less than ~15% of the transcript). OR the write content is
+      < 1000 chars OR mentions fewer than 2 distinct dollar figures.
+    severity: high
+
+  - id: P3_excessive_thinking_no_action
+    desc: |
+      This turn's thinking is > 3000 chars AND no tool call is issued AND no
+      substantive text (>200 chars) is produced. Burning budget on thinking
+      without action. (Note: thinking PAIRED with a meaningful tool call in
+      the same turn is NOT a pitfall — Qwen3 requires thinking.)
+    severity: high
+
+  - id: P4_read_loop
+    desc: |
+      This turn issues a `read` of transcript.md with offset / range arguments
+      identical to a previous read in the trajectory, AND no `write`,
+      `extraction-thinking` (thinking that names budget items), or
+      `extraction-text` has occurred between the two reads.
+    severity: medium
+
+  - id: P5_no_summary
+    desc: |
+      This turn writes budget_report.md but the content lacks any "summary",
+      "totals", "financial summary", or "key totals" section.
+    severity: low
+
+notes: |
+  Expert (DSv4 V4-flash) trajectory: T0 read+ls → T1..T4 chunked reads with
+  offsets → T5 write → T6 short close. 7 turns total.
+
+  4B failure modes seen (round 2-4 graded_trajectories.jsonl):
+    - 1-turn trajectory: T0 = thinking 3-5K + read first chunk → trajectory ends.
+      No write ever happens. P1_no_output_written fires on the only turn.
+
+  Note on M3: this milestone can fire MULTIPLE TURNS in a row (each new
+  chunk read may yield new items). That is fine — the judge should give
+  +1 only when the turn ADDS new items vs. prior turns. If an extraction
+  step just restates what was already named, give 0 instead.

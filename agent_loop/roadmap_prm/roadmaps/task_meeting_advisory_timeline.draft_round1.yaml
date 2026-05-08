@@ -1,0 +1,57 @@
+task_id: task_meeting_advisory_timeline
+goal: Extract all temporal references from the meeting transcript and organize them into a structured, chronologically ordered timeline report.
+inputs:
+  - meeting-transcript.md
+output: timeline.md
+milestones:
+  - id: M1_read_transcript
+    desc: The agent reads the meeting transcript file to access the source material.
+    signals:
+      - tool call to read('meeting-transcript.md')
+      - tool call to read('meeting-transcript.txt')
+      - tool call to read('meeting-transcript')
+  - id: M2_identify_historical_references
+    desc: The agent identifies and extracts past events, dates, and timeframes mentioned in the transcript (e.g., 2010 memo, Oct 2011 report, prior relocations).
+    signals:
+      - text containing "June 2010" or "President's memorandum" or "500 MHz goal"
+      - text containing "October 1, 2011" or "infamous October 1st"
+      - text containing "1710-1755" and "cleared in 5 years"
+      - text containing "2001" and "cost estimates"
+  - id: M3_identify_future_deadlines
+    desc: The agent extracts all future deadlines, target dates, and scheduled meetings mentioned in the transcript.
+    signals:
+      - text containing "September 2012" and "weather satellite" or "Working Group 1"
+      - text containing "January 2013" and "Working Group" or "wrap up"
+      - text containing "July 24" and "Boulder" or "next meeting"
+      - text containing "ISART" and "July 25" or "July 26"
+      - text containing "10-year" and "transition" or "relocation"
+      - text containing "5-year" and "law enforcement" or "first phase"
+  - id: M4_organize_chronologically
+    desc: The agent structures all extracted entries into a chronological timeline, distinguishing past, present, and future events.
+    signals:
+      - report contains a section titled "Chronological Timeline" or "Timeline"
+      - entries are ordered by date or timeframe (e.g., 2010, 2011, 2012, 2013)
+      - report uses clear formatting like tables, lists, or headings to separate time periods
+  - id: M5_write_timeline_report
+    desc: The agent writes the final structured timeline report to the output file.
+    signals:
+      - tool call to write('timeline.md', ...)
+      - tool call to write('timeline_report.md', ...)
+      - tool call to write('deadlines.md', ...)
+pitfalls:
+  - id: P1_missing_historical_context
+    desc: The agent focuses only on future deadlines and ignores important historical references that provide context.
+    severity: high
+  - id: P2_fabricated_or_inaccurate_dates
+    desc: The agent invents dates or timeframes not present in the transcript, or misattributes dates to the wrong events.
+    severity: high
+  - id: P3_no_attribution_or_context
+    desc: The agent lists dates without indicating who mentioned them or what conditions apply, making the timeline less useful.
+    severity: medium
+  - id: P4_poor_organization
+    desc: The agent dumps all dates in a random order without chronological or logical grouping, making the report hard to scan.
+    severity: medium
+  - id: P5_incomplete_extraction
+    desc: The agent misses key deadlines like the September 2012 target, January 2013 target, or the ISART meeting.
+    severity: high
+notes: The transcript contains both exact dates (e.g., July 24, 2012) and relative timeframes (e.g., "within the next week", "two and a half years ago"). The agent should resolve relative references to approximate dates where possible.

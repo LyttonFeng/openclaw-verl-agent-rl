@@ -1,0 +1,52 @@
+task_id: task_meeting_council_neighborhood
+goal: Produce a comprehensive neighborhoods_report.md identifying every neighborhood, district, geographic area, and specific location mentioned in the Tampa City Council transcript, organized with district overviews, frequency counts, and topic cross-references.
+inputs:
+  - transcript.md
+output: neighborhoods_report.md
+milestones:
+  - id: M1_transcript_read
+    desc: The agent has read the full transcript content, covering all sections and topics.
+    signals:
+      - Read tool calls span the entire transcript file (e.g., offsets covering the full file size)
+      - Agent text indicates understanding of the meeting's structure and key topics
+  - id: M2_locations_extracted
+    desc: The agent has identified and listed the core set of required locations (Temple Crest, West Tampa, South Howard, East Tampa, Highland Pines, rezoning addresses, MacDill AFB, Riverwalk).
+    signals:
+      - Agent text or tool output mentions at least 8 of the key locations from the expected behavior list
+      - Agent text references specific addresses (4102 N 22nd St, 2707 E 22nd Ave, 110 S Boulevard)
+  - id: M3_context_associated
+    desc: The agent has associated each key location with its correct context (e.g., Temple Crest with crime/McNeil, West Tampa with Rome Yard/Rays).
+    signals:
+      - Agent text pairs Temple Crest with "crime" or "McNeil"
+      - Agent text pairs West Tampa with "Rome Yard" or "Rays"
+      - Agent text pairs South Howard with "street closures" or "pipes"
+      - Agent text pairs East Tampa with "development" or "22nd St"
+      - Agent text pairs Highland Pines with "homelessness"
+  - id: M4_report_written
+    desc: The agent has written the neighborhoods_report.md file to the workspace.
+    signals:
+      - Write tool call with path containing "neighborhoods_report.md"
+      - File write confirmation from tool result
+  - id: M5_report_organized
+    desc: The report includes district-based overview, frequency count, and topic cross-reference sections.
+    signals:
+      - Report content includes a section header for "District" or "District Overview"
+      - Report content includes a "Frequency" or "Count" section
+      - Report content includes a "Cross-Reference" or "Topic" section
+pitfalls:
+  - id: P1_incomplete_reading
+    desc: The agent stops reading the transcript before reaching the end, missing key locations mentioned later in the meeting.
+    severity: high
+  - id: P2_missing_context
+    desc: The agent lists locations without associating them with their relevant context (speaker, issue, item), producing a bare list.
+    severity: high
+  - id: P3_insufficient_locations
+    desc: The agent identifies fewer than 15 distinct locations, failing to meet the breadth requirement.
+    severity: medium
+  - id: P4_no_organization
+    desc: The agent writes a flat list of locations without district grouping, frequency counts, or cross-references.
+    severity: medium
+  - id: P5_wrong_output_file
+    desc: The agent writes the report to a filename other than neighborhoods_report.md (e.g., locations.md, areas.md).
+    severity: low
+notes: The agent must read the entire transcript (it is large) to capture all locations. The automated checks are strict about specific keyword pairings (e.g., 'temple crest' AND 'crime' or 'mcneil'). The LLM judge rubric rewards organization and breadth.

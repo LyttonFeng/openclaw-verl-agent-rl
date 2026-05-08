@@ -1,0 +1,64 @@
+task_id: task_meeting_gov_next_steps
+goal: Extract all mentioned next steps, follow-up actions, timelines, and deliverables from the NASA UAP hearing transcript into a well-organized file.
+inputs:
+  - transcript.md
+output: next_steps.md
+milestones:
+  - id: M1_read_transcript
+    desc: The agent reads the full transcript file.
+    signals:
+      - tool call to read('transcript.md') or read('path') where path contains 'transcript'
+      - agent text mentions reading or parsing the transcript
+  - id: M2_identify_immediate_actions
+    desc: The agent identifies next steps with timelines in weeks (panel deliberations, AARO annual report, Five Eyes agreements).
+    signals:
+      - mentions 'panel continues deliberations' or 'several months'
+      - mentions 'AARO annual report' and 'August 1'
+      - mentions 'Five Eyes' or 'data-sharing agreements'
+  - id: M3_identify_near_term_actions
+    desc: The agent identifies actions with timelines in months (final report, sensor findings, embed, Q&A publication).
+    signals:
+      - mentions 'final report' and 'summer' or 'end of July'
+      - mentions 'purpose-built sensors' or 'sensor anomaly'
+      - mentions 'NASA embed' or 'Pritar'
+      - mentions 'Q&A' and 'science.nasa.gov'
+  - id: M4_identify_long_term_goals
+    desc: The agent identifies ongoing or long-term actions (monitoring campaigns, sensor calibration, AI/ML analytics, partnerships, crowdsourcing, budget).
+    signals:
+      - mentions '24/7 collection monitoring' or 'hotspot areas'
+      - mentions 'calibrating DOD sensors' or 'F-35' and 'weather balloons'
+      - mentions 'AI/ML analytics'
+      - mentions 'international scientific partnerships'
+      - mentions 'citizen science' or 'crowdsourcing platform'
+      - mentions 'budget allocation' or 'program funding'
+  - id: M5_identify_open_questions
+    desc: The agent identifies unresolved issues or debates from the meeting.
+    signals:
+      - mentions 'open question' or 'unresolved' or 'debate'
+      - mentions 'scope' and 'aerial' or 'underwater' or 'space'
+      - mentions 'definition of anomalous'
+      - mentions 'FAA raw radar data' or 'technical challenge'
+      - mentions 'formal UAP program' or 'too early to say'
+  - id: M6_organize_and_write_output
+    desc: The agent writes the organized next steps document with sections and timeline visualization.
+    signals:
+      - tool call to write('next_steps.md', ...) or write('action_items.md', ...)
+      - output file contains sections like 'Immediate', 'Near-Term', 'Longer-Term', 'Open Questions'
+      - output file contains a timeline visualization or milestone summary
+pitfalls:
+  - id: P1_incomplete_read
+    desc: Agent stops reading the transcript before reaching the end, missing later discussion items.
+    severity: high
+  - id: P2_missing_open_questions
+    desc: Agent fails to identify any open questions or unresolved issues from the meeting.
+    severity: medium
+  - id: P3_no_timeline_distinction
+    desc: Agent lists action items without distinguishing between firm deadlines, vague timing, and ongoing efforts.
+    severity: high
+  - id: P4_no_organization
+    desc: Agent outputs a flat list of items without organizing by timeframe or including a timeline visualization.
+    severity: medium
+  - id: P5_missing_responsible_parties
+    desc: Agent fails to attribute actions to specific responsible parties (NASA, AARO, panel, FAA, etc.).
+    severity: medium
+notes: The transcript contains many forward-looking statements. The agent must distinguish between committed actions, planned activities, and aspirational goals. The final output should be a practical reference document.

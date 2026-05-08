@@ -1,0 +1,124 @@
+task_id: task_meeting_council_neighborhood
+
+goal: |
+  Produce a comprehensive neighborhoods_report.md identifying every neighborhood, district, geographic area, and specific location mentioned in the Tampa City Council transcript, organized with district overviews, frequency counts, and topic cross-references.
+
+inputs:
+  - transcript.md
+
+output: neighborhoods_report.md
+
+# ROUND 3 (auto-promoted from R1 draft):
+#   - DSv4-flash drafted task-specific milestones (kept).
+#   - Added PRECONDITION to write milestone.
+#   - Appended generic M_close_cleanly.
+#   - Replaced pitfalls with the 5 canonical turn-level pitfalls
+#     validated on pilot A (blog_post) + pilot B (council_budget).
+#   - DSv4's task-specific pitfalls preserved as informational notes.
+
+milestones:
+  - id: M1_transcript_read
+    desc: |
+      The agent has read the full transcript content, covering all sections and topics.
+    signals:
+      - Read tool calls span the entire transcript file (e.g., offsets covering the full file size)
+      - "Agent text indicates understanding of the meeting's structure and key topics"
+
+  - id: M2_locations_extracted
+    desc: |
+      The agent has identified and listed the core set of required locations (Temple Crest, West Tampa, South Howard, East Tampa, Highland Pines, rezoning addresses, MacDill AFB, Riverwalk).
+    signals:
+      - Agent text or tool output mentions at least 8 of the key locations from the expected behavior list
+      - Agent text references specific addresses (4102 N 22nd St, 2707 E 22nd Ave, 110 S Boulevard)
+
+  - id: M3_context_associated
+    desc: |
+      The agent has associated each key location with its correct context (e.g., Temple Crest with crime/McNeil, West Tampa with Rome Yard/Rays).
+    signals:
+      - "Agent text pairs Temple Crest with \"crime\" or \"McNeil\""
+      - "Agent text pairs West Tampa with \"Rome Yard\" or \"Rays\""
+      - "Agent text pairs South Howard with \"street closures\" or \"pipes\""
+      - "Agent text pairs East Tampa with \"development\" or \"22nd St\""
+      - "Agent text pairs Highland Pines with \"homelessness\""
+
+  - id: M4_report_written
+    desc: |
+      The agent has written the neighborhoods_report.md file to the workspace.
+    signals:
+      - "Write tool call with path containing \"neighborhoods_report.md\""
+      - File write confirmation from tool result
+
+  - id: M5_report_organized
+    desc: |
+      The report includes district-based overview, frequency count, and topic cross-reference sections.
+    signals:
+      - "Report content includes a section header for \"District\" or \"District Overview\""
+      - "Report content includes a \"Frequency\" or \"Count\" section"
+      - "Report content includes a \"Cross-Reference\" or \"Topic\" section"
+
+  - id: M_close_cleanly
+    desc: |
+      The final turn of the trajectory, after the write milestone has fired,
+      produces a brief confirmation or empty text and no further write that
+      would replace the main output.
+    signals:
+      - this is the last turn of the trajectory
+      - the write milestone has already fired in a prior turn
+      - this turn has no tool call OR a non-write tool call
+      - if there is any text, it is < 400 chars
+
+pitfalls:
+  - id: P1_no_output_written
+    desc: |
+      This is the LAST turn of the trajectory AND no `write` to the expected
+      output file has occurred in any turn so far. The agent ran out of budget
+      without producing the required output. (4B's dominant failure mode.)
+    severity: high
+
+  - id: P2_write_without_reading
+    desc: |
+      LITERAL CHECK ONLY. This turn issues a `write` tool_call to the expected
+      output file AND no prior turn in this trajectory contains a `read`
+      tool_call whose tool_result returned `is_error: false` with content
+      length > 1000 chars on the input file. Do NOT infer hallucination from
+      content style or formatting — only check whether a successful prior read
+      tool_call exists in the trajectory history. If one does exist, this
+      pitfall does NOT fire even if the written content is long and polished.
+    severity: high
+
+  - id: P3_post_write_rambling
+    desc: |
+      LITERAL CHECK ONLY. A prior turn already produced a `write` tool_call to
+      the expected output file. THIS turn produces an assistant text block
+      (`type: text`, OUTSIDE any tool_call) longer than 500 chars. Length
+      check only — do NOT judge whether the trailing text "looks like" a
+      paraphrase or restatement. If the trailing text is < 500 chars, this
+      pitfall does NOT fire.
+    severity: high
+
+  - id: P4_excessive_thinking_no_action
+    desc: |
+      This turn's thinking is > 2500 chars AND no tool call is issued AND no
+      substantive text (> 200 chars) is produced. Burning budget on thinking
+      without any progress. (Note: thinking PAIRED with a meaningful tool call
+      in the same turn is NOT a pitfall — Qwen3 requires thinking.)
+    severity: high
+
+  - id: P5_read_loop
+    desc: |
+      This turn issues a `read` of the input file with arguments identical to
+      a previous read in the trajectory, AND no `write`, no extraction-thinking
+      that names new content, and no extraction-text has occurred between the
+      two reads. The agent is stuck re-reading the same chunk.
+    severity: medium
+
+notes: |
+  The agent must read the entire transcript (it is large) to capture all locations. The automated checks are strict about specific keyword pairings (e.g., 'temple crest' AND 'crime' or 'mcneil'). The LLM judge rubric rewards organization and breadth.
+
+  DSv4 also flagged these task-specific quality concerns
+  (kept here for reference, not enforced by the judge):
+    - P1_incomplete_reading: The agent stops reading the transcript before reaching the end, missing key locations mentioned later in the meeting.
+    - P2_missing_context: The agent lists locations without associating them with their relevant context (speaker, issue, item), producing a bare list.
+    - P3_insufficient_locations: The agent identifies fewer than 15 distinct locations, failing to meet the breadth requirement.
+    - P4_no_organization: The agent writes a flat list of locations without district grouping, frequency counts, or cross-references.
+    - P5_wrong_output_file: The agent writes the report to a filename other than neighborhoods_report.md (e.g., locations.md, areas.md).

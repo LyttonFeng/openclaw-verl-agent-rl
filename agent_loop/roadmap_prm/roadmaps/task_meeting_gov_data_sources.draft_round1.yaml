@@ -1,0 +1,58 @@
+task_id: task_meeting_gov_data_sources
+goal: Extract all data sources, sensors, databases, and measurement systems from the NASA UAP hearing transcript into a structured, categorized markdown report.
+inputs:
+  - transcript.md
+output: data_sources.md
+milestones:
+  - id: M1_transcript_read
+    desc: The agent reads the full transcript file to identify all data source references.
+    signals:
+      - read('transcript.md') or read('transcript.md', offset=...) is called
+      - The agent's text mentions reading or parsing the transcript
+  - id: M2_government_military_sources
+    desc: Government and military data sources (AARO, DOD sensors, IC sensors) are identified and documented.
+    signals:
+      - AARO database mentioned with case count details
+      - DOD sensors (F-35, MQ-9) or IC sensors referenced
+      - Purpose-built AARO sensors mentioned
+  - id: M3_civilian_aviation_sources
+    desc: Civilian aviation systems (FAA radars, ADS-B, TRACON, ERAM/STARS, Domestic Events Network) are identified.
+    signals:
+      - FAA short-range radar (ASR, 40-60 mile range) mentioned
+      - FAA long-range radar (ARSR-4, CRSR, 200-250 nm) mentioned
+      - ADS-B or Automatic Dependent Surveillance-Broadcast mentioned
+  - id: M4_space_based_and_scientific_sources
+    desc: Space-based assets (NASA/NOAA satellites, JWST, Hubble, ISS) and ground-based scientific instruments are identified.
+    signals:
+      - NASA earth science/sensing satellites or NOAA satellites mentioned
+      - James Webb Space Telescope or Hubble Space Telescope mentioned
+      - Radio telescopes, astronomical observatories, or NOAA ground sensors mentioned
+  - id: M5_crowdsource_and_database_sources
+    desc: Crowdsource/public data sources and databases/archives are identified.
+    signals:
+      - Smartphone sensor data or iPhone imagery mentioned
+      - Eyewitness reports or proposed NASA crowdsourcing platform mentioned
+      - NASA open data portal (data.nasa.gov) or Data.gov mentioned
+  - id: M6_report_written
+    desc: The agent writes the final data_sources.md file with categories, summary table, and limitations.
+    signals:
+      - write('data_sources.md', content=...) is called
+      - Content includes a summary table or overview section
+      - Content includes at least 3 limitation notes for different sources
+pitfalls:
+  - id: P1_incomplete_read
+    desc: Agent fails to read the full transcript, missing key data sources mentioned in later sections.
+    severity: high
+  - id: P2_no_categorization
+    desc: Agent lists sources without organizing them into the required categories (Government/Military, Civilian Aviation, etc.).
+    severity: high
+  - id: P3_missing_limitations
+    desc: Agent describes sources but fails to note limitations (e.g., DOD sensors not scientific, FAA filtering, iPhone photos unhelpful).
+    severity: medium
+  - id: P4_no_summary_table
+    desc: Agent writes detailed entries but omits the required summary table at the top.
+    severity: medium
+  - id: P5_technical_inaccuracy
+    desc: Agent includes incorrect technical details (e.g., wrong radar range, misattributed owner) or conflates different systems.
+    severity: high
+notes: The transcript is a long meeting with multiple speakers; the agent must read all sections to catch sources mentioned in passing. The expert trajectory used 9 turns with multiple read calls to cover the full file.

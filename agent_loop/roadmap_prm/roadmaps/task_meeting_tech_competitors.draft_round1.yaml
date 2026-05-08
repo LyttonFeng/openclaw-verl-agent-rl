@@ -1,0 +1,65 @@
+task_id: task_meeting_tech_competitors
+goal: Extract a structured competitor analysis from a meeting transcript, covering competitors, positioning, stage mapping, methodology, and insights.
+inputs:
+  - meeting_transcript.md
+output: competitor_analysis.md
+milestones:
+  - id: M1_transcript_read
+    desc: The agent reads the meeting transcript file.
+    signals:
+      - tool call to read('meeting_transcript.md')
+      - tool result contains the full transcript text
+  - id: M2_competitors_listed
+    desc: All six tier 1 competitors are explicitly named in the output file.
+    signals:
+      - 'Azure DevOps' or 'ADO' appears in competitor_analysis.md
+      - 'Atlassian' appears
+      - 'GitHub' appears
+      - 'Jenkins' appears
+      - 'JFrog' appears
+      - 'CloudBees' appears
+  - id: M3_tier_system_documented
+    desc: The tier classification system (tier 1, 2, 3) is mentioned.
+    signals:
+      - 'tier 1' or 'tier one' appears
+      - 'tier 2' or 'tier two' appears
+      - 'tier 3' or 'tier three' appears
+  - id: M4_stage_mapping_discussed
+    desc: The analysis notes that not all competitors apply to all product stages.
+    signals:
+      - 'stage' and 'not all' or 'relevant' or 'applicable' appear in proximity
+      - specific example like 'CloudBees' and 'Monitor' appear together
+  - id: M5_methodology_decisions_captured
+    desc: Key methodology decisions (tier 1 focus, market lens, GitLab row, green-only infographic) are documented.
+    signals:
+      - 'focus' or 'only' appears near 'tier 1'
+      - 'market lens' or 'buyer' or 'customer' appears
+      - 'GitLab' and 'row' or 'line' appear together
+      - 'green' and 'comparison' or 'no red' appear together
+  - id: M6_platform_distinction_made
+    desc: The distinction between platform and non-platform competitors is captured.
+    signals:
+      - 'platform' appears
+      - 'Jenkins' or 'CloudBees' is described as 'not a platform' or similar
+  - id: M7_output_file_created
+    desc: The output file competitor_analysis.md is written to the workspace.
+    signals:
+      - tool call to write('competitor_analysis.md', ...)
+      - tool result confirms successful write
+pitfalls:
+  - id: P1_skipped_reading
+    desc: Agent writes the analysis without first reading the transcript.
+    severity: high
+  - id: P2_incomplete_competitor_list
+    desc: Agent lists fewer than 5 of the 6 tier 1 competitors.
+    severity: high
+  - id: P3_no_methodology
+    desc: Agent extracts facts but fails to document the team's methodology decisions (tier focus, market lens, GitLab row, infographic design).
+    severity: medium
+  - id: P4_no_stage_relevance
+    desc: Agent lists competitors without noting that not all apply to all stages.
+    severity: medium
+  - id: P5_ignores_platform_distinction
+    desc: Agent fails to note which competitors are platforms and which are not.
+    severity: low
+notes: The agent should read the transcript first, then write the analysis. The output file must be named competitor_analysis.md.

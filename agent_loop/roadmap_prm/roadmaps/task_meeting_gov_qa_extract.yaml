@@ -1,0 +1,123 @@
+task_id: task_meeting_gov_qa_extract
+
+goal: |
+  Extract all Q&A exchanges from a NASA UAP hearing transcript into a structured, chronologically organized file with correct speaker attribution.
+
+inputs:
+  - transcript.md
+
+output: qa_exchanges.md
+
+# ROUND 3 (auto-promoted from R1 draft):
+#   - DSv4-flash drafted task-specific milestones (kept).
+#   - Added PRECONDITION to write milestone.
+#   - Appended generic M_close_cleanly.
+#   - Replaced pitfalls with the 5 canonical turn-level pitfalls
+#     validated on pilot A (blog_post) + pilot B (council_budget).
+#   - DSv4's task-specific pitfalls preserved as informational notes.
+
+milestones:
+  - id: M1_read_transcript
+    desc: |
+      Agent reads the full transcript file to understand the meeting structure and content.
+    signals:
+      - "tool call to read('transcript.md') or read('transcript.md', ...) with offset"
+      - "text_preview contains 'transcript' or 'meeting' or 'NASA'"
+
+  - id: M2_identify_qa_sections
+    desc: |
+      Agent identifies the two distinct Q&A sections (panel-to-presenter and public Q&A) in the transcript.
+    signals:
+      - "text_preview mentions 'panel' and 'public' or 'curated' Q&A sections"
+      - "text_preview references 'Q&A' or 'question' and 'answer' patterns"
+
+  - id: M3_extract_panel_qa
+    desc: |
+      Agent extracts at least 10 panel-to-presenter Q&A exchanges with correct speaker names and topics.
+    signals:
+      - "output file contains 'Spergel' and 'Fox' in a Q&A context"
+      - "output file contains 'Drake' and 'Kirkpatrick' with database numbers (800, 2-5%)"
+      - "output file contains 'Freie' with FAA-related topics (radar, reporting)"
+
+  - id: M4_extract_public_qa
+    desc: |
+      Agent extracts the curated public Q&A session, including the non-human intelligence question.
+    signals:
+      - "output file contains a section titled 'Public Q&A' or 'Curated Public Q&A'"
+      - "output file contains 'non-human intelligence' or 'extraterrestrial' in a Q&A entry"
+
+  - id: M5_write_output_file
+    desc: |
+      Agent writes the final structured output file with numbered exchanges, topic labels, and clear section separation.
+    signals:
+      - "tool call to write('qa_exchanges.md', ...)"
+      - output file contains at least 10 numbered exchanges
+      - "output file contains '---' or '##' section separators"
+      - "PRECONDITION: a prior turn in this trajectory has performed a successful read of transcript.md (returned substantial content without is_error). If no such prior read exists, this milestone does NOT fire (the turn is P2_write_without_reading instead)."
+
+  - id: M_close_cleanly
+    desc: |
+      The final turn of the trajectory, after the write milestone has fired,
+      produces a brief confirmation or empty text and no further write that
+      would replace the main output.
+    signals:
+      - this is the last turn of the trajectory
+      - the write milestone has already fired in a prior turn
+      - this turn has no tool call OR a non-write tool call
+      - if there is any text, it is < 400 chars
+
+pitfalls:
+  - id: P1_no_output_written
+    desc: |
+      This is the LAST turn of the trajectory AND no `write` to the expected
+      output file has occurred in any turn so far. The agent ran out of budget
+      without producing the required output. (4B's dominant failure mode.)
+    severity: high
+
+  - id: P2_write_without_reading
+    desc: |
+      LITERAL CHECK ONLY. This turn issues a `write` tool_call to the expected
+      output file AND no prior turn in this trajectory contains a `read`
+      tool_call whose tool_result returned `is_error: false` with content
+      length > 1000 chars on the input file. Do NOT infer hallucination from
+      content style or formatting — only check whether a successful prior read
+      tool_call exists in the trajectory history. If one does exist, this
+      pitfall does NOT fire even if the written content is long and polished.
+    severity: high
+
+  - id: P3_post_write_rambling
+    desc: |
+      LITERAL CHECK ONLY. A prior turn already produced a `write` tool_call to
+      the expected output file. THIS turn produces an assistant text block
+      (`type: text`, OUTSIDE any tool_call) longer than 500 chars. Length
+      check only — do NOT judge whether the trailing text "looks like" a
+      paraphrase or restatement. If the trailing text is < 500 chars, this
+      pitfall does NOT fire.
+    severity: high
+
+  - id: P4_excessive_thinking_no_action
+    desc: |
+      This turn's thinking is > 2500 chars AND no tool call is issued AND no
+      substantive text (> 200 chars) is produced. Burning budget on thinking
+      without any progress. (Note: thinking PAIRED with a meaningful tool call
+      in the same turn is NOT a pitfall — Qwen3 requires thinking.)
+    severity: high
+
+  - id: P5_read_loop
+    desc: |
+      This turn issues a `read` of the input file with arguments identical to
+      a previous read in the trajectory, AND no `write`, no extraction-thinking
+      that names new content, and no extraction-text has occurred between the
+      two reads. The agent is stuck re-reading the same chunk.
+    severity: medium
+
+notes: |
+  The transcript has two distinct Q&A formats. The expert trajectory required 6 turns including multiple reads and one write. Key exchanges to catch include Spergel-Fox, Drake-Kirkpatrick (800 cases, 2-5%), and public Q&A on non-human intelligence.
+
+  DSv4 also flagged these task-specific quality concerns
+  (kept here for reference, not enforced by the judge):
+    - P1_miss_public_qa: Agent fails to separate or extract the public Q&A session, treating all exchanges as one section.
+    - P2_wrong_attribution: Agent attributes questions or answers to incorrect speakers (e.g., mixing up Spergel and Fox).
+    - P3_too_few_exchanges: Agent extracts fewer than 10 Q&A exchanges, missing key ones like Drake-Kirkpatrick or FAA-related.
+    - P4_raw_quotes_no_summary: Agent copies raw transcript quotes without summarizing questions and answers concisely.
+    - P5_no_numbering: Agent fails to number or clearly delineate individual exchanges, making the output hard to reference.
