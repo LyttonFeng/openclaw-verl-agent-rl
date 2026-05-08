@@ -53,7 +53,15 @@ PREV_LORA="${PREV_LORA:-}"   # empty = base 4B (round 1)
 
 # ── Defaults (PRM v1 spec) ──────────────────────────────────────────────
 EXPERIMENT="${EXPERIMENT:-meeting_grpo_prm_v1}"
-BASE_DIR="${BASE_DIR:-/workspace/$EXPERIMENT}"
+# Default: /workspace/$EXPERIMENT if /workspace exists (pod convention),
+# else fall back to $HOME/grpo_runs/$EXPERIMENT (portable across dev/laptop).
+if [ -z "${BASE_DIR:-}" ]; then
+    if [ -d "/workspace" ] && [ -w "/workspace" ]; then
+        BASE_DIR="/workspace/$EXPERIMENT"
+    else
+        BASE_DIR="$HOME/grpo_runs/$EXPERIMENT"
+    fi
+fi
 ROUND_DIR="$BASE_DIR/round_${ROUND_NUM}"
 
 VLLM_BASE_URL="${VLLM_BASE_URL:-http://127.0.0.1:8021/v1}"
@@ -70,6 +78,9 @@ LORA_RANK="${LORA_RANK:-16}"
 GRAD_ACCUM="${GRAD_ACCUM:-2}"
 PRM_ALPHA="${PRM_ALPHA:-1.0}"
 PRM_BETA="${PRM_BETA:-0.1}"
+PRM_MODE="${PRM_MODE:-additive}"   # 'additive' (default) or 'multiplicative'
+VARIANCE_THRESHOLD="${VARIANCE_THRESHOLD:-1e-8}"
+POS_ONLY_CLIP="${POS_ONLY_CLIP:-1}"   # 1 = clip -1 PRM scores to 0; 0 = keep raw
 
 # Judge for terminal grading (current default = DSv4)
 JUDGE_MODEL="${JUDGE_MODEL:-deepseek-chat}"
@@ -209,9 +220,48 @@ else
     echo "[round $ROUND_NUM] PRM-scored: $N_PRM records → $PRM_GRADED_FILE"
 fi
 
+# ── Step 2.5: variance filter + pos-only clip ────────────────────────────────
+# Drops groups whose terminal-score variance is below threshold (no GRPO
+# signal possible there) and clips -1 PRM turn scores to 0 if POS_ONLY_CLIP=1.
+# This is the actual file fed into training; raw PRM file is kept for audit.
+echo ""
+echo "[round $ROUND_NUM] Step 2.5: variance filter (threshold=$VARIANCE_THRESHOLD) + pos-only clip (POS_ONLY_CLIP=$POS_ONLY_CLIP)..."
+SELECT_DIR="$ROUND_DIR/selection"
+mkdir -p "$SELECT_DIR"
+PYTHONPATH="$REPO_ROOT" python3 "$REPO_ROOT/rl/train/select_grpo_samples.py" \
+    --graded-file "$PRM_GRADED_FILE" \
+    --output-dir "$SELECT_DIR" \
+    --variance-threshold "$VARIANCE_THRESHOLD" \
+    --alpha "$PRM_ALPHA" \
+    2>&1 | tee "$SELECT_DIR/select.log"
+
+VALID_FILE="$SELECT_DIR/graded_trajectories_prm_valid.jsonl"
+if [ ! -f "$VALID_FILE" ]; then
+    echo "ERROR: variance-filtered file not found: $VALID_FILE"
+    exit 1
+fi
+
+if [ "$POS_ONLY_CLIP" = "1" ]; then
+    TRAIN_FILE="$SELECT_DIR/graded_trajectories_prm_pos_only.jsonl"
+    python3 -c "
+import json
+with open('$VALID_FILE') as fin, open('$TRAIN_FILE','w') as fout:
+    for line in fin:
+        rec = json.loads(line)
+        rec['prm_turn_scores'] = [max(0, int(s)) for s in rec.get('prm_turn_scores', [])]
+        fout.write(json.dumps(rec) + '\n')
+"
+    echo "[round $ROUND_NUM] pos-only clip → $TRAIN_FILE"
+else
+    TRAIN_FILE="$VALID_FILE"
+    echo "[round $ROUND_NUM] keeping raw PRM scores (no pos-only clip) → $TRAIN_FILE"
+fi
+N_TRAIN=$(wc -l < "$TRAIN_FILE")
+echo "[round $ROUND_NUM] training samples: $N_TRAIN"
+
 # ── Step 3: GRPO training step ───────────────────────────────────────────────
 echo ""
-echo "[round $ROUND_NUM] Step 3: GRPO training step (α=$PRM_ALPHA, β=$PRM_BETA, lr=$LR, rope=$ROPE_FACTOR)..."
+echo "[round $ROUND_NUM] Step 3: GRPO training step (mode=$PRM_MODE, α=$PRM_ALPHA, β=$PRM_BETA, lr=$LR, rope=$ROPE_FACTOR)..."
 CKPT_DIR="$ROUND_DIR/checkpoint"
 
 LORA_ARG=""
@@ -220,7 +270,7 @@ if [ -n "$PREV_LORA" ]; then
 fi
 
 CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" python3 -u "$REPO_ROOT/rl/train/train_meeting_grpo_step.py" \
-    --graded-file "$PRM_GRADED_FILE" \
+    --graded-file "$TRAIN_FILE" \
     --model-path "$MODEL_PATH" \
     $LORA_ARG \
     --output-dir "$CKPT_DIR" \
@@ -231,6 +281,7 @@ CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" python3 -u "$REPO_ROOT/rl/trai
     --rope-scaling-factor "$ROPE_FACTOR" \
     --prm-alpha "$PRM_ALPHA" \
     --prm-beta "$PRM_BETA" \
+    --prm-mode "$PRM_MODE" \
     2>&1 | tee "$CKPT_DIR/train.log"
 
 if [ ! -d "$CKPT_DIR/lora_adapter" ]; then

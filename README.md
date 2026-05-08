@@ -105,15 +105,13 @@ python rl/train/build_meeting_analysis_prompts.py \
     --split-file rl/train/meeting_analysis_split.json \
     --output-dir data/meeting_prompts
 
-# 4a. one round, terminal + PRM (recommended). On non-pod machines override BASE_DIR:
-BASE_DIR=$HOME/grpo_runs/meeting_grpo_prm_v1 \
-ROUND_NUM=1 \
-bash rl/train/run_meeting_grpo_prm_round.sh
+# 4a. one round, terminal + PRM (recommended).
+# BASE_DIR auto-resolves to /workspace/$EXPERIMENT on pods, else $HOME/grpo_runs/$EXPERIMENT.
+ROUND_NUM=1 bash rl/train/run_meeting_grpo_prm_round.sh
 
 # 4b. or terminal-only ablation (PRM weight zero; PRM judge still scores —
 #     set SKIP_PRM_SCORING=1 to skip the DeepSeek PRM calls entirely)
 PRM_BETA=0 SKIP_PRM_SCORING=1 \
-BASE_DIR=$HOME/grpo_runs/meeting_grpo_terminal_v1 \
 ROUND_NUM=1 EXPERIMENT=meeting_grpo_terminal_v1 \
 bash rl/train/run_meeting_grpo_prm_round.sh
 ```

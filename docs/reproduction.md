@@ -56,23 +56,22 @@ python -c "import verl; print(verl.__version__, verl.__file__)"
 ### Install OpenClaw CLI
 
 OpenClaw is the multi-turn agent runtime that drives each rollout. Reference
-release `2026.4.5 (3e72c03)`. Installation depends on your team's
-distribution channel — typically:
+release `2026.4.5 (3e72c03)`.
 
-```bash
-# pip-installable build (if your team publishes one):
-pip install openclaw-cli==2026.4.5
-
-# Or install from source if you have access:
-git clone <openclaw-repo>
-cd openclaw && pip install -e .
-
-# Verify:
-openclaw --version   # → 2026.4.5 (3e72c03)
-```
-
-If the binary isn't on your PATH after install, set
-`OPENCLAW_BIN=/path/to/openclaw` before running the training wrapper.
+> **Heads-up**: OpenClaw is currently an internal tool — there is no public
+> pip / GitHub release at the time of writing. External reproducers will
+> need either:
+> 1. the OpenClaw binary obtained through team channels (verify with
+>    `openclaw --version` → expects `2026.4.5 (3e72c03)`), or
+> 2. a substitute multi-turn agent runtime that produces JSONL transcripts
+>    in the format consumed by `agent_loop/openclaw_agent_loop.py`. The
+>    transcript format is defined by the parser in
+>    `agent_loop/diagnostics/core.py:_walk_trajectory` (each line is a
+>    `{"type": "message", "message": {role, content: [{type, ...}]}}`
+>    record; `toolCall` / `toolResult` parts carry tool name + arguments).
+>
+> If you only have an internal binary not on PATH, set
+> `OPENCLAW_BIN=/path/to/openclaw` before running the training wrapper.
 
 ### API keys
 
@@ -146,14 +145,15 @@ python -m vllm.entrypoints.openai.api_server \
 ROUND_NUM=1 bash rl/train/run_meeting_grpo_prm_round.sh
 ```
 
-This runs the full pipeline:
+This runs the full pipeline (each step writes its own log + intermediate file):
 
-1. Generate 23 × 2 = 46 rollouts (4 parallel workers)
-2. Grade with terminal reward (automated + DeepSeek LLM judge)
-3. PRM-score each trajectory (judge-gate + per-turn judge)
-4. Variance filter + pos-only clip (-1 → 0)
-5. Single GRPO step (15 updates, batch=2, lr=2e-6)
-6. Save LoRA adapter to `/workspace/meeting_grpo_prm_v1/round_1/checkpoint/lora_adapter`
+1. **Rollouts** — 23 train tasks × 2 responses = 46 trajectories, 4 parallel workers via OpenClaw.
+2. **Terminal grade** — automated check + DeepSeek LLM judge → `graded_trajectories.jsonl`.
+3. **PRM scoring** — DSv4 judge with terminal-completion gate (skipped if `SKIP_PRM_SCORING=1`) → `graded_trajectories_prm.jsonl`.
+4. **Variance filter + pos-only clip** — `select_grpo_samples.py` drops zero-variance groups; default `POS_ONLY_CLIP=1` clips -1 turn scores to 0 → `graded_trajectories_prm_pos_only.jsonl`.
+5. **GRPO step** — 15 updates, batch=2, lr=2e-6, mode=`PRM_MODE`. Saves LoRA to `$BASE_DIR/round_1/checkpoint/lora_adapter`.
+6. **Hot-load** — `POST /v1/load_lora_adapter` to vLLM with the new adapter (no restart).
+7. **3-run bench** — `scripts/benchmark.py` against the 5 held-out test tasks.
 
 ### One round, terminal-only (baseline)
 
@@ -189,17 +189,20 @@ All overridable via environment variable.
 | `ROUND_NUM` | required | round counter |
 | `PREV_LORA` | empty | start from base if empty, else LoRA path |
 | `EXPERIMENT` | `meeting_grpo_prm_v1` | output subdir name (under `BASE_DIR`) |
-| `BASE_DIR` | `/workspace/$EXPERIMENT` | run output root — **change this on machines where `/workspace/` doesn't exist**, e.g. `BASE_DIR=$HOME/grpo_runs/$EXPERIMENT` |
-| `PRM_ALPHA` | `1.0` | terminal weight |
+| `BASE_DIR` | auto-detect: `/workspace/$EXPERIMENT` if `/workspace` exists & writable, else `$HOME/grpo_runs/$EXPERIMENT` | run output root |
+| `PRM_ALPHA` | `1.0` | terminal weight in advantage formula |
 | `PRM_BETA` | `0.10` | PRM weight (0 = terminal-only ablation; PRM scoring still runs unless `SKIP_PRM_SCORING=1`) |
-| `PRM_MODE` | `additive` | `additive` or `multiplicative` (see `algorithm.md` for formulas) |
+| `PRM_MODE` | `additive` | `additive` or `multiplicative` (formulas in [`algorithm.md`](algorithm.md)) |
 | `SKIP_PRM_SCORING` | `0` | set to `1` to skip the DeepSeek PRM judge step entirely (synthesizes all-zero per-turn scores) |
+| `POS_ONLY_CLIP` | `1` | clip negative PRM turn scores to 0 before training; set `0` to keep raw `{-1,0,+1}` |
+| `VARIANCE_THRESHOLD` | `1e-8` | drop GRPO groups with terminal-score variance below this (no signal anyway) |
 | `N_RESPONSES` | `2` | rollouts per prompt (GRPO group size) |
 | `NUM_WORKERS` | `4` | parallel rollout workers |
 | `MAX_SEQ_LEN` | `81920` | training sequence cap (must match vLLM `--max-model-len`) |
 | `MEETING_JUDGE_PROVIDER` | `deepseek` | `deepseek` (default) or `dashscope` (qwen-plus) for terminal judge |
 | `TASKS_DIR` | `pinchbench_tasks/meeting_analysis` | task `.md` lookup root |
-| `BASE_URL` etc. | see top of wrapper | vLLM endpoint and served model name |
+| `VLLM_BASE_URL` | `http://127.0.0.1:8021/v1` | vLLM endpoint |
+| `SERVED_MODEL` | `Qwen3-4B` | model id served by vLLM |
 
 ## 5. Bench / evaluate
 
