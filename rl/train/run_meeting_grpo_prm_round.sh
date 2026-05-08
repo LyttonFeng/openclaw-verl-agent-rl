@@ -85,7 +85,7 @@ VARIANCE_THRESHOLD="${VARIANCE_THRESHOLD:-1e-8}"
 POS_ONLY_CLIP="${POS_ONLY_CLIP:-1}"   # 1 = clip -1 PRM scores to 0; 0 = keep raw
 
 # Judge for terminal grading (current default = DSv4)
-JUDGE_MODEL="${JUDGE_MODEL:-deepseek-chat}"
+JUDGE_MODEL="${JUDGE_MODEL:-deepseek-v4-flash}"
 export MEETING_JUDGE_PROVIDER="${MEETING_JUDGE_PROVIDER:-deepseek}"
 
 # ── Paths ────────────────────────────────────────────────────────────────────

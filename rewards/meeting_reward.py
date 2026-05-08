@@ -13,7 +13,7 @@ Usage in veRL config:
 
 Environment variables:
     DEEPSEEK_API_KEY        - Required for the LLM judge (default provider: DeepSeek)
-    MEETING_JUDGE_MODEL     - Judge model (default: deepseek-chat)
+    MEETING_JUDGE_MODEL     - Judge model (default: deepseek-v4-flash)
     MEETING_JUDGE_BASE_URL  - Judge API base URL (default: https://api.deepseek.com/v1)
     MEETING_JUDGE_PROVIDER  - "deepseek" (default) — kept as a switch for future providers
     MEETING_REWARD_JUDGE_ONLY - If "1", skip automated checks, only use judge (for debugging)
@@ -42,11 +42,11 @@ if str(_SCRIPTS_DIR) not in sys.path:
 def _get_judge_config() -> tuple[str, str, str]:
     """Return (model, base_url, api_key) for the judge.
 
-    Default provider is DeepSeek (deepseek-chat). Override via env vars if you
+    Default provider is DeepSeek (deepseek-v4-flash). Override via env vars if you
     point at a different OpenAI-compatible endpoint.
     """
     return (
-        os.environ.get("MEETING_JUDGE_MODEL", "deepseek-chat"),
+        os.environ.get("MEETING_JUDGE_MODEL", "deepseek-v4-flash"),
         os.environ.get("MEETING_JUDGE_BASE_URL", "https://api.deepseek.com/v1"),
         os.environ.get("DEEPSEEK_API_KEY", ""),
     )

@@ -153,7 +153,7 @@ def _get_judge_config() -> tuple[str, str, str]:
     if not api_key:
         raise RuntimeError("DEEPSEEK_API_KEY (or OPENAI_API_KEY) must be set")
     base_url = os.environ.get("ROADMAP_JUDGE_BASE_URL", "https://api.deepseek.com/v1")
-    model = os.environ.get("ROADMAP_JUDGE_MODEL", "deepseek-chat")
+    model = os.environ.get("ROADMAP_JUDGE_MODEL", "deepseek-v4-flash")
     return model, base_url, api_key
 
 

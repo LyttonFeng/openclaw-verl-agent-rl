@@ -19,7 +19,7 @@ with optional **Roadmap PRM** for per-turn process reward.
 
 ## Reference results
 
-3-run mean on 5 held-out test tasks, judge = `openai/deepseek-chat`:
+3-run mean on 5 held-out test tasks, judge = `deepseek-v4-flash`:
 
 | Config | Overall | Δ vs baseline | Notes |
 |---|---|---|---|

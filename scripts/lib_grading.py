@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 # API judge (default): DeepSeek OpenAI-compatible API — stable JSON with response_format.
-DEFAULT_JUDGE_MODEL = "deepseek-chat"
+DEFAULT_JUDGE_MODEL = "deepseek-v4-flash"
 DEFAULT_JUDGE_BASE_URL = "https://api.deepseek.com/v1"
 # When falling back to OpenClaw-embedded judge (no DEEPSEEK_API_KEY), use a capable cloud model id.
 DEFAULT_JUDGE_MODEL_OPENCLAW_FALLBACK = "openrouter/anthropic/claude-opus-4.5"
@@ -183,7 +183,7 @@ def resolve_judge_backend_from_env(
 ) -> Dict[str, Optional[str]]:
     """Resolve judge settings from env vars used by training/benchmark entrypoints.
 
-    Defaults: DeepSeek ``deepseek-chat`` via OpenAI-compatible API
+    Defaults: DeepSeek ``deepseek-v4-flash`` via OpenAI-compatible API
     (needs ``DEEPSEEK_API_KEY``). Without a key, falls back to OpenClaw-embedded
     judge (noisier JSON; use API key in production).
 
@@ -202,7 +202,7 @@ def resolve_judge_backend_from_env(
         logger.warning(
             "No DEEPSEEK_API_KEY (or JUDGE_API_KEY / PINCHBENCH_GRADE_JUDGE_API_KEY): "
             "LLM judge falling back to OpenClaw embedded agent (%s). "
-            "Set DEEPSEEK_API_KEY for the API judge (deepseek-chat).",
+            "Set DEEPSEEK_API_KEY for the API judge (deepseek-v4-flash).",
             DEFAULT_JUDGE_MODEL_OPENCLAW_FALLBACK,
         )
         backend = "openclaw"
