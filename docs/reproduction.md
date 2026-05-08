@@ -55,23 +55,32 @@ python -c "import verl; print(verl.__version__, verl.__file__)"
 
 ### Install OpenClaw CLI
 
-OpenClaw is the multi-turn agent runtime that drives each rollout. Reference
-release `2026.4.5 (3e72c03)`.
+OpenClaw is the multi-turn agent runtime that drives each rollout. It is a
+public **npm package**:
 
-> **Heads-up**: OpenClaw is currently an internal tool — there is no public
-> pip / GitHub release at the time of writing. External reproducers will
-> need either:
-> 1. the OpenClaw binary obtained through team channels (verify with
->    `openclaw --version` → expects `2026.4.5 (3e72c03)`), or
-> 2. a substitute multi-turn agent runtime that produces JSONL transcripts
->    in the format consumed by `agent_loop/openclaw_agent_loop.py`. The
->    transcript format is defined by the parser in
->    `agent_loop/diagnostics/core.py:_walk_trajectory` (each line is a
->    `{"type": "message", "message": {role, content: [{type, ...}]}}`
->    record; `toolCall` / `toolResult` parts carry tool name + arguments).
->
-> If you only have an internal binary not on PATH, set
-> `OPENCLAW_BIN=/path/to/openclaw` before running the training wrapper.
+```bash
+# Make sure node + npm are available (e.g. via nvm)
+node --version && npm --version
+
+# Install globally to local disk — DO NOT install under /workspace or any
+# network-mounted FS; OpenClaw has hundreds of transitive deps and a
+# network-FS install can take 50+ minutes vs. ~30s on local disk.
+npm install -g openclaw@2026.4.5
+
+# If your `node` binary lives in a non-standard location (e.g. nvm puts it
+# under /workspace/nvm/...), the openclaw shebang `#!/usr/bin/env node`
+# may not find it after `npm install -g`. Symlink node into PATH:
+ln -sf "$(which node)" /usr/local/bin/node
+
+# Verify
+which openclaw
+openclaw --version    # → OpenClaw 2026.4.5 (3e72c03)
+```
+
+The installed package is ~1.3 GB on disk (extensions + transitive deps);
+the local install dir is `/usr/local/lib/node_modules/openclaw/` by
+default. If `OPENCLAW_BIN` is set in your environment, the training
+wrapper will respect it instead of looking on PATH.
 
 ### API keys
 

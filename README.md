@@ -81,7 +81,10 @@ pip install -r requirements.txt
 git clone https://github.com/volcengine/verl.git ~/verl
 pip install -e ~/verl
 
-# 0c. OpenClaw CLI — install per your team's distribution channel; verify with:
+# 0c. OpenClaw CLI — public npm package. Install to LOCAL disk, NOT NFS:
+npm install -g openclaw@2026.4.5      # ~30s on local disk; do NOT install under /workspace/
+# If node lives outside /usr/local/bin (e.g. nvm), symlink it so the shebang resolves:
+[ -x /usr/local/bin/node ] || ln -sf "$(which node)" /usr/local/bin/node
 openclaw --version    # → 2026.4.5 (3e72c03)
 
 # 1. DeepSeek API key (judge for both terminal grading and PRM scoring)
