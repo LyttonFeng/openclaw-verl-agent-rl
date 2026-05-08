@@ -1,222 +1,112 @@
 # openclaw-verl-agent-rl
 
-This repo reproduces task16 email triage RL training using:
+Offline GRPO training of Qwen3-4B on PinchBench `meeting_analysis` tasks,
+with optional **Roadmap PRM** for per-turn process reward.
 
-- Qwen3-1.7B by default, Qwen3-4B supported by `VERL_MODEL`
-- veRL REINFORCE++
-- OpenClaw multi-turn agent loop
-- PinchBench task16 grader
-- turn-level process reward + terminal reward
-- no `masked_whiten`
+- **Async, off-policy.** vLLM serves rollouts; veRL-free GRPO step writes a
+  new LoRA per round; LoRA hot-loaded back into vLLM for next round.
+- **Two reward layers.** Terminal reward (automated check + LLM judge) +
+  optional process reward (DSv4-flash judge against task-specific roadmaps,
+  with terminal-completion gate that only supervises failed trajectories).
+- **No ECS.** OpenClaw runs locally on the same pod as training.
 
-The repo is intentionally narrow: task16 RL only. It does not include agent team,
-wolfpack, DPO, task18, slides, history, or exploration notes.
+## Start here
 
-## Start Here
+1. [`docs/algorithm.md`](docs/algorithm.md) — design (flow diagram + reward formula + Roadmap PRM)
+2. [`docs/reproduction.md`](docs/reproduction.md) — end-to-end recipe (terminal-only and terminal+PRM)
+3. [`docs/diagnostics.md`](docs/diagnostics.md) — trajectory analysis module
+4. [`docs/experiment_report.md`](docs/experiment_report.md) — full result history with ablations
 
-1. `README.md`
-2. `docs/reproduction.md`
-3. `scripts/run_task16_rl.sh`
+## Reference results
 
-Everything else is implementation or debugging support.
+3-run mean on 5 held-out test tasks, judge = `openai/deepseek-chat`:
 
-## Repository Map
+| Config | Overall | Δ vs baseline | Notes |
+|---|---|---|---|
+| Baseline (rope=2, no LoRA) | 50.6% | — | apples-to-apples baseline |
+| Terminal-only, R5 LoRA | 55.0% | +4.4pp | ~5 rounds to converge |
+| **Terminal + Roadmap PRM, R1 LoRA** | **57.24%** | **+6.6pp** | converges in 1 round |
 
-- `configs/task16_rl.env.example`: training and evaluation environment template
-- `data/task16_prompts/`: committed train/validation parquet and JSONL data
-- `pinchbench_tasks/task_16_email_triage.md`: canonical task16 fixture
-- `scripts/build_task16_prompts.py`: regenerate task16 prompt data
-- `scripts/check_env.py`: verify Python, veRL/vLLM, judge, and OpenClaw reachability
-- `scripts/check_data.py`: verify committed data files and row counts
-- `scripts/test_task16.py`: local unit smoke for data, reward, and verifier logic
-- `scripts/run_task16_rl.sh`: main training entrypoint
-- `scripts/run_task16_eval.sh`: evaluation entrypoint/checklist
-- `agent_loop/`: OpenClaw agent loop, model proxy, trajectory helpers
-- `rewards/task16_event_reward.py`: task16 process/terminal reward
-- `rl/train/`: veRL launcher and reward manager glue
-- `patches/`: veRL/Ray compatibility patches used by the training script
+## Repo layout
 
-## Required Environment
+```
+agent_loop/                              OpenClaw multi-turn agent + analysis
+├── openclaw_agent_loop.py / model_proxy.py / trajectory.py
+├── diagnostics/                         layered trajectory analyzer (plugin-based)
+└── roadmap_prm/                         Roadmap PRM judge stack
+    ├── judge.py                         per-turn + terminal-completion gate
+    ├── schema.py / trajectory.py / calibrate.py
+    ├── roadmaps/                        46 calibrated yaml roadmaps
+    └── scripts/score_trajectories.py    attaches PRM scores to a graded JSONL
 
-Training host:
+rewards/meeting_reward.py                terminal reward (automated + LLM judge)
 
-- A100 80G recommended
-- Python 3.12
-- CUDA/vLLM-compatible environment
-- veRL `0.7.1`
-- vLLM `0.10.2`
-- Transformers `4.57.1`
-- Torch `2.8.0+cu128` verified on RunPod A100
-- `pyarrow` for parquet
+rl/
+├── train/
+│   ├── train_meeting_grpo_step.py       single GRPO step (additive / multiplicative PRM)
+│   ├── generate_meeting_rollouts.py     parallel rollout collection + grading
+│   ├── select_grpo_samples.py           variance filter + per-task selection
+│   ├── build_meeting_analysis_prompts.py
+│   ├── meeting_analysis_split.json      23 train / 5 test
+│   └── run_meeting_grpo_prm_round.sh    end-to-end one-round wrapper
+└── *_patch.py                           veRL / transformers / vLLM patches
 
-OpenClaw runtime:
+scripts/benchmark.py                     PinchBench grader entrypoint
 
-- OpenClaw installed locally or on a reachable ECS host over SSH
-- Reference OpenClaw CLI: `2026.4.5 (3e72c03)`
-- Fresh per-episode workspace under `/tmp/pinchbench`
-- Default/global skills disabled for task16 training
-
-Grading:
-
-- DashScope API key
-- Judge model: `qwen-plus`
-
-## Data
-
-Committed data lives in `data/task16_prompts/`.
-
-Default training/eval files:
-
-- `train.parquet`: 91 rows
-- `val.parquet`: 11 rows
-
-Additional files:
-
-- `train_small.parquet`: 32-row smaller ablation set
-- `train_tiny.parquet`: 16-row smoke/debug set
-- `train_canonical32_readexplicit.parquet`: 32 canonical read-explicit prompts
-- `train_synth20.parquet`: 20 synthetic task16-style inbox instances
-- `train_stage2_balanced.parquet`: 32 rows, 12 canonical focused + 20 synthetic
-- `val_canonical5_readexplicit.parquet`: 5 canonical validation prompts
-- `val_synth5.parquet`: 5 synthetic validation instances for diagnostics
-
-The synthetic rows are not prompt-only variants. They carry
-`extra_info.workspace_files`, so each episode gets its own 13-email inbox.
-
-Regenerate data only when changing prompts or the canonical task:
-
-```bash
-python scripts/build_task16_prompts.py \
-  --tasks-dir pinchbench_tasks \
-  --output-dir data/task16_prompts
+assets/meetings/                         4 real meeting transcripts
+pinchbench_tasks/meeting_analysis/       28 task definitions
 ```
 
-Verify data:
+## Required versions
+
+| Component | Version |
+|---|---|
+| Python | 3.12 |
+| veRL | 0.7.1 |
+| vLLM | 0.10.2 (with `VLLM_ALLOW_RUNTIME_LORA_UPDATING=True`) |
+| Transformers | 4.57.1 |
+| Torch | 2.8.0+cu128 |
+| OpenClaw CLI | 2026.4.5 (3e72c03) |
+| PinchBench | 1.2.1 |
+| GPU | 2 × A100-80GB (GPU 0 = train, GPU 1 = vLLM) |
+
+## Quick start
 
 ```bash
-python scripts/check_data.py data/task16_prompts
-python scripts/test_task16.py --data-dir data/task16_prompts
-```
-
-## Setup
-
-Install dependencies:
-
-```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
+# 0. install
+python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-```
 
-Configure the environment:
-
-```bash
-cp configs/task16_rl.env.example ~/.pinchbench_env
+# 1. set DeepSeek API key (judge for both terminal and PRM)
+echo 'export DEEPSEEK_API_KEY=sk-xxxxxxxxxxxx' > ~/.pinchbench_env
 chmod 600 ~/.pinchbench_env
+
+# 2. start vLLM on GPU 1 (background)  — see docs/reproduction.md §3 for full args
+CUDA_VISIBLE_DEVICES=1 VLLM_ALLOW_RUNTIME_LORA_UPDATING=True \
+python -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen3-4B --served-model-name Qwen3-4B \
+    --port 8021 --max-model-len 81920 \
+    --rope-scaling '{"type":"dynamic","factor":2.0}' \
+    --enable-lora --max-lora-rank 16 \
+    --enable-auto-tool-choice --tool-call-parser hermes --reasoning-parser qwen3 \
+    --gpu-memory-utilization 0.85 --dtype bfloat16 --trust-remote-code &
+
+# 3. build training prompts (one-time)
+python rl/train/build_meeting_analysis_prompts.py \
+    --tasks-dir pinchbench_tasks/meeting_analysis \
+    --split-file rl/train/meeting_analysis_split.json \
+    --output-dir data/meeting_prompts
+
+# 4a. one round, terminal + PRM (recommended)
+ROUND_NUM=1 bash rl/train/run_meeting_grpo_prm_round.sh
+
+# 4b. or terminal-only (PRM disabled)
+PRM_BETA=0 ROUND_NUM=1 EXPERIMENT=meeting_grpo_terminal_v1 \
+    bash rl/train/run_meeting_grpo_prm_round.sh
 ```
 
-Edit `~/.pinchbench_env` and set:
+## Status
 
-- `OPENCLAW_HOST`
-- `OPENCLAW_USER`
-- `OPENCLAW_PORT`
-- `OPENCLAW_SSH_KEY`
-- `DASHSCOPE_API_KEY`
-
-Then load it:
-
-```bash
-set -a
-source ~/.pinchbench_env
-set +a
-```
-
-Check the environment:
-
-```bash
-python scripts/check_env.py
-```
-
-## Train
-
-Dry-run the exact veRL command:
-
-```bash
-bash scripts/run_task16_rl.sh --dry-run
-```
-
-Run a one-step smoke:
-
-```bash
-TOTAL_TRAINING_STEPS=1 TEST_FREQ=999 SAVE_FREQ=999 bash scripts/run_task16_rl.sh
-```
-
-Run the short reproduction:
-
-```bash
-TOTAL_TRAINING_STEPS=32 TEST_FREQ=4 SAVE_FREQ=4 bash scripts/run_task16_rl.sh
-```
-
-Default training settings:
-
-- `VERL_MODEL=Qwen/Qwen3-1.7B`
-- `BATCH_SIZE=1`
-- `LORA_RANK=32`
-- `LR=2e-5`
-- `ROLLOUT_TEMPERATURE=0.8`
-- `ROLLOUT_TOP_P=0.9`
-- `VAL_DO_SAMPLE=False`
-- `MAX_PROMPT_LENGTH=20000`
-- `MAX_RESPONSE_LENGTH=12000`
-- `VLLM_MAX_MODEL_LEN=32768`
-
-For Qwen3-4B:
-
-```bash
-VERL_MODEL=Qwen/Qwen3-4B \
-RUN_VERSION=task16_qwen4b_debug \
-TOTAL_TRAINING_STEPS=32 \
-TEST_FREQ=4 \
-SAVE_FREQ=4 \
-bash scripts/run_task16_rl.sh
-```
-
-## Evaluate
-
-Use `scripts/run_task16_eval.sh` as the evaluation checklist:
-
-```bash
-bash scripts/run_task16_eval.sh
-```
-
-For LoRA checkpoint evaluation:
-
-1. Serve the base model plus LoRA adapter with `scripts/start_vllm_lora.sh`.
-2. Run task16 through the same OpenClaw + PinchBench grader path.
-3. Save transcripts and grader JSON under `logs/` or an external artifacts path.
-
-## Debug Scripts
-
-These are useful when training behaves strangely, but they are not the main
-reproduction path:
-
-- `scripts/check_train_infer_parity.py`: verifies task16 prompt extraction parity
-- `scripts/check_ecs_harness_gate.py`: strict ECS/OpenClaw harness preflight
-- `scripts/run_task16_step0_gate.sh`: veRL training-side validation-only smoke
-- `scripts/analyze_task16_terminal_gate.py`: regrade task16 transcripts
-- `scripts/extract_training_metrics.py`: extract validation/reward curves from logs
-
-Known status: this repo is a debug-ready minimal reproduction. It is intended to
-make the training and evaluation path portable first; it does not claim a
-guaranteed improving checkpoint on every run.
-
-## Reference Versions
-
-- PinchBench benchmark: `1.2.1`
-- veRL: `0.7.1`
-- vLLM: `0.10.2`
-- Transformers: `4.57.1`
-- Torch: `2.8.0+cu128`
-- OpenClaw CLI: `2026.4.5 (3e72c03)`
-- Default model: `Qwen/Qwen3-1.7B`
-- Judge: DashScope `qwen-plus`
+Reproduces a single round end-to-end on the 4 transcripts × 5 held-out tasks
+suite. Continued continuing past R2 with the default recipe regresses on the
+test set (reward hacking); see [`experiment_report.md`](docs/experiment_report.md) §15.
