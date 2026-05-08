@@ -2053,36 +2053,6 @@ class OpenClawAgentLoop(AgentLoopBase):
                 "status": "success",
             }
 
-            reward_rubric = extra_info.get("reward_rubric") if isinstance(extra_info, dict) else None
-            if (
-                task_id == "task_16_email_triage"
-                and isinstance(reward_rubric, dict)
-                and os.environ.get("PINCHBENCH_PER_INSTANCE_VERIFIER", "").strip().lower()
-                in {"1", "true", "yes", "on"}
-            ):
-                from agent_loop.per_instance_verifier import verify_task16_per_instance
-
-                threshold = float(os.environ.get("PINCHBENCH_PER_INSTANCE_VERIFIER_THRESHOLD", "0.72"))
-                result = verify_task16_per_instance(
-                    workspace_path=workspace,
-                    reward_rubric=reward_rubric,
-                    threshold=threshold,
-                    min_coverage=float(os.environ.get("PINCHBENCH_PER_INSTANCE_MIN_COVERAGE", "0.90")),
-                    min_priority=float(os.environ.get("PINCHBENCH_PER_INSTANCE_MIN_PRIORITY", "0.80")),
-                    min_category=float(os.environ.get("PINCHBENCH_PER_INSTANCE_MIN_CATEGORY", "0.75")),
-                    min_required_fields=float(os.environ.get("PINCHBENCH_PER_INSTANCE_MIN_REQUIRED_FIELDS", "0.75")),
-                )
-                logger.info(
-                    "Per-instance grading %s: score=%.3f passed=%s threshold=%.3f breakdown=%s notes=%s",
-                    task_id,
-                    result.score,
-                    result.passed,
-                    threshold,
-                    result.breakdown,
-                    result.notes,
-                )
-                return result.passed
-
             skill_dir = Path(self.oc_config.pinchbench_dir)
             from lib_grading import resolve_judge_backend_from_env, preflight_judge_connection
             judge_cfg = resolve_judge_backend_from_env(
@@ -2133,27 +2103,6 @@ class OpenClawAgentLoop(AgentLoopBase):
             if not task_file.exists():
                 return False
             task = TaskLoader(tasks_dir).load_task(task_file)
-
-            reward_rubric = extra_info.get("reward_rubric") if isinstance(extra_info, dict) else None
-            if (
-                task_id == "task_16_email_triage"
-                and isinstance(reward_rubric, dict)
-                and os.environ.get("PINCHBENCH_PER_INSTANCE_VERIFIER", "").strip().lower()
-                in {"1", "true", "yes", "on"}
-            ):
-                from agent_loop.per_instance_verifier import verify_task16_per_instance
-
-                result = verify_task16_per_instance(
-                    workspace_path=Path(str(execution_result.get("workspace", ""))),
-                    reward_rubric=reward_rubric,
-                    threshold=float(os.environ.get("PINCHBENCH_PER_INSTANCE_VERIFIER_THRESHOLD", "0.72")),
-                    min_coverage=float(os.environ.get("PINCHBENCH_PER_INSTANCE_MIN_COVERAGE", "0.90")),
-                    min_priority=float(os.environ.get("PINCHBENCH_PER_INSTANCE_MIN_PRIORITY", "0.80")),
-                    min_category=float(os.environ.get("PINCHBENCH_PER_INSTANCE_MIN_CATEGORY", "0.75")),
-                    min_required_fields=float(os.environ.get("PINCHBENCH_PER_INSTANCE_MIN_REQUIRED_FIELDS", "0.75")),
-                )
-                logger.info("Per-instance grading %s: score=%.3f passed=%s", task_id, result.score, result.passed)
-                return result.passed
 
             judge_cfg = resolve_judge_backend_from_env(
                 default_backend="api",
