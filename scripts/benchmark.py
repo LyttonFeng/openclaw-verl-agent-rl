@@ -41,6 +41,7 @@ from lib_grading import (
     DEFAULT_JUDGE_TIMEOUT_SECONDS,
     GradeResult,
     grade_task,
+    resolve_judge_backend_from_env,
     set_judge_cache_dir,
     get_judge_cache_stats,
     clear_judge_cache,
@@ -1020,8 +1021,16 @@ def main():
                 task=task, execution_result=result, skill_dir=skill_dir, verbose=args.verbose
             )
             if args.judge:
+                # Resolve base_url + api_key from env vars (DEEPSEEK_API_KEY by
+                # default — see lib_grading.resolve_judge_backend_from_env). The
+                # `openai/<model>` prefix on its own would otherwise route to
+                # api.openai.com via _judge_via_openai (reads OPENAI_API_KEY only)
+                # which is NOT what we want for DeepSeek.
+                _resolved_judge = resolve_judge_backend_from_env(default_backend="api")
                 grade_kwargs["judge_model"] = args.judge
                 grade_kwargs["judge_backend"] = "api"
+                grade_kwargs["judge_base_url"] = _resolved_judge.get("judge_base_url")
+                grade_kwargs["judge_api_key"] = _resolved_judge.get("judge_api_key")
 
             # Parallel grading: submit to background if enabled and single run
             # For multi-run tasks, grade synchronously to maintain order
