@@ -62,26 +62,33 @@ pinchbench_tasks/meeting_analysis/       28 task definitions
 | Component | Version |
 |---|---|
 | Python | 3.12 |
-| veRL | 0.7.1 |
+| **veRL** | **0.8.0.dev0** — install **editable from source**, not pip release (≤0.7.x lacks the agent_loop API). See [`docs/reproduction.md`](docs/reproduction.md) §1. |
 | vLLM | 0.10.2 (with `VLLM_ALLOW_RUNTIME_LORA_UPDATING=True`) |
 | Transformers | 4.57.1 |
 | Torch | 2.8.0+cu128 |
-| OpenClaw CLI | 2026.4.5 (3e72c03) |
-| PinchBench | 1.2.1 |
+| OpenClaw CLI | 2026.4.5 (3e72c03) — installed locally, not via SSH/ECS |
+| PinchBench | 1.2.1 (subset embedded — `pinchbench_tasks/meeting_analysis/` + `assets/meetings/`) |
 | GPU | 2 × A100-80GB (GPU 0 = train, GPU 1 = vLLM) |
 
 ## Quick start
 
 ```bash
-# 0. install
+# 0a. Python deps
 python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 1. set DeepSeek API key (judge for both terminal and PRM)
+# 0b. veRL — editable install from source (NOT a pip release)
+git clone https://github.com/volcengine/verl.git ~/verl
+pip install -e ~/verl
+
+# 0c. OpenClaw CLI — install per your team's distribution channel; verify with:
+openclaw --version    # → 2026.4.5 (3e72c03)
+
+# 1. DeepSeek API key (judge for both terminal grading and PRM scoring)
 echo 'export DEEPSEEK_API_KEY=sk-xxxxxxxxxxxx' > ~/.pinchbench_env
 chmod 600 ~/.pinchbench_env
 
-# 2. start vLLM on GPU 1 (background)  — see docs/reproduction.md §3 for full args
+# 2. start vLLM on GPU 1 (background) — see docs/reproduction.md §3 for full args
 CUDA_VISIBLE_DEVICES=1 VLLM_ALLOW_RUNTIME_LORA_UPDATING=True \
 python -m vllm.entrypoints.openai.api_server \
     --model Qwen/Qwen3-4B --served-model-name Qwen3-4B \
@@ -90,19 +97,25 @@ python -m vllm.entrypoints.openai.api_server \
     --enable-lora --max-lora-rank 16 \
     --enable-auto-tool-choice --tool-call-parser hermes --reasoning-parser qwen3 \
     --gpu-memory-utilization 0.85 --dtype bfloat16 --trust-remote-code &
+# wait until vLLM responds on /v1/models before proceeding (~60-90s on cold load)
 
-# 3. build training prompts (one-time)
+# 3. build training prompts (one-time per checkout, not committed)
 python rl/train/build_meeting_analysis_prompts.py \
     --tasks-dir pinchbench_tasks/meeting_analysis \
     --split-file rl/train/meeting_analysis_split.json \
     --output-dir data/meeting_prompts
 
-# 4a. one round, terminal + PRM (recommended)
-ROUND_NUM=1 bash rl/train/run_meeting_grpo_prm_round.sh
+# 4a. one round, terminal + PRM (recommended). On non-pod machines override BASE_DIR:
+BASE_DIR=$HOME/grpo_runs/meeting_grpo_prm_v1 \
+ROUND_NUM=1 \
+bash rl/train/run_meeting_grpo_prm_round.sh
 
-# 4b. or terminal-only (PRM disabled)
-PRM_BETA=0 ROUND_NUM=1 EXPERIMENT=meeting_grpo_terminal_v1 \
-    bash rl/train/run_meeting_grpo_prm_round.sh
+# 4b. or terminal-only ablation (PRM weight zero; PRM judge still scores —
+#     set SKIP_PRM_SCORING=1 to skip the DeepSeek PRM calls entirely)
+PRM_BETA=0 SKIP_PRM_SCORING=1 \
+BASE_DIR=$HOME/grpo_runs/meeting_grpo_terminal_v1 \
+ROUND_NUM=1 EXPERIMENT=meeting_grpo_terminal_v1 \
+bash rl/train/run_meeting_grpo_prm_round.sh
 ```
 
 ## Status

@@ -13,17 +13,19 @@ Two training paths are supported via the same wrapper:
 | Component | Version | Notes |
 |---|---|---|
 | Python | 3.12 | venv recommended |
-| veRL | 0.7.1 | offline GRPO trainer dependency |
+| **veRL** | **0.8.0.dev0** (editable from source) | **NOT a pip release** — see install step below |
 | vLLM | 0.10.2 | with `VLLM_ALLOW_RUNTIME_LORA_UPDATING=True` for hot-load |
 | Transformers | 4.57.1 | |
 | PEFT | latest compatible | LoRA training |
 | Torch | 2.8.0+cu128 | tested on A100 |
 | OpenClaw CLI | `2026.4.5` (3e72c03) | runs the multi-turn agent locally |
-| PinchBench | 1.2.1 | task definitions + grader |
+| PinchBench | 1.2.1 | task definitions + grader (this repo embeds the subset needed) |
 | GPU | 2 × A100-80GB | GPU 0 = training, GPU 1 = vLLM |
 
 > **No ECS / external runtime needed.** OpenClaw runs locally on the same pod
 > as training. SSH-to-OpenClaw mode (used by older task16 path) is not used here.
+
+### Install Python deps
 
 ```bash
 python3.12 -m venv .venv
@@ -31,7 +33,50 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-API keys (DeepSeek required for both terminal LLM-judge and PRM judge):
+### Install veRL from source (required)
+
+veRL is **not installed via pip**. Older releases (≤0.7.x) lack the
+`agent_loop` integration this repo depends on. Use the dev branch:
+
+```bash
+git clone https://github.com/volcengine/verl.git ~/verl
+cd ~/verl
+# Reference state: 0.8.0.dev0 head as of 2026-04 — pin a commit if you need a
+# fixed reference; the agent_loop API has been stable since 2026-03.
+pip install -e .
+```
+
+Verify the install picked up the editable path:
+
+```bash
+python -c "import verl; print(verl.__version__, verl.__file__)"
+# expected: 0.8.0.dev0 ~/verl/verl/__init__.py
+```
+
+### Install OpenClaw CLI
+
+OpenClaw is the multi-turn agent runtime that drives each rollout. Reference
+release `2026.4.5 (3e72c03)`. Installation depends on your team's
+distribution channel — typically:
+
+```bash
+# pip-installable build (if your team publishes one):
+pip install openclaw-cli==2026.4.5
+
+# Or install from source if you have access:
+git clone <openclaw-repo>
+cd openclaw && pip install -e .
+
+# Verify:
+openclaw --version   # → 2026.4.5 (3e72c03)
+```
+
+If the binary isn't on your PATH after install, set
+`OPENCLAW_BIN=/path/to/openclaw` before running the training wrapper.
+
+### API keys
+
+DeepSeek is the default judge for **both** terminal grading and PRM scoring:
 
 ```bash
 cat > ~/.pinchbench_env <<'EOF'
@@ -39,6 +84,10 @@ export DEEPSEEK_API_KEY=sk-xxxxxxxxxxxx
 EOF
 chmod 600 ~/.pinchbench_env
 ```
+
+`DASHSCOPE_API_KEY` is only needed if you switch the terminal judge to
+`qwen-plus` via `MEETING_JUDGE_PROVIDER=dashscope JUDGE_MODEL=qwen-plus`.
+Otherwise it's optional.
 
 ## 2. Data
 
@@ -115,8 +164,13 @@ EXPERIMENT=meeting_grpo_terminal_v1 \
 bash rl/train/run_meeting_grpo_prm_round.sh
 ```
 
-`PRM_BETA=0` makes the PRM scores have no effect on advantage; PRM scoring
-still runs (it's cheap) but the GRPO update reduces to terminal-only.
+> **Note:** `PRM_BETA=0` makes the PRM scores have no effect on the GRPO
+> advantage, so the update reduces to terminal-only. **PRM scoring itself
+> still runs** (one DeepSeek call per assistant turn, ~$0.05 per round) —
+> it's cheap and useful as a control signal in diagnosis. If you want to
+> skip the PRM stage entirely (zero DeepSeek PRM calls), set
+> `SKIP_PRM_SCORING=1` (and the wrapper will jump from grade → train,
+> using all-zero per-turn scores).
 
 ### Continue from a previous LoRA
 
@@ -128,17 +182,24 @@ bash rl/train/run_meeting_grpo_prm_round.sh
 
 ### Key knobs
 
+All overridable via environment variable.
+
 | Variable | Default | Meaning |
 |---|---|---|
 | `ROUND_NUM` | required | round counter |
 | `PREV_LORA` | empty | start from base if empty, else LoRA path |
-| `EXPERIMENT` | `meeting_grpo_prm_v1` | output subdir name |
+| `EXPERIMENT` | `meeting_grpo_prm_v1` | output subdir name (under `BASE_DIR`) |
+| `BASE_DIR` | `/workspace/$EXPERIMENT` | run output root — **change this on machines where `/workspace/` doesn't exist**, e.g. `BASE_DIR=$HOME/grpo_runs/$EXPERIMENT` |
 | `PRM_ALPHA` | `1.0` | terminal weight |
-| `PRM_BETA` | `0.10` | PRM weight (0 = terminal-only) |
-| `PRM_MODE` | `additive` | `additive` or `multiplicative` |
+| `PRM_BETA` | `0.10` | PRM weight (0 = terminal-only ablation; PRM scoring still runs unless `SKIP_PRM_SCORING=1`) |
+| `PRM_MODE` | `additive` | `additive` or `multiplicative` (see `algorithm.md` for formulas) |
+| `SKIP_PRM_SCORING` | `0` | set to `1` to skip the DeepSeek PRM judge step entirely (synthesizes all-zero per-turn scores) |
 | `N_RESPONSES` | `2` | rollouts per prompt (GRPO group size) |
 | `NUM_WORKERS` | `4` | parallel rollout workers |
-| `MAX_SEQ_LEN` | `81920` | training sequence cap (must match vLLM) |
+| `MAX_SEQ_LEN` | `81920` | training sequence cap (must match vLLM `--max-model-len`) |
+| `MEETING_JUDGE_PROVIDER` | `deepseek` | `deepseek` (default) or `dashscope` (qwen-plus) for terminal judge |
+| `TASKS_DIR` | `pinchbench_tasks/meeting_analysis` | task `.md` lookup root |
+| `BASE_URL` etc. | see top of wrapper | vLLM endpoint and served model name |
 
 ## 5. Bench / evaluate
 
@@ -146,8 +207,11 @@ After training, the wrapper hot-loads the new LoRA into vLLM and runs a 3-run
 bench on the 5 test tasks. Result lands at:
 
 ```text
-/workspace/<EXPERIMENT>/bench_<round_tag>_v2_<timestamp>/result.json
+$BASE_DIR/bench_<round_tag>_v2_<timestamp>/result.json
 ```
+
+(default `$BASE_DIR=/workspace/$EXPERIMENT`; override `BASE_DIR` to use any
+writable directory.)
 
 To run bench manually on a saved LoRA:
 
@@ -175,10 +239,17 @@ modes, output budget allocation, automated check stability across runs):
 
 ```bash
 python -m agent_loop.diagnostics analyze \
-    --result-json /workspace/<bench_dir>/result.json \
-    --transcripts-dirs results/<NNNN>_transcripts \
-    --output /workspace/<bench_dir>/diagnosis.md
+    --result-json $BASE_DIR/<bench_dir>/result.json \
+    --transcripts-dirs results/0071_transcripts \
+    --output $BASE_DIR/<bench_dir>/diagnosis.md
 ```
+
+`results/<NNNN>_transcripts/` is automatically created by `scripts/benchmark.py`
+during the bench step — `<NNNN>` is a zero-padded sequential job id (e.g.
+`0071`), one folder per `benchmark.py` invocation, holding one
+`<task_id>.jsonl` per evaluated task. List `ls results/` after a bench to find
+the latest folder; pass it (or several, for multi-run merge) to
+`--transcripts-dirs`.
 
 See [`diagnostics.md`](diagnostics.md) for what the report covers.
 

@@ -1,3 +1,7 @@
+# veRL is intentionally NOT pinned here — install it editable from source.
+# See docs/reproduction.md §1 for the recommended branch / commit.
+# Reference: veRL 0.8.0.dev0 (editable from /workspace/verl), tested on
+# Torch 2.8.0+cu128 / CUDA 12.8 / A100-80GB.
 pandas
 pyarrow
 pyyaml
@@ -8,5 +12,4 @@ transformers==4.57.1
 accelerate
 peft
 vllm==0.10.2
-verl==0.7.1
 tensorboard

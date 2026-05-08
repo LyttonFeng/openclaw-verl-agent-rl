@@ -1,8 +1,10 @@
 [project]
 name = "openclaw-verl-agent-rl"
 version = "0.1.0"
-description = "Minimal task16 email triage RL reproduction with veRL, OpenClaw, and PinchBench."
+description = "Offline GRPO + Roadmap PRM training for meeting_analysis on Qwen3-4B, with OpenClaw multi-turn rollouts and PinchBench grading."
 requires-python = "==3.12.*"
+# veRL is installed editable from source (`pip install -e /path/to/verl`).
+# It is intentionally NOT listed here — see docs/reproduction.md §1.
 dependencies = [
   "pandas",
   "pyarrow",
@@ -14,7 +16,6 @@ dependencies = [
   "accelerate",
   "peft",
   "vllm==0.10.2",
-  "verl==0.7.1",
   "tensorboard",
 ]
 

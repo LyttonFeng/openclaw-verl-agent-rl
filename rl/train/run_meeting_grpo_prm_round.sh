@@ -19,8 +19,14 @@
 #   ROUND_NUM=1 bash rl/train/run_meeting_grpo_prm_round.sh
 #
 #   # Subsequent round, continuing from previous LoRA:
-#   ROUND_NUM=2 PREV_LORA=/workspace/meeting_grpo_prm_v1/round_1/lora_adapter \
+#   ROUND_NUM=2 PREV_LORA=/workspace/meeting_grpo_prm_v1/round_1/checkpoint/lora_adapter \
 #     bash rl/train/run_meeting_grpo_prm_round.sh
+#
+#   # Override defaults:
+#   BASE_DIR=$HOME/grpo_runs   # default /workspace/$EXPERIMENT — change for non-pod machines
+#   PRM_BETA=0                 # disable PRM weight (terminal-only ablation; PRM scoring still runs)
+#   PRM_MODE=multiplicative    # default 'additive'; switches to (1 + β·prm) advantage scaling
+#   TASKS_DIR=...              # default $REPO_ROOT/pinchbench_tasks/meeting_analysis
 #
 # Environment:
 #   DEEPSEEK_API_KEY   — for DSv4 PRM judge AND meeting_reward judge
@@ -70,10 +76,10 @@ JUDGE_MODEL="${JUDGE_MODEL:-deepseek-chat}"
 export MEETING_JUDGE_PROVIDER="${MEETING_JUDGE_PROVIDER:-deepseek}"
 
 # ── Paths ────────────────────────────────────────────────────────────────────
-TRAIN_SPLIT="$REPO_ROOT/rl/train/meeting_analysis_split.json"
-TASKS_DIR="$REPO_ROOT/tasks"
-ASSETS_DIR="$REPO_ROOT/assets"
-ROADMAPS_DIR="$REPO_ROOT/agent_loop/roadmap_prm/roadmaps"
+TRAIN_SPLIT="${TRAIN_SPLIT:-$REPO_ROOT/rl/train/meeting_analysis_split.json}"
+TASKS_DIR="${TASKS_DIR:-$REPO_ROOT/pinchbench_tasks/meeting_analysis}"
+ASSETS_DIR="${ASSETS_DIR:-$REPO_ROOT/assets}"
+ROADMAPS_DIR="${ROADMAPS_DIR:-$REPO_ROOT/agent_loop/roadmap_prm/roadmaps}"
 
 mkdir -p "$ROUND_DIR/rollouts" "$ROUND_DIR/checkpoint"
 
@@ -162,23 +168,46 @@ if [ "$N_GRADED" -lt 4 ]; then
 fi
 
 # ── Step 2: PRM scoring ──────────────────────────────────────────────────────
-echo ""
-echo "[round $ROUND_NUM] Step 2: PRM-scoring trajectories with DSv4-flash..."
-PYTHONPATH="$REPO_ROOT" python3 -m agent_loop.roadmap_prm.scripts.score_trajectories \
-    --graded-file "$GRADED_FILE" \
-    --tasks-dir "$TASKS_DIR" \
-    --roadmaps-dir "$ROADMAPS_DIR" \
-    --output-suffix _prm \
-    --max-workers 4 \
-    2>&1 | tee "$ROUND_DIR/rollouts/score_trajectories.log"
-
+# Set SKIP_PRM_SCORING=1 to bypass this step entirely (zero PRM judge calls);
+# the file is then synthesized with all-zero per-turn scores so step 3 can
+# still run. Useful for the strict terminal-only ablation when you want to
+# avoid DeepSeek PRM costs altogether.
 PRM_GRADED_FILE="$ROUND_DIR/rollouts/graded_trajectories_prm.jsonl"
-if [ ! -f "$PRM_GRADED_FILE" ]; then
-    echo "ERROR: PRM-scored file not found: $PRM_GRADED_FILE"
-    exit 1
+if [ "${SKIP_PRM_SCORING:-0}" = "1" ]; then
+    echo ""
+    echo "[round $ROUND_NUM] Step 2: SKIPPED (SKIP_PRM_SCORING=1) — synthesizing all-zero PRM file"
+    PYTHONPATH="$REPO_ROOT" python3 -c "
+import json, sys
+with open('$GRADED_FILE') as fin, open('$PRM_GRADED_FILE', 'w') as fout:
+    for line in fin:
+        rec = json.loads(line)
+        # Stub all-zero PRM scores so downstream training tolerates the file.
+        n = max(1, int(rec.get('num_assistant_turns') or 1))
+        rec['prm_turn_scores'] = [0] * n
+        rec['prm_status'] = 'skipped'
+        fout.write(json.dumps(rec) + '\n')
+print('SKIP_PRM_SCORING: synthesized all-zero PRM file', file=sys.stderr)
+"
+    N_PRM=$(wc -l < "$PRM_GRADED_FILE")
+    echo "[round $ROUND_NUM] PRM-stub: $N_PRM records → $PRM_GRADED_FILE"
+else
+    echo ""
+    echo "[round $ROUND_NUM] Step 2: PRM-scoring trajectories with DSv4-flash..."
+    PYTHONPATH="$REPO_ROOT" python3 -m agent_loop.roadmap_prm.scripts.score_trajectories \
+        --graded-file "$GRADED_FILE" \
+        --tasks-dir "$TASKS_DIR" \
+        --roadmaps-dir "$ROADMAPS_DIR" \
+        --output-suffix _prm \
+        --max-workers 4 \
+        2>&1 | tee "$ROUND_DIR/rollouts/score_trajectories.log"
+
+    if [ ! -f "$PRM_GRADED_FILE" ]; then
+        echo "ERROR: PRM-scored file not found: $PRM_GRADED_FILE"
+        exit 1
+    fi
+    N_PRM=$(wc -l < "$PRM_GRADED_FILE")
+    echo "[round $ROUND_NUM] PRM-scored: $N_PRM records → $PRM_GRADED_FILE"
 fi
-N_PRM=$(wc -l < "$PRM_GRADED_FILE")
-echo "[round $ROUND_NUM] PRM-scored: $N_PRM records → $PRM_GRADED_FILE"
 
 # ── Step 3: GRPO training step ───────────────────────────────────────────────
 echo ""

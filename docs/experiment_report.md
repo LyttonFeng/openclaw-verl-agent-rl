@@ -16,9 +16,15 @@
 
 ## Baselines
 
-Two baselines coexist because rope-scaling slightly penalizes the unadapted
-base model. **All trained models below are bench'd at rope=2; compare against
-the rope=2 baseline to stay apples-to-apples.**
+`rope=N` here refers to RoPE-scaling's `dynamic` factor — `rope=1` is the
+native 40K-token context, `rope=2` doubles the effective context to 80K
+(needed because Tampa City Council and NASA UAP transcripts exceed 40K).
+The unadapted base model takes a small (-1.1pp) quality hit at rope=2 since
+it never trained at extended positions; LoRA training recovers and exceeds
+the rope=1 baseline.
+
+**All trained models below are bench'd at rope=2; compare against the rope=2
+baseline to stay apples-to-apples.**
 
 | Config | 3-run mean |
 |---|---|
