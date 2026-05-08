@@ -1951,9 +1951,18 @@ def call_judge_api(
         )
         if not resolved_key:
             return {"status": "error", "text": "", "error": "No API key provided for custom judge endpoint"}
+        # Strip provider prefixes — custom endpoints (e.g. DeepSeek) only accept
+        # bare model names like ``deepseek-chat``. The CLI/user-facing form
+        # (``openai/deepseek-chat``, ``openrouter/...``) is a routing hint, not
+        # a model id, so we must remove it before sending to the upstream API.
+        bare_model = model
+        for _prefix in ("openai/", "openrouter/", "anthropic/", "deepseek/"):
+            if bare_model.startswith(_prefix):
+                bare_model = bare_model[len(_prefix):]
+                break
         endpoint = base_url.rstrip("/") + "/chat/completions"
         return _judge_via_openai_compat(
-            prompt, model, endpoint, resolved_key, timeout_seconds, response_json=response_json
+            prompt, bare_model, endpoint, resolved_key, timeout_seconds, response_json=response_json
         )
     if model == "claude" or model.startswith("claude:"):
         return _judge_via_claude_cli(prompt, model, timeout_seconds)
