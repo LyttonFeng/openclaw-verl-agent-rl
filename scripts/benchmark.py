@@ -1242,19 +1242,22 @@ def main():
     else:
         try:
             from lib_upload import UploadError, upload_results
-
-            result = upload_results(output_path, official_key=args.official_key)
-            if result.submission_id:
-                logger.info("Submission ID: %s", result.submission_id)
-                submission_id = result.submission_id
-            if result.rank is not None:
-                logger.info("Uploaded to leaderboard: rank #%s", result.rank)
-            if result.leaderboard_url:
-                logger.info("View at: %s", result.leaderboard_url)
-                leaderboard_url = result.leaderboard_url
-        except UploadError as exc:
-            logger.warning("Upload failed: %s", exc)
-            axiom.upload_failed(error=str(exc))
+        except ImportError:
+            logger.info("lib_upload module not present in this checkout; skipping upload.")
+        else:
+            try:
+                result = upload_results(output_path, official_key=args.official_key)
+                if result.submission_id:
+                    logger.info("Submission ID: %s", result.submission_id)
+                    submission_id = result.submission_id
+                if result.rank is not None:
+                    logger.info("Uploaded to leaderboard: rank #%s", result.rank)
+                if result.leaderboard_url:
+                    logger.info("View at: %s", result.leaderboard_url)
+                    leaderboard_url = result.leaderboard_url
+            except UploadError as exc:
+                logger.warning("Upload failed: %s", exc)
+                axiom.upload_failed(error=str(exc))
 
     # Log run completion to Axiom
     total_time_sec = sum(r.get("execution_time", 0.0) for r in results)
