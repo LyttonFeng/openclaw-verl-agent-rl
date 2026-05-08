@@ -33,7 +33,11 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger(__name__)
 
 # Ensure scripts/ is importable
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# Note: this file lives at <repo>/rewards/meeting_reward.py, so REPO_ROOT
+# is parent.parent (NOT parent.parent.parent — that mistake left REPO_ROOT
+# pointing at /workspace/ on pods, which silently broke _load_task and
+# made every rollout grade to 0).
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 _SCRIPTS_DIR = _REPO_ROOT / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
@@ -53,10 +57,16 @@ def _get_judge_config() -> tuple[str, str, str]:
 
 
 def _load_task(task_id: str):
-    """Load task definition from tasks/ directory."""
+    """Load task definition from pinchbench_tasks/meeting_analysis/ directory.
+
+    Honors MEETING_TASKS_DIR env var as override; useful if a caller wants
+    to point at a different task family. Falls back to the canonical
+    <repo>/pinchbench_tasks/meeting_analysis/ path used by this repo.
+    """
     from lib_tasks import TaskLoader
 
-    tasks_dir = _REPO_ROOT / "tasks"
+    env_dir = os.environ.get("MEETING_TASKS_DIR")
+    tasks_dir = Path(env_dir) if env_dir else (_REPO_ROOT / "pinchbench_tasks" / "meeting_analysis")
     task_file = tasks_dir / f"{task_id}.md"
     if not task_file.exists():
         raise FileNotFoundError(f"Task file not found: {task_file}")
