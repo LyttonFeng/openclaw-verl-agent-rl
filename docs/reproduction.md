@@ -243,7 +243,7 @@ python scripts/benchmark.py \
     --model "custom/meeting-r1" \
     --base-url "http://127.0.0.1:8021/v1" \
     --api-key "dummy" \
-    --judge "deepseek-v4-flash" \
+    --judge "deepseek-chat" \
     --output-dir /workspace/bench_meeting_r1 \
     --runs 3
 ```
@@ -277,7 +277,7 @@ See [`diagnostics.md`](diagnostics.md) for what the report covers.
 
 ## 7. Expected results
 
-Reference scores (3-run mean, judge = `deepseek-v4-flash`):
+Reference scores (3-run mean, judge = `deepseek-chat`):
 
 | Config | Overall | Notes |
 |---|---|---|

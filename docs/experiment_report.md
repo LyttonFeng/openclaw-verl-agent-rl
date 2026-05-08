@@ -1,6 +1,6 @@
 # Experiment Report — Meeting Analysis GRPO
 
-3-run mean scores on 5 held-out test tasks, judge = `deepseek-v4-flash`.
+3-run mean scores on 5 held-out test tasks, judge = `deepseek-chat`.
 **Scope notice**: this is a small-N study (5 test tasks × 3 runs = 15
 evaluations per checkpoint, single training seed). Numbers below are point
 estimates; we report per-run scores so the reader can judge variance.

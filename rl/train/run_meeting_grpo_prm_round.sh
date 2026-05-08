@@ -83,9 +83,13 @@ PRM_BETA="${PRM_BETA:-0.1}"
 PRM_MODE="${PRM_MODE:-additive}"   # 'additive' (default) or 'multiplicative'
 VARIANCE_THRESHOLD="${VARIANCE_THRESHOLD:-1e-8}"
 POS_ONLY_CLIP="${POS_ONLY_CLIP:-1}"   # 1 = clip -1 PRM scores to 0; 0 = keep raw
+# Rollout concurrency. Default 4 — running with NUM_WORKERS=1 makes 23 tasks ×
+# N_RESPONSES rollouts wall-clock-serial (~30+ min), so default to 4 unless the
+# caller explicitly pins it. See feedback_rollout_parallel.md.
+NUM_WORKERS="${NUM_WORKERS:-4}"
 
 # Judge for terminal grading (current default = DSv4)
-JUDGE_MODEL="${JUDGE_MODEL:-deepseek-v4-flash}"
+JUDGE_MODEL="${JUDGE_MODEL:-deepseek-chat}"
 export MEETING_JUDGE_PROVIDER="${MEETING_JUDGE_PROVIDER:-deepseek}"
 
 # ── Paths ────────────────────────────────────────────────────────────────────
@@ -168,6 +172,7 @@ python3 "$REPO_ROOT/rl/train/generate_meeting_rollouts.py" \
     --n-responses "$N_RESPONSES" \
     --output-dir "$ROUND_DIR/rollouts" \
     --judge-model "$JUDGE_MODEL" \
+    --num-workers "$NUM_WORKERS" \
     --timeout 600 \
     2>&1 | tee "$ROUND_DIR/rollouts/generate.log"
 
