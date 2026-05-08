@@ -89,6 +89,8 @@ class TaskLoader:
     
     def __init__(self, tasks_dir: Path):
         self.tasks_dir = tasks_dir
+        self.category_map = {}
+        self.categories = []
         logger.info(f"Initialized TaskLoader with directory: {tasks_dir}")
     
     def load_all_tasks(self) -> List[Task]:
@@ -110,6 +112,12 @@ class TaskLoader:
                 logger.error(f"Failed to load task from {task_file}: {e}", exc_info=True)
         
         logger.info(f"Successfully loaded {len(tasks)} tasks")
+        self.category_map = {t.task_id: (t.category or "uncategorized") for t in tasks}
+        seen = []
+        for t in tasks:
+            c = t.category or "uncategorized"
+            if c not in seen: seen.append(c)
+        self.categories = seen
         return tasks
     
     def load_task(self, task_file: Path) -> Task:

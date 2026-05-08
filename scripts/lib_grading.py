@@ -772,3 +772,17 @@ def _normalize_judge_response(parsed: Dict[str, Any]) -> Dict[str, Any]:
         result["notes"] = str(parsed["reasoning"])
     
     return result
+
+
+# ---- Stub: judge cache shims (originals not in this checkout) ----
+_JUDGE_CACHE_DIR = None
+
+def set_judge_cache_dir(path):
+    global _JUDGE_CACHE_DIR
+    _JUDGE_CACHE_DIR = path
+
+def get_judge_cache_stats():
+    return {'hits': 0, 'misses': 0, 'size': 0, 'dir': str(_JUDGE_CACHE_DIR) if _JUDGE_CACHE_DIR else None}
+
+def clear_judge_cache():
+    return 0
