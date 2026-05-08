@@ -25,7 +25,11 @@ DEFAULT_JUDGE_BASE_URL = "https://api.deepseek.com/v1"
 # When falling back to OpenClaw-embedded judge (no DEEPSEEK_API_KEY), use a capable cloud model id.
 DEFAULT_JUDGE_MODEL_OPENCLAW_FALLBACK = "openrouter/anthropic/claude-opus-4.5"
 DEFAULT_JUDGE_AGENT_PREFIX = "bench-judge"
-DEFAULT_JUDGE_TIMEOUT_SECONDS = 180
+# Bumped 180 -> 300 to absorb DeepSeek API congestion observed during a real
+# reproduction run (R2 rollouts saw 16 'read operation timed out' errors
+# against the 120s rollout-judge timeout while DS was busy). 300s is enough
+# margin to keep bench scoring valid when the API takes ~minutes to respond.
+DEFAULT_JUDGE_TIMEOUT_SECONDS = 300
 
 
 @dataclass

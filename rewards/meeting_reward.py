@@ -153,7 +153,7 @@ def _run_llm_judge(task, workspace_path: str, transcript: list) -> float:
 
     try:
         req = urllib.request.Request(endpoint, data=payload, headers=headers)
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with urllib.request.urlopen(req, timeout=300) as resp:
             data = json_mod.loads(resp.read())
             text = data["choices"][0]["message"]["content"]
             return _parse_judge_score(text)
