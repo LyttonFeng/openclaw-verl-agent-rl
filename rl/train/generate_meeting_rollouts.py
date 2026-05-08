@@ -32,6 +32,7 @@ sys.path.insert(0, str(REPO_ROOT))                       # for `import agent_loo
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 sys.path.insert(0, str(REPO_ROOT / "agent_loop"))
 sys.path.insert(0, str(REPO_ROOT / "rl" / "train"))
+sys.path.insert(0, str(REPO_ROOT / "rewards"))           # for `import meeting_reward`
 
 from lib_tasks import TaskLoader
 from agent_loop.diagnostics import diagnose
