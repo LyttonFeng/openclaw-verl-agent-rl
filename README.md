@@ -1,33 +1,40 @@
 # openclaw-verl-agent-rl
 
-Offline GRPO training of Qwen3-4B on PinchBench `meeting_analysis` tasks,
-with optional **Roadmap PRM** for per-turn process reward.
+在 PinchBench `meeting_analysis` 任务上对 Qwen3-4B 进行离线 GRPO 训练，
+可选 **Roadmap PRM** 提供 per-turn 过程奖励。
 
-- **Async, off-policy.** vLLM serves rollouts; veRL-free GRPO step writes a
-  new LoRA per round; LoRA hot-loaded back into vLLM for next round.
-- **Two reward layers.** Terminal reward (automated check + LLM judge) +
-  optional process reward (DSv4-flash judge against task-specific roadmaps,
-  with terminal-completion gate that only supervises failed trajectories).
-- **No ECS.** OpenClaw runs locally on the same pod as training.
+> **关于 repo 名字的说明**：repo 叫 `openclaw-verl-agent-rl` 是历史命名遗留，
+> 但**当前 GRPO 训练器不使用 veRL**。训练是 `rl/train/train_meeting_grpo_step.py`
+> 里一个自包含的 PyTorch + transformers + peft 循环（~250 行）。
+> veRL 源码只留给遗留 PPO 脚本（`rl/train/launch_main_ppo.py`、
+> `run_reinforce_lora.sh` 等）使用，**这些脚本不是本文档的复现路径**。
+> 详见 [`docs/algorithm.md`](docs/algorithm.md) §"训练器实现"。
 
-## Start here
+- **异步、off-policy。** vLLM 负责 rollout；veRL-free 的 GRPO step 每轮写出一个
+  新的 LoRA；LoRA 热加载回 vLLM 用于下一轮。
+- **两层奖励。** Terminal reward（自动检查 + LLM judge）+
+  可选 process reward（DSv4-flash judge 对照任务专属 roadmap，
+  带有 terminal-completion gate，只对失败轨迹进行监督）。
+- **不依赖 ECS。** OpenClaw 在与训练相同的 pod 上本地运行。
 
-1. [`docs/algorithm.md`](docs/algorithm.md) — design (flow diagram + reward formula + Roadmap PRM)
-2. [`docs/reproduction.md`](docs/reproduction.md) — end-to-end recipe (terminal-only and terminal+PRM)
-3. [`docs/diagnostics.md`](docs/diagnostics.md) — trajectory analysis module
-4. [`docs/experiment_report.md`](docs/experiment_report.md) — full result history with ablations
+## 从这里开始
 
-## Reference results
+1. [`docs/algorithm.md`](docs/algorithm.md) — 设计（流程图 + 奖励公式 + Roadmap PRM）
+2. [`docs/reproduction.md`](docs/reproduction.md) — 端到端复现流程（terminal-only 与 terminal+PRM）
+3. [`docs/diagnostics.md`](docs/diagnostics.md) — 轨迹分析模块
+4. [`docs/experiment_report.md`](docs/experiment_report.md) — 包含消融实验的完整结果历史
 
-3-run mean on 5 held-out test tasks, judge = `deepseek-chat`:
+## 参考结果
 
-| Config | Overall | Δ vs baseline | Notes |
+在 5 个 held-out 测试任务上的 3-run 平均，judge = `deepseek-chat`：
+
+| 配置 | 总分 | Δ vs baseline | 备注 |
 |---|---|---|---|
 | Baseline (rope=2, no LoRA) | 50.6% | — | apples-to-apples baseline |
-| Terminal-only, R5 LoRA | 55.0% | +4.4pp | ~5 rounds to converge |
-| **Terminal + Roadmap PRM, R1 LoRA** | **57.24%** | **+6.6pp** | converges in 1 round |
+| Terminal-only, R5 LoRA | 55.0% | +4.4pp | ~5 轮收敛 |
+| **Terminal + Roadmap PRM, R1 LoRA** | **57.24%** | **+6.6pp** | 1 轮即收敛 |
 
-## Repo layout
+## 仓库结构
 
 ```
 agent_loop/                              OpenClaw multi-turn agent + analysis
@@ -57,17 +64,17 @@ assets/meetings/                         4 real meeting transcripts
 pinchbench_tasks/meeting_analysis/       28 task definitions
 ```
 
-## Required versions
+## 所需版本
 
-| Component | Version |
+| 组件 | 版本 |
 |---|---|
 | Python | 3.12 |
-| **veRL** | **0.8.0.dev0** — install **editable from source**, not pip release (≤0.7.x lacks the agent_loop API). See [`docs/reproduction.md`](docs/reproduction.md) §1. |
+| **veRL** | **可选** — 当前 GRPO 训练器（`train_meeting_grpo_step.py`）不 import veRL。只有想运行遗留 PPO 脚本（`launch_main_ppo.py` / `run_reinforce_lora.sh`）才需要，那些脚本不是用来跑下面 SOTA 结果的。跳过 veRL 安装，§"Quick start" 的 0c-4 步骤照常工作。 |
 | vLLM | 0.10.2 (with `VLLM_ALLOW_RUNTIME_LORA_UPDATING=True`) |
 | Transformers | 4.57.1 |
 | Torch | 2.8.0+cu128 |
-| OpenClaw CLI | 2026.4.5 (3e72c03) — installed locally, not via SSH/ECS |
-| PinchBench | 1.2.1 (subset embedded — `pinchbench_tasks/meeting_analysis/` + `assets/meetings/`) |
+| OpenClaw CLI | 2026.4.5 (3e72c03) — 本地安装，不通过 SSH/ECS |
+| PinchBench | 1.2.1 (内嵌子集 — `pinchbench_tasks/meeting_analysis/` + `assets/meetings/`) |
 | GPU | 2 × A100-80GB (GPU 0 = train, GPU 1 = vLLM) |
 
 ## Quick start
@@ -77,9 +84,9 @@ pinchbench_tasks/meeting_analysis/       28 task definitions
 python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 0b. veRL — editable install from source (NOT a pip release)
-git clone https://github.com/volcengine/verl.git ~/verl
-pip install -e ~/verl
+# 0b. veRL — OPTIONAL, can skip. Current GRPO trainer doesn't import veRL.
+# Only install if you also want the legacy PPO scripts to work.
+# git clone https://github.com/volcengine/verl.git ~/verl && pip install -e ~/verl
 
 # 0c. OpenClaw CLI — public npm package. Install to LOCAL disk, NOT NFS:
 npm install -g openclaw@2026.4.5      # ~30s on local disk; do NOT install under /workspace/
@@ -119,8 +126,8 @@ ROUND_NUM=1 EXPERIMENT=meeting_grpo_terminal_v1 \
 bash rl/train/run_meeting_grpo_prm_round.sh
 ```
 
-## Status
+## 状态
 
-Reproduces a single round end-to-end on the 4 transcripts × 5 held-out tasks
-suite. Continued continuing past R2 with the default recipe regresses on the
-test set (reward hacking); see [`experiment_report.md`](docs/experiment_report.md) §15.
+可在 4 个 transcripts × 5 个 held-out 任务的 suite 上端到端复现单轮训练结果。
+使用默认配方继续训练超过 R2 会在测试集上回退（reward hacking）；
+详见 [`experiment_report.md`](docs/experiment_report.md) §15。
