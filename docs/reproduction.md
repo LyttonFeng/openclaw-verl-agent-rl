@@ -26,6 +26,60 @@
 > **不需要 ECS / 外部 runtime。** OpenClaw 在与训练相同的 pod 上本地运行。
 > 之前 task16 路径用的 SSH-to-OpenClaw 模式在这里不再使用。
 
+### ⚠️ 训练 dtype：必须用 fp32，不能用 bf16（2026-05-09 发现）
+
+**现象（NaN 复现 trace）**：在 **transformers 4.57 + peft 0.19 + 80K context** 组合下，
+bf16 训练会出现完全可复现的 NaN：
+
+```
+sample 5/30:    loss=0.0313  ✓
+sample 10/30:   loss=0.0290  ✓
+sample 11-17:   <无 print，但单 sample 时间从 16s/sample 飙升到 51s/sample>
+                <某次 backward 产生 inf gradient，optimizer.step() 把 NaN 写入 LoRA 参数>
+sample 18/30:   loss is NaN/inf, skipping  ← 第一次 NaN
+sample 19-30:   loss is NaN/inf, skipping  ← 后续全 NaN（参数已污染）
+Training done: 7 optimizer steps, 16 skipped, avg_loss=0.0053
+LoRA saved   ← 但保存的是 NaN 参数
+```
+
+**验证**：训练后用 safetensors 直接读 LoRA `adapter_model.safetensors`，
+所有 layer 的 `lora_A.weight` / `lora_B.weight` **全部** `tensor([nan, nan, nan, ...])`。
+vLLM hot-load 这个 NaN LoRA 后，bench 第一个 task 第一 run 即 0%。
+
+**根因**：transformers 4.57 的 attention 实现 + peft 0.19 的 LoRA forward path
++ bf16 + 长 context 在某些 batch 上数值溢出。同代码（diff 仅是后加的 NaN guard）
+在 2026-05 老 SOTA pod 上的 transformers/peft 旧版本不出 NaN。
+
+**修复（必须）**：`rl/train/train_meeting_grpo_step.py` 里：
+
+1. Model load 用 fp32：
+   ```python
+   model = AutoModelForCausalLM.from_pretrained(
+       args.model_path,
+       torch_dtype=torch.float32,    # 不是 torch.bfloat16
+       ...
+   )
+   ```
+2. 去掉 bf16 autocast：
+   ```python
+   # 旧：with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+   # 新：直接 forward，不要 autocast wrapper
+   body_out = body(input_ids=input_ids)
+   ...
+   ```
+
+代价：fp32 训练比 bf16 慢约 2x（每 sample 16s → 25s）。
+显存：4B fp32 + LoRA + 80K context activation + grad checkpointing
+在 80GB A100 上够用，不会 OOM。
+
+实测 R1 fp32（terminal-only，30 sample，lr=1e-6）：
+- avg_loss=0.0071（正常，无 NaN）
+- bench overall **46.16%**，相比 baseline_v6 (44.68%) **+1.48pp** ↑
+
+未来如果切回 bf16，需要先确认：
+- 装老版本 `transformers==4.45.2 peft==0.13.0`（疑似 SOTA 时代版本）
+- 或自己实现 attention scores cast fp32 的 numerical safety
+
 ### 安装 Python 依赖
 
 ```bash
@@ -214,6 +268,72 @@ bash rl/train/run_meeting_grpo_prm_round.sh
 | `TASKS_DIR` | `pinchbench_tasks/meeting_analysis` | 任务 `.md` 查找根 |
 | `VLLM_BASE_URL` | `http://127.0.0.1:8021/v1` | vLLM endpoint |
 | `SERVED_MODEL` | `Qwen3-4B` | vLLM 提供的 model id |
+
+### 进阶：质量过滤 + PPO（推荐 setting）
+
+R3 实验（详见 `experiment_report.md`）发现 vanilla PG 在 N=2 GRPO 下会
+**race-to-bottom 退化**（judge 噪声让 lazy 答案拿正 advantage，模型学偷懒）。
+解决方案：**质量过滤 + PPO 三件套**（importance ratio + clip + KL）。
+
+完整一轮命令（多卡 fp32 + rope=2 + 6h chain 验证 setting）：
+
+```bash
+ROUND_DIR=/workspace/grpo_runs/meeting_grpo_v2/round_3
+PREV_LORA=/workspace/grpo_runs/meeting_grpo_v2/round_2/checkpoint/lora_adapter
+
+# 1. Rollouts（同前；vLLM 在 GPU1 服务）
+# 略 — 用 generate_meeting_rollouts.py 或 wrapper script
+
+# 2. PRM-skip + variance filter（同前）
+python3 rl/train/select_grpo_samples.py \
+  --graded-file $ROUND_DIR/rollouts/graded_trajectories_prm.jsonl \
+  --output-dir  $ROUND_DIR/selection \
+  --variance-threshold 1e-08 --alpha 1.0
+
+# 3. 质量过滤（race-to-bottom 防御，详见 algorithm.md）
+python3 rl/train/apply_quality_filter.py \
+  --input  $ROUND_DIR/selection/graded_trajectories_prm_valid.jsonl \
+  --output $ROUND_DIR/selection/graded_trajectories_quality_filtered.jsonl \
+  --report $ROUND_DIR/selection/quality_report.json
+
+# 4. Kill vLLM 释放 GPU1 给训练
+pkill -f vllm.entrypoints.openai.api_server
+sleep 8
+
+# 5. 计算 P_old log_probs（PPO 必需）
+CUDA_VISIBLE_DEVICES=0,1 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+python3 rl/train/compute_rollout_logprobs.py \
+  --graded-file $ROUND_DIR/selection/graded_trajectories_quality_filtered.jsonl \
+  --lora-path   $PREV_LORA \
+  --output      $ROUND_DIR/rollout_logprobs.jsonl \
+  --max-seq-length 65536 --rope-scaling-factor 2.0
+# R1 从 base 起：去掉 --lora-path 参数（compute 脚本会用 base only）
+
+# 6. PPO + KL 训练
+CUDA_VISIBLE_DEVICES=0,1 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+python3 rl/train/train_meeting_grpo_step.py \
+  --graded-file $ROUND_DIR/selection/graded_trajectories_quality_filtered.jsonl \
+  --model-path  Qwen/Qwen3-4B \
+  --lora-path   $PREV_LORA \
+  --output-dir  $ROUND_DIR/checkpoint \
+  --logprobs-file $ROUND_DIR/rollout_logprobs.jsonl \
+  --clip-eps 0.2 --kl-beta 0.02 \
+  --lr 1e-6 --lora-rank 16 --grad-accum-steps 2 \
+  --max-seq-length 65536 --rope-scaling-factor 2.0 \
+  --prm-alpha 1.0 --prm-beta 0 --prm-mode additive
+
+# 7. 重启 vLLM、hot-load、bench（同前）
+```
+
+**关键 flag**：
+- `--logprobs-file`：传入 P_old 文件即启用 PPO；不传则退回 vanilla PG（向后兼容）
+- `--clip-eps 0.2`：PPO clip ε，标准值
+- `--kl-beta 0.02`：KL 惩罚系数（实测 KL 落在 0.001-0.003 健康区间）
+- `CUDA_VISIBLE_DEVICES=0,1`：多卡 device_map="auto" 是 fp32 + 17k+ tokens 的必要条件（单卡 OOM）
+- `--rope-scaling-factor 2.0`：必须，与 vLLM rollout 一致
+
+参考一键 chain：`repro/clean_chain_filter_ppo.sh`（pod 上的 6 轮自动化脚本，
+含 OOM 重试 + 断点续跑 + vLLM lifecycle 管理）。
 
 ## 5. Bench / 评估
 

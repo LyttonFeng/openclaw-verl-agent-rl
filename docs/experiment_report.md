@@ -161,6 +161,83 @@ chat 端总结之间的**输出预算分配**变化：
 - 用此配方继续 R1 之后是不安全的；rubric 可能需要先惩罚 chat 端冗长输出
   才能让 R2+ 有意义。
 
+## R3 重训：质量过滤 + PPO 突破 R2 平台 (2026-05-09 ~ 2026-05-10)
+
+R2→R3 vanilla GRPO 退化 -3.1pp（46.4% → 43.3%）后，做了三轮干预实验：
+
+| Round | Setting | MEETING % | vs R2 |
+|---|---|---:|---:|
+| R2 (基准) | vanilla PG, no filter | 46.40 | — |
+| **R3 v1** | vanilla PG, no filter（重跑 R3） | 43.30 | **-3.1pp 退化** |
+| **R3 v2** | vanilla PG **+ 质量过滤**（race-to-bottom 防御） | 46.20 | -0.2pp（持平） |
+| **R3 v3** | **PPO + KL** + 质量过滤 | **47.50** | **+1.1pp 真实增量** ⭐ |
+
+### Per-task 细分（5-task held-out set）
+
+| Task | base | R1 | R2 | R3 v1 | R3 v2 | R3 v3 |
+|---|---:|---:|---:|---:|---:|---:|
+| advisory_stakeholders | 0.384 | 0.430 | 0.440 | **0.358** ↓ | 0.490 | **0.504** ⭐ |
+| council_votes | 0.198 | 0.252 | 0.248 | **0.175** ↓ | 0.200 | 0.225 |
+| gov_speaker_summary | 0.425 | 0.418 | 0.434 | 0.397 | 0.397 | 0.425 |
+| tech_action_items | 0.586 | 0.598 | 0.582 | 0.603 | 0.559 | **0.607** ⭐ |
+| sentiment_analysis | 0.641 | 0.610 | 0.617 | 0.631 | **0.666** | 0.613 |
+| **TOTAL %** | **44.70** | **46.20** | **46.40** | **43.30** | **46.20** | **47.50** |
+
+### 退化诊断
+
+R3 v1 退化的真实原因（通过对比 R2/R3 v1 同题 transcript 找到）：
+
+1. **Race-to-bottom 组**：N=2 的 group 中两条都质量低时，judge 噪声/bias 让
+   lazy 答案拿正 advantage，GRPO 把它当好榜样训练。R3 v1 的 16 个 useful
+   group 中有 4 个属此类（max reward < 0.4）。
+2. **早期终止漂移**：1/3 的 R3 v1 run 在 advisory_stakeholders 上"写到文件
+   就交差"，final reply 仅 385 字符（vs R2 1742）—— judge 评 final text，
+   这种 run 直接被 discount。
+3. **缺少 PPO 安全机制**：vanilla PG 无 importance ratio + clip + KL，单步
+   更新可以把 policy 推得很远，没有刹车。
+
+### 干预 1：质量过滤（R3 v2）
+
+只对 **正 advantage 样本**做质量审查（负样本是"避免信号"，质量差也 OK）。
+保守三道过滤：
+- group max(reward) ≥ 0.4（race-to-bottom 整组扔）
+- final_reply + 所有写文件总字符 ≥ 500（彻底没产出的扔）
+- 至少一次成功 tool call
+
+**结果**：从 16 个正样本中删掉 4 个（全是 max < 0.4 的 race-to-bottom），
+退化止住到 -0.2pp（持平 R2）。但**没有产生增量**，单靠过滤打不破平台。
+
+详见 `algorithm.md` § 训练数据质量过滤。
+
+### 干预 2：PPO + KL（R3 v3）
+
+在过滤之上加 PPO 三件套：importance ratio + clip(ε=0.2) + KL k3 estimator(β=0.02)。
+
+**实现关键**：
+- 用 `compute_rollout_logprobs.py` 离线算 P_old（不用常驻 ref model，节省一半显存）
+- bf16 saved P_old + fp32 训练（实测 1-3% outlier 被 PPO clip 自然吸收）
+- π_ref = π_old（单轮锚定，不用第二份模型）
+
+**结果**：47.5%，**首次突破 R2** +1.1pp。avg_kl=0.0015 全程稳定。
+
+### 收获
+
+| Setting | MEETING % | 增量解读 |
+|---|---:|---|
+| vanilla PG | 46.4 → 43.3 | **退化**（race-to-bottom + 无安全网） |
+| + 质量过滤 | 46.2 | **止住退化**（删除假正样本） |
+| + PPO + KL | **47.5** | **真正增量**（importance correction + 防漂移） |
+
+**结论**：
+
+> **质量过滤"治退化"，PPO+KL "破平台"，两者必须同时上**。  
+> 单加任意一个都无法从 R2 继续涨。
+
+详见：
+- `algorithm.md` § 训练数据质量过滤
+- `algorithm.md` § PPO 三件套
+- `rl/train/apply_quality_filter.py`、`rl/train/compute_rollout_logprobs.py`
+
 ## 收敛性比较（定性）
 
 Terminal-only 和 terminal+PRM 在这套配置上都会收敛。轶事性地，terminal-only

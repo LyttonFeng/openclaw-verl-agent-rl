@@ -218,6 +218,9 @@ def train_grpo_step(
     prm_alpha: float = 1.0,
     prm_beta: float = 0.0,
     prm_mode: str = "additive",
+    old_logprobs_file: str | None = None,
+    clip_eps: float = 0.2,
+    kl_beta: float = 0.0,
 ):
     """
     Do one GRPO training step with proper masking.
@@ -295,9 +298,23 @@ def train_grpo_step(
         weight_decay=0.01,
     )
 
+    # Load old policy log_probs (for PPO ratio + KL). If None, vanilla PG.
+    old_logprobs_map = {}
+    if old_logprobs_file:
+        with open(old_logprobs_file) as f:
+            for line in f:
+                rec = json.loads(line)
+                key = (rec['task_id'], rec['response_idx'])
+                old_logprobs_map[key] = rec.get('trainable_log_probs', [])
+        logger.info(f"  Loaded old logprobs for {len(old_logprobs_map)} rollouts (PPO mode)")
+        logger.info(f"  PPO clip_eps={clip_eps} kl_beta={kl_beta}")
+    else:
+        logger.info("  No old_logprobs_file → vanilla PG (no ratio, no KL)")
+
     # ── Training loop (batch_size=1, gradient accumulation) ──────────────
 
     total_loss = 0.0
+    total_kl = 0.0
     n_steps = 0
     n_skipped = 0
     optimizer.zero_grad()
@@ -410,10 +427,34 @@ def train_grpo_step(
             neg_log_probs = torch.nn.functional.cross_entropy(
                 train_logits.float(), train_targets, reduction="none"
             )
-            token_log_probs = -neg_log_probs                # [N_train]
+            token_log_probs = -neg_log_probs                # [N_train] under π_θ
 
-            # Per-token policy gradient: a_t * log_p(t), averaged over trainable tokens
-            loss = -(train_advantages * token_log_probs).mean() / grad_accum_steps
+            # ── PPO: ratio + clip + KL（启用 --logprobs-file 时） ────────────
+            kl_value = torch.tensor(0.0, device=token_log_probs.device)
+            if old_logprobs_file:
+                key = (record['task_id'], record['response_idx'])
+                old_lp_list = old_logprobs_map.get(key)
+                if old_lp_list is None or len(old_lp_list) != token_log_probs.shape[0]:
+                    logger.warning(
+                        f"  Sample {i} ({key}): old_logprobs missing or len mismatch "
+                        f"({len(old_lp_list) if old_lp_list else 'None'} vs {token_log_probs.shape[0]}); fallback to vanilla"
+                    )
+                    loss = -(train_advantages * token_log_probs).mean() / grad_accum_steps
+                else:
+                    old_log_probs = torch.tensor(old_lp_list, dtype=torch.float32, device=token_log_probs.device)
+                    log_ratio = (token_log_probs - old_log_probs).clamp(-20.0, 20.0)
+                    ratio = torch.exp(log_ratio)
+                    surr1 = ratio * train_advantages
+                    surr2 = ratio.clamp(1.0 - clip_eps, 1.0 + clip_eps) * train_advantages
+                    pg_loss = -torch.min(surr1, surr2).mean()
+                    # KL k3 estimator: KL(π_θ || π_ref) where ref=old in our setup.
+                    # k3 = exp(log_ratio_ref) - log_ratio_ref - 1, where
+                    # log_ratio_ref = log_p_ref - log_p_θ = -log_ratio
+                    kl_value = (torch.exp(-log_ratio) + log_ratio - 1.0).mean()
+                    loss = (pg_loss + kl_beta * kl_value) / grad_accum_steps
+            else:
+                # Vanilla policy gradient (legacy path)
+                loss = -(train_advantages * token_log_probs).mean() / grad_accum_steps
 
         loss.backward()
 
@@ -425,12 +466,14 @@ def train_grpo_step(
             n_steps += 1
 
         total_loss += loss.item() * grad_accum_steps
+        total_kl += float(kl_value.item()) if old_logprobs_file else 0.0
 
         if (i + 1) % 5 == 0:
             n_pos_turns = sum(1 for s in prm_turn_scores if s > 0)
             n_neg_turns = sum(1 for s in prm_turn_scores if s < 0)
+            kl_str = f" kl={float(kl_value.item()):.4f}" if old_logprobs_file else ""
             logger.info(
-                f"    sample {i+1}/{len(records)}: loss={loss.item()*grad_accum_steps:.4f} "
+                f"    sample {i+1}/{len(records)}: loss={loss.item()*grad_accum_steps:.4f}{kl_str} "
                 f"adv={advantage:.3f} tokens={len(token_ids)} "
                 f"trainable={n_trainable} ({n_trainable/len(token_ids)*100:.0f}%) "
                 f"prm_turns=+{n_pos_turns}/-{n_neg_turns}/{n_assistant_turns}"
@@ -464,6 +507,10 @@ def train_grpo_step(
         "prm_alpha": prm_alpha,
         "prm_beta": prm_beta,
         "prm_mode": prm_mode,
+        "ppo_enabled": bool(old_logprobs_file),
+        "clip_eps": clip_eps if old_logprobs_file else None,
+        "kl_beta": kl_beta if old_logprobs_file else None,
+        "avg_kl": (total_kl / max(len(records) - n_skipped, 1)) if old_logprobs_file else None,
     }
     (output_path / "training_meta.json").write_text(json.dumps(meta, indent=2))
 
@@ -509,6 +556,17 @@ def main():
              "multiplicative: a_token = terminal · (1 + β·prm[k]) when terminal>0 "
              "else terminal (PRM does not touch failures).",
     )
+    parser.add_argument(
+        "--logprobs-file",
+        type=str,
+        default=None,
+        help="JSONL of token log_probs from the rollout-time policy (P_old). "
+             "When provided, switches loss from vanilla PG to PPO with ratio + clip. "
+             "In our setup ref=old, so KL(π_θ || π_old) is also taken from the same file. "
+             "Generate via rl/train/compute_rollout_logprobs.py.",
+    )
+    parser.add_argument("--clip-eps", type=float, default=0.2, help="PPO clip epsilon (default 0.2)")
+    parser.add_argument("--kl-beta", type=float, default=0.0, help="KL penalty coefficient (default 0=off; recommend 0.02 when PPO enabled)")
     args = parser.parse_args()
 
     logger.info("Loading graded trajectories...")
@@ -536,6 +594,9 @@ def main():
         prm_alpha=args.prm_alpha,
         prm_beta=args.prm_beta,
         prm_mode=args.prm_mode,
+        old_logprobs_file=args.logprobs_file,
+        clip_eps=args.clip_eps,
+        kl_beta=args.kl_beta,
     )
 
     logger.info("Done.")

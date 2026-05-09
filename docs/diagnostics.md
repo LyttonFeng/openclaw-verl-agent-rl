@@ -120,3 +120,71 @@ register_plugin(PLUGIN)
 | `output_too_short` | 期望输出文件 `< 50` 字符 | "写了文件但文件本质上是空的"的合理性检查。 |
 
 如果你的任务有不同的产物大小或 tool 有不同的 read 上限，请在 fork 中调整这些。
+
+## 诊断 race-to-bottom（GRPO 训练数据漂移）
+
+当 round-N+1 比 round-N **退化**（如 R3 v1 从 R2 的 46.4% 跌到 43.3%）时，
+默认嫌疑是 **race-to-bottom 训练数据**。诊断流程：
+
+### Step 1：对比同题的"前后两轮"transcript
+
+挑退步最大的 task（per-task 表里 `Δ < -5pp` 的）。把上一轮（R_old）和当前
+轮（R_new）在该 task 上的 3 个 run transcript 摆一起，提取：
+
+| 指标 | 提取逻辑 |
+|---|---|
+| `final_chars` | 最后一个 assistant `text` block 的字符数 |
+| `written_files` | 所有 `write` toolCall 的 `arguments.content` 字符数 |
+| `n_assistant_turns` | role==assistant 的 message 数 |
+| `n_tool_calls` / `n_tool_success` / `n_tool_errors` | 累计 tool 调用情况 |
+| `total_output` | `final_chars + sum(written_files)` |
+
+参考 `rl/train/apply_quality_filter.py` 里的 `analyze_transcript()` 函数。
+
+### Step 2：识别"早终止"模式
+
+如果 R_new 的某些 run 出现**显著比 R_old 短**的 `total_output`（比如 R_old
+每 run 1500-3000 字符，R_new 突然有 1/3 run 缩到 < 500 字符）— 这就是**早期
+终止漂移**：模型学会了"写到文件就交差，不在 final reply 展开"。
+
+> **小心区分**：单看 `final_chars` 短不一定是退化（很多 task 内容应在
+> markdown 文件里）；要看 `total_output = final + 写文件` 综合。
+
+### Step 3：从 graded_trajectories 反查 race-to-bottom 组
+
+回到训练数据 `graded_trajectories.jsonl`：
+
+```python
+import json, statistics
+from collections import defaultdict
+recs = [json.loads(l) for l in open('graded_trajectories.jsonl')]
+groups = defaultdict(list)
+for r in recs: groups[r['task_id']].append(r['score'])
+
+bad_groups = [t for t, sc in groups.items() if max(sc) < 0.4]
+print(f'race-to-bottom groups: {len(bad_groups)}/{len(groups)}')
+print('Worst 5:', sorted([(t, max(sc)) for t,sc in groups.items()], key=lambda x: x[1])[:5])
+```
+
+如果 ≥ 25% 的 group 是 race-to-bottom，几乎可以确诊：训练数据本身有问题，
+GRPO 在挑"两个差答案中相对不那么差"的当好榜样训练。
+
+### Step 4：施救
+
+参考 `algorithm.md` § 训练数据质量过滤。核心：
+
+- 只过滤**正 advantage 样本**（负样本是"避免信号"，质量差也保留）
+- 三道保守过滤：group max ≥ 0.4 / total_output ≥ 500 / 至少 1 次成功 tool call
+- **不要**用 special token glitch（如 `[[xxx]]`）作为过滤信号 — 实测两轮都有，
+  不是退化引入的
+
+### 实证（R3 v1 → R3 v2 → R3 v3）
+
+| 干预 | MEETING % |
+|---|---:|
+| 无干预（vanilla GRPO） | 43.3% |
+| + 质量过滤 | 46.2%（止住退化） |
+| + 质量过滤 + PPO+KL | **47.5%**（首次破 R2） |
+
+**结论**：诊断 + 过滤能止住退化，但要从平台继续上升必须配 PPO（参考
+`algorithm.md` § PPO 三件套）。
