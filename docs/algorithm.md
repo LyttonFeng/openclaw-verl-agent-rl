@@ -148,6 +148,57 @@ PRM 有三个特征：
 代码：`agent_loop/roadmap_prm/judge.py:judge_terminal_completion`、
 `judge.py:judge_trajectory`。
 
+### PRM 与 [filter + PPO] 组合的实证设计要点 (2026-05-10 ablation)
+
+把 PRM 直接叠加到 [filter + PPO] setting 之上 **会退化 -1.2pp**（R1+PRM 朴素配置 = 45.7%，
+vs R1' no-PRM = 46.9%）。诊断发现两个根因：
+
+1. **PRM 在已及格 trajectory 上是负向扰动**。tech_action_items（R1' 0.642）和
+   sentiment_analysis（R1' 0.667）这种"中等偏强"task，原模型已在局部最优附近，PRM
+   引入的 milestone-aligned 偏置反而把它从局部最优拉走。binary `mostly_done` gate
+   太保守（要 ~0.8 才放过），中段反应不过来。
+2. **PRM token-level 应用导致"长 turn 多放大"偏置**。multiplicative 公式给一个
+   PRM=+1 turn 的每个 token 都乘 1.5；1000-token 长 turn 比 50-token 短 turn 拿到
+   20× 更多梯度推力。**直接训练出"多写字"的副作用**。
+
+修正这两条之后 R1+PRM = **47.3%**（**+0.4pp vs R1' no-PRM, +1.6pp vs naive PRM**）：
+
+#### Fix 1：Reward-gated PRM（绝对阈值替代 binary gate）
+
+`apply_quality_filter.py --prm-reward-gate 0.5`：score >= 0.5 的 trajectory 直接把
+`prm_turn_scores` 清零，等同于纯 terminal gradient。比 `judge_terminal_completion`
+的 binary 判断更直接、更细粒度。
+
+#### Fix 2：Per-turn loss weighting（消除长 turn 偏置）
+
+`train_meeting_grpo_step.py --per-turn-loss`：每个 token 权重 = 1/n_tokens_in_its_turn，
+确保**每个 turn 对梯度贡献相等，不被 turn 长度影响**。这切断 PRM 推策略向"啰嗦"
+偏移的机制。
+
+#### Per-task 实证（PRM ablation, 5 task × 3 run）
+
+| Task | base | R1' | R1+PRM v1 (naive) | R1+PRM v2 (with fixes) |
+|---|---:|---:|---:|---:|
+| advisory_stakeholders | 0.384 | 0.424 | 0.427 | **0.443** |
+| council_votes (弱项) | 0.198 | 0.204 | **0.235** | 0.221 |
+| gov_speaker_summary | 0.425 | 0.407 | 0.418 | 0.397 |
+| tech_action_items (强项) | 0.586 | 0.642 | **0.597** ↓ | 0.639 (修复) |
+| sentiment_analysis (强项) | 0.641 | 0.667 | **0.608** ↓ | 0.665 (修复) |
+| **TOTAL %** | 44.68 | **46.89** | **45.69** | **47.29** |
+
+#### 关键观察
+
+- **PRM 系统性帮弱项、伤强项**：在没有 fix 的 v1 里，R1' < 0.3 的弱项 council_votes
+  从 0.204 → 0.235（+15%）；R1' > 0.6 的强项 tech_action_items 0.642 → 0.597（-7%）、
+  sentiment 0.667 → 0.608（-9%）。**reward gate 直击这一点**。
+- **Per-turn loss 几乎不动 v1 没有 fix 的强项退化**（强项数据本身需要 reward gate
+  把 PRM 关掉），但**配合 reward gate 之后保护了 advisory_stakeholders 不被
+  PRM 副作用反噬**（v2 0.443 > v1 0.427）。
+- **PRM β=0.5 in multiplicative**（不是 docs 默认的 1.0，也不是 additive 的 0.10）
+  在 5-task bench 噪声下信号最稳：β 太小看不到效果，太大破坏 filter+PPO 稳定性。
+- **整体增量 +0.4pp 偏小**，逼近 5-task bench 的 ±1pp 噪声边界。要做严格性证明
+  需要更大 task suite 或多 seed 验证。
+
 ## 训练数据质量过滤（Race-to-bottom 防御）
 
 在 N=2 GRPO + judge-based reward 下，会出现 **race-to-bottom** 退化模式：当一个 group 内的两条 rollout 都质量低（judge 噪声/bias 让 lazy 答案偶然拿高分），GRPO 仍然会按 group-relative 给"两个都差但稍微不那么差"的那条正 advantage。模型把 lazy 当成"好榜样"学，慢慢漂向偷懒模式。

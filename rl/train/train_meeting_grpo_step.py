@@ -221,6 +221,7 @@ def train_grpo_step(
     old_logprobs_file: str | None = None,
     clip_eps: float = 0.2,
     kl_beta: float = 0.0,
+    per_turn_loss: bool = False,
 ):
     """
     Do one GRPO training step with proper masking.
@@ -389,6 +390,10 @@ def train_grpo_step(
         per_token_adv = torch.tensor(
             [per_token_adv_list], dtype=torch.float32, device="cuda"
         )  # [B, T]
+        # Per-turn loss 用：保留 turn id（-1 表示非 assistant token），shift 后跟 targets 对齐
+        turn_idx_t = torch.tensor(
+            [turn_idx_per_token], dtype=torch.long, device="cuda"
+        )  # [B, T]
 
         # Forward pass — at long context (>32K) we MUST avoid materializing
         # the [T, V] logits tensor. For Qwen3-4B with V≈152K, T=75K → 22 GB
@@ -401,6 +406,7 @@ def train_grpo_step(
         targets = input_ids[:, 1:]           # shifted targets [B, T-1]
         mask_shifted = mask[:, 1:]           # align mask [B, T-1]
         adv_shifted = per_token_adv[:, 1:]   # align advantage to targets [B, T-1]
+        turn_idx_shifted = turn_idx_t[:, 1:]  # align turn id to targets [B, T-1]
         trainable_idx = mask_shifted.bool()  # [B, T-1] bool
         n_train = int(trainable_idx.sum().item())
         if n_train == 0:
@@ -429,6 +435,30 @@ def train_grpo_step(
             )
             token_log_probs = -neg_log_probs                # [N_train] under π_θ
 
+            # ── Per-turn loss reweighting（消除 PRM 的"长 turn 多放大"偏置） ──
+            # 每个 token 权重 = 1 / (该 token 所在 turn 的 token 数)
+            # 这样 sum(weights) = n_distinct_turns；除以 n_turns → 每个 turn 等权
+            if per_turn_loss:
+                turn_idx_train = turn_idx_shifted[trainable_idx].long()  # [N_train]
+                # 仅计 valid turn ids (>= 0)
+                unique_turns, inverse = torch.unique(turn_idx_train, return_inverse=True)
+                counts = torch.zeros(len(unique_turns), dtype=torch.float32,
+                                     device=turn_idx_train.device)
+                counts.scatter_add_(
+                    0, inverse,
+                    torch.ones_like(inverse, dtype=torch.float32)
+                )
+                tw = 1.0 / counts[inverse]                  # [N_train]
+                n_turns_distinct = max(int(len(unique_turns)), 1)
+            else:
+                tw = None
+
+            def _reduce(x):
+                """Mean over tokens (default) or per-turn equal sum."""
+                if per_turn_loss and tw is not None:
+                    return (x * tw).sum() / n_turns_distinct
+                return x.mean()
+
             # ── PPO: ratio + clip + KL（启用 --logprobs-file 时） ────────────
             kl_value = torch.tensor(0.0, device=token_log_probs.device)
             if old_logprobs_file:
@@ -439,22 +469,22 @@ def train_grpo_step(
                         f"  Sample {i} ({key}): old_logprobs missing or len mismatch "
                         f"({len(old_lp_list) if old_lp_list else 'None'} vs {token_log_probs.shape[0]}); fallback to vanilla"
                     )
-                    loss = -(train_advantages * token_log_probs).mean() / grad_accum_steps
+                    loss = -_reduce(train_advantages * token_log_probs) / grad_accum_steps
                 else:
                     old_log_probs = torch.tensor(old_lp_list, dtype=torch.float32, device=token_log_probs.device)
                     log_ratio = (token_log_probs - old_log_probs).clamp(-20.0, 20.0)
                     ratio = torch.exp(log_ratio)
                     surr1 = ratio * train_advantages
                     surr2 = ratio.clamp(1.0 - clip_eps, 1.0 + clip_eps) * train_advantages
-                    pg_loss = -torch.min(surr1, surr2).mean()
+                    pg_loss = -_reduce(torch.min(surr1, surr2))
                     # KL k3 estimator: KL(π_θ || π_ref) where ref=old in our setup.
                     # k3 = exp(log_ratio_ref) - log_ratio_ref - 1, where
                     # log_ratio_ref = log_p_ref - log_p_θ = -log_ratio
-                    kl_value = (torch.exp(-log_ratio) + log_ratio - 1.0).mean()
+                    kl_value = _reduce(torch.exp(-log_ratio) + log_ratio - 1.0)
                     loss = (pg_loss + kl_beta * kl_value) / grad_accum_steps
             else:
                 # Vanilla policy gradient (legacy path)
-                loss = -(train_advantages * token_log_probs).mean() / grad_accum_steps
+                loss = -_reduce(train_advantages * token_log_probs) / grad_accum_steps
 
         loss.backward()
 
@@ -567,6 +597,9 @@ def main():
     )
     parser.add_argument("--clip-eps", type=float, default=0.2, help="PPO clip epsilon (default 0.2)")
     parser.add_argument("--kl-beta", type=float, default=0.0, help="KL penalty coefficient (default 0=off; recommend 0.02 when PPO enabled)")
+    parser.add_argument("--per-turn-loss", action="store_true",
+                        help="按 turn 等权累加 loss（消除 PRM 长 turn 多放大的偏置）。"
+                             "建议启用 PRM (prm-beta>0) 时配合使用。")
     args = parser.parse_args()
 
     logger.info("Loading graded trajectories...")
@@ -597,6 +630,7 @@ def main():
         old_logprobs_file=args.logprobs_file,
         clip_eps=args.clip_eps,
         kl_beta=args.kl_beta,
+        per_turn_loss=args.per_turn_loss,
     )
 
     logger.info("Done.")

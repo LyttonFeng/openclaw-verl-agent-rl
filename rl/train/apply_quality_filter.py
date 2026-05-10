@@ -110,6 +110,9 @@ def main():
     ap.add_argument('--min-group-max-score', type=float, default=DEFAULT_MIN_GROUP_MAX_SCORE)
     ap.add_argument('--min-total-output-chars', type=int, default=DEFAULT_MIN_TOTAL_OUTPUT_CHARS)
     ap.add_argument('--min-tool-success', type=int, default=DEFAULT_MIN_TOOL_SUCCESS)
+    ap.add_argument('--prm-reward-gate', type=float, default=None,
+                    help='若设置，对 score >= 阈值的 trajectory 把 prm_turn_scores 清零'
+                         '（避免 PRM 干扰已及格的 trajectory）。')
     args = ap.parse_args()
 
     records = [json.loads(l) for l in open(args.input)]
@@ -150,6 +153,7 @@ def main():
             })
 
     # 写训练文件（PRM 正向化以兼容下游）
+    n_gated = 0
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     with open(args.output, 'w') as f:
         for r in kept:
@@ -157,7 +161,15 @@ def main():
             out['prm_turn_scores'] = [
                 max(0, int(s)) for s in out.get('prm_turn_scores', [])
             ]
+            # Reward gate：score >= 阈值的 trajectory 清零 PRM
+            if args.prm_reward_gate is not None and out.get('score', 0.0) >= args.prm_reward_gate:
+                out['prm_turn_scores'] = [0] * len(out['prm_turn_scores'])
+                out['prm_zeroed_by_reward_gate'] = True
+                n_gated += 1
             f.write(json.dumps(out) + '\n')
+
+    if args.prm_reward_gate is not None:
+        print(f'PRM reward gate: zeroed PRM for {n_gated}/{len(kept)} trajectories with score >= {args.prm_reward_gate}')
 
     pos_total = sum(1 for r in records if r['_advantage'] > 0.01)
     neg_total = sum(1 for r in records if r['_advantage'] < -0.01)

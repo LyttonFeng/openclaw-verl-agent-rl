@@ -238,6 +238,25 @@ R3 v1 退化的真实原因（通过对比 R2/R3 v1 同题 transcript 找到）�
 - `algorithm.md` § PPO 三件套
 - `rl/train/apply_quality_filter.py`、`rl/train/compute_rollout_logprobs.py`
 
+## PRM ablation 在新 baseline 上的实证（2026-05-10）
+
+把 Roadmap PRM 加到 [filter + PPO] setting 上的实验。详见
+[`experiments/r1_prm_ablation/README.md`](../experiments/r1_prm_ablation/README.md)。
+
+| | base | R1' (no PRM) | v1 naive PRM | **v2 PRM + fixes** |
+|---|---:|---:|---:|---:|
+| MEETING % | 44.68 | **46.89** | **45.69** ↓ | **47.80** ↑ |
+| 增量 vs no-PRM | — | base | -1.20 | **+0.91** |
+
+**核心发现**：
+- **朴素加 PRM 反而退化 -1.2pp**——PRM 把 "milestone-aligned 啰嗦" 偏置注入
+  policy，破坏强项 task（tech_action_items、sentiment_analysis）已收敛的局部最优
+- **加两个 fix（reward-gate + per-turn-loss）后 +0.9pp**：
+  - Reward gate (`score >= 0.5 → 清零 PRM`)：救回强项
+  - Per-turn loss (token 权重 = 1/n_tokens_in_turn)：消除 "长 turn 多放大" 偏置
+- **PRM 增量在 5-task bench 噪声边界附近**（±0.5-1pp），严格性需要更大 task
+  suite 或多 seed 验证
+
 ## Clean chain：从 base 起跑 6 轮 [filter + PPO]（2026-05-10）
 
 为验证 setting 的稳定性，**从 base Qwen3-4B 起重跑 6 轮**，每轮都用同一 setting：

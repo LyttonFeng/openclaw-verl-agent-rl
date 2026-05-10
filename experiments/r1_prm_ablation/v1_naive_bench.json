@@ -1,0 +1,1764 @@
+{
+  "model": "clean-r1-prm-ablate",
+  "benchmark_version": "0d70f3c",
+  "run_id": "0041",
+  "timestamp": 1778420107.3719163,
+  "suite": "task_meeting_advisory_stakeholders,task_meeting_council_votes,task_meeting_gov_speaker_summary,task_meeting_tech_action_items,task_meeting_sentiment_analysis",
+  "runs_per_task": 3,
+  "tasks": [
+    {
+      "task_id": "task_meeting_advisory_stakeholders",
+      "status": "success",
+      "timed_out": false,
+      "execution_time": 49.4686484336853,
+      "transcript_length": 10,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "request_count": 3
+      },
+      "workspace": "/tmp/pinchbench/0041/agent_workspace",
+      "grading": {
+        "runs": [
+          {
+            "task_id": "task_meeting_advisory_stakeholders",
+            "score": 0.48,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.gov_stakeholders": 0.5,
+              "automated.commercial_stakeholders": 1.0,
+              "automated.sharing_preference": 1.0,
+              "automated.relocation_cost": 0.0,
+              "automated.sharing_vs_relocation": 1.0,
+              "automated.common_parameters": 0.0,
+              "automated.conflicts_identified": 1.0,
+              "automated.member_positions": 0.5,
+              "llm_judge.Stakeholder Identification Completeness": 0.3,
+              "llm_judge.Interest and Position Analysis": 0.2,
+              "llm_judge.Conflict and Agreement Mapping": 0.2,
+              "llm_judge.Evidence-Based Analysis": 0.1
+            },
+            "notes": "The analysis is extremely brief and generic, missing most key stakeholders (e.g., NTIA/Karl Nebbia, White House/OSTP, defense contractors like Lockheed Martin/Raytheon, public interest groups, individual committee members with strong positions). Interests and positions are vague or absent; no evidence from transcript is cited. Key tensions (sharing vs. relocation, cost disputes, common parameters, classified info, public participation) are not captured. The file appears to be a placeholder rather than a thorough analysis."
+          },
+          {
+            "task_id": "task_meeting_advisory_stakeholders",
+            "score": 0.38,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.gov_stakeholders": 0.5,
+              "automated.commercial_stakeholders": 1.0,
+              "automated.sharing_preference": 0.0,
+              "automated.relocation_cost": 0.0,
+              "automated.sharing_vs_relocation": 1.0,
+              "automated.common_parameters": 0.0,
+              "automated.conflicts_identified": 1.0,
+              "automated.member_positions": 0.0,
+              "llm_judge.stakeholder_identification_completeness": 0.3,
+              "llm_judge.interest_and_position_analysis": 0.2,
+              "llm_judge.conflict_and_agreement_mapping": 0.2,
+              "llm_judge.evidence_based_analysis": 0.1
+            },
+            "notes": "The analysis is extremely superficial and generic, missing most of the specific stakeholders, named individuals, nuanced positions, and key tensions from the transcript. It fails to capture the detailed discussions on sharing vs. relocation, cost disputes, common parameters, classified info, and public participation. No evidence or quotes from the transcript are provided. The output reads like a template rather than a genuine analysis of the meeting."
+          },
+          {
+            "task_id": "task_meeting_advisory_stakeholders",
+            "score": 0.42,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.gov_stakeholders": 0.5,
+              "automated.commercial_stakeholders": 1.0,
+              "automated.sharing_preference": 0.0,
+              "automated.relocation_cost": 0.0,
+              "automated.sharing_vs_relocation": 1.0,
+              "automated.common_parameters": 0.0,
+              "automated.conflicts_identified": 1.0,
+              "automated.member_positions": 0.0,
+              "llm_judge.Stakeholder Identification Completeness": 0.4,
+              "llm_judge.Interest and Position Analysis": 0.3,
+              "llm_judge.Conflict and Agreement Mapping": 0.3,
+              "llm_judge.Evidence-Based Analysis": 0.2
+            },
+            "notes": "The analysis misses many key stakeholders (e.g., White House/OSTP, AT&T, Verizon, Intel, academics, public interest, public participants) and fails to capture nuanced positions (e.g., NTIA's preference for sharing over relocation, industry's desire for certainty). Conflicts and agreements are vague and not tied to transcript evidence. No specific quotes or references are provided."
+          }
+        ],
+        "mean": 0.42666666666666664,
+        "std": 0.05033222956847165,
+        "min": 0.38,
+        "max": 0.48
+      },
+      "frontmatter": {
+        "id": "task_meeting_advisory_stakeholders",
+        "name": "NTIA Advisory Board Stakeholder Interests",
+        "category": "meeting",
+        "grading_type": "hybrid",
+        "timeout_seconds": 180,
+        "grading_weights": {
+          "automated": 0.6,
+          "llm_judge": 0.4
+        },
+        "workspace_files": [
+          {
+            "source": "meetings/2012-05-30-meeting-transcript-ntia-csmac.md",
+            "dest": "meeting-transcript.md"
+          }
+        ]
+      },
+      "category": "meeting"
+    },
+    {
+      "task_id": "task_meeting_advisory_stakeholders",
+      "status": "success",
+      "timed_out": false,
+      "execution_time": 51.46209001541138,
+      "transcript_length": 10,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "request_count": 3
+      },
+      "workspace": "/tmp/pinchbench/0041/agent_workspace",
+      "grading": {
+        "runs": [
+          {
+            "task_id": "task_meeting_advisory_stakeholders",
+            "score": 0.48,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.gov_stakeholders": 0.5,
+              "automated.commercial_stakeholders": 1.0,
+              "automated.sharing_preference": 1.0,
+              "automated.relocation_cost": 0.0,
+              "automated.sharing_vs_relocation": 1.0,
+              "automated.common_parameters": 0.0,
+              "automated.conflicts_identified": 1.0,
+              "automated.member_positions": 0.5,
+              "llm_judge.Stakeholder Identification Completeness": 0.3,
+              "llm_judge.Interest and Position Analysis": 0.2,
+              "llm_judge.Conflict and Agreement Mapping": 0.2,
+              "llm_judge.Evidence-Based Analysis": 0.1
+            },
+            "notes": "The analysis is extremely brief and generic, missing most key stakeholders (e.g., NTIA/Karl Nebbia, White House/OSTP, defense contractors like Lockheed Martin/Raytheon, public interest groups, individual committee members with strong positions). Interests and positions are vague or absent; no evidence from transcript is cited. Key tensions (sharing vs. relocation, cost disputes, common parameters, classified info, public participation) are not captured. The file appears to be a placeholder rather than a thorough analysis."
+          },
+          {
+            "task_id": "task_meeting_advisory_stakeholders",
+            "score": 0.38,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.gov_stakeholders": 0.5,
+              "automated.commercial_stakeholders": 1.0,
+              "automated.sharing_preference": 0.0,
+              "automated.relocation_cost": 0.0,
+              "automated.sharing_vs_relocation": 1.0,
+              "automated.common_parameters": 0.0,
+              "automated.conflicts_identified": 1.0,
+              "automated.member_positions": 0.0,
+              "llm_judge.stakeholder_identification_completeness": 0.3,
+              "llm_judge.interest_and_position_analysis": 0.2,
+              "llm_judge.conflict_and_agreement_mapping": 0.2,
+              "llm_judge.evidence_based_analysis": 0.1
+            },
+            "notes": "The analysis is extremely superficial and generic, missing most of the specific stakeholders, named individuals, nuanced positions, and key tensions from the transcript. It fails to capture the detailed discussions on sharing vs. relocation, cost disputes, common parameters, classified info, and public participation. No evidence or quotes from the transcript are provided. The output reads like a template rather than a genuine analysis of the meeting."
+          },
+          {
+            "task_id": "task_meeting_advisory_stakeholders",
+            "score": 0.42,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.gov_stakeholders": 0.5,
+              "automated.commercial_stakeholders": 1.0,
+              "automated.sharing_preference": 0.0,
+              "automated.relocation_cost": 0.0,
+              "automated.sharing_vs_relocation": 1.0,
+              "automated.common_parameters": 0.0,
+              "automated.conflicts_identified": 1.0,
+              "automated.member_positions": 0.0,
+              "llm_judge.Stakeholder Identification Completeness": 0.4,
+              "llm_judge.Interest and Position Analysis": 0.3,
+              "llm_judge.Conflict and Agreement Mapping": 0.3,
+              "llm_judge.Evidence-Based Analysis": 0.2
+            },
+            "notes": "The analysis misses many key stakeholders (e.g., White House/OSTP, AT&T, Verizon, Intel, academics, public interest, public participants) and fails to capture nuanced positions (e.g., NTIA's preference for sharing over relocation, industry's desire for certainty). Conflicts and agreements are vague and not tied to transcript evidence. No specific quotes or references are provided."
+          }
+        ],
+        "mean": 0.42666666666666664,
+        "std": 0.05033222956847165,
+        "min": 0.38,
+        "max": 0.48
+      },
+      "frontmatter": {
+        "id": "task_meeting_advisory_stakeholders",
+        "name": "NTIA Advisory Board Stakeholder Interests",
+        "category": "meeting",
+        "grading_type": "hybrid",
+        "timeout_seconds": 180,
+        "grading_weights": {
+          "automated": 0.6,
+          "llm_judge": 0.4
+        },
+        "workspace_files": [
+          {
+            "source": "meetings/2012-05-30-meeting-transcript-ntia-csmac.md",
+            "dest": "meeting-transcript.md"
+          }
+        ]
+      },
+      "category": "meeting"
+    },
+    {
+      "task_id": "task_meeting_advisory_stakeholders",
+      "status": "success",
+      "timed_out": false,
+      "execution_time": 50.25263738632202,
+      "transcript_length": 10,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "request_count": 3
+      },
+      "workspace": "/tmp/pinchbench/0041/agent_workspace",
+      "grading": {
+        "runs": [
+          {
+            "task_id": "task_meeting_advisory_stakeholders",
+            "score": 0.48,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.gov_stakeholders": 0.5,
+              "automated.commercial_stakeholders": 1.0,
+              "automated.sharing_preference": 1.0,
+              "automated.relocation_cost": 0.0,
+              "automated.sharing_vs_relocation": 1.0,
+              "automated.common_parameters": 0.0,
+              "automated.conflicts_identified": 1.0,
+              "automated.member_positions": 0.5,
+              "llm_judge.Stakeholder Identification Completeness": 0.3,
+              "llm_judge.Interest and Position Analysis": 0.2,
+              "llm_judge.Conflict and Agreement Mapping": 0.2,
+              "llm_judge.Evidence-Based Analysis": 0.1
+            },
+            "notes": "The analysis is extremely brief and generic, missing most key stakeholders (e.g., NTIA/Karl Nebbia, White House/OSTP, defense contractors like Lockheed Martin/Raytheon, public interest groups, individual committee members with strong positions). Interests and positions are vague or absent; no evidence from transcript is cited. Key tensions (sharing vs. relocation, cost disputes, common parameters, classified info, public participation) are not captured. The file appears to be a placeholder rather than a thorough analysis."
+          },
+          {
+            "task_id": "task_meeting_advisory_stakeholders",
+            "score": 0.38,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.gov_stakeholders": 0.5,
+              "automated.commercial_stakeholders": 1.0,
+              "automated.sharing_preference": 0.0,
+              "automated.relocation_cost": 0.0,
+              "automated.sharing_vs_relocation": 1.0,
+              "automated.common_parameters": 0.0,
+              "automated.conflicts_identified": 1.0,
+              "automated.member_positions": 0.0,
+              "llm_judge.stakeholder_identification_completeness": 0.3,
+              "llm_judge.interest_and_position_analysis": 0.2,
+              "llm_judge.conflict_and_agreement_mapping": 0.2,
+              "llm_judge.evidence_based_analysis": 0.1
+            },
+            "notes": "The analysis is extremely superficial and generic, missing most of the specific stakeholders, named individuals, nuanced positions, and key tensions from the transcript. It fails to capture the detailed discussions on sharing vs. relocation, cost disputes, common parameters, classified info, and public participation. No evidence or quotes from the transcript are provided. The output reads like a template rather than a genuine analysis of the meeting."
+          },
+          {
+            "task_id": "task_meeting_advisory_stakeholders",
+            "score": 0.42,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.gov_stakeholders": 0.5,
+              "automated.commercial_stakeholders": 1.0,
+              "automated.sharing_preference": 0.0,
+              "automated.relocation_cost": 0.0,
+              "automated.sharing_vs_relocation": 1.0,
+              "automated.common_parameters": 0.0,
+              "automated.conflicts_identified": 1.0,
+              "automated.member_positions": 0.0,
+              "llm_judge.Stakeholder Identification Completeness": 0.4,
+              "llm_judge.Interest and Position Analysis": 0.3,
+              "llm_judge.Conflict and Agreement Mapping": 0.3,
+              "llm_judge.Evidence-Based Analysis": 0.2
+            },
+            "notes": "The analysis misses many key stakeholders (e.g., White House/OSTP, AT&T, Verizon, Intel, academics, public interest, public participants) and fails to capture nuanced positions (e.g., NTIA's preference for sharing over relocation, industry's desire for certainty). Conflicts and agreements are vague and not tied to transcript evidence. No specific quotes or references are provided."
+          }
+        ],
+        "mean": 0.42666666666666664,
+        "std": 0.05033222956847165,
+        "min": 0.38,
+        "max": 0.48
+      },
+      "frontmatter": {
+        "id": "task_meeting_advisory_stakeholders",
+        "name": "NTIA Advisory Board Stakeholder Interests",
+        "category": "meeting",
+        "grading_type": "hybrid",
+        "timeout_seconds": 180,
+        "grading_weights": {
+          "automated": 0.6,
+          "llm_judge": 0.4
+        },
+        "workspace_files": [
+          {
+            "source": "meetings/2012-05-30-meeting-transcript-ntia-csmac.md",
+            "dest": "meeting-transcript.md"
+          }
+        ]
+      },
+      "category": "meeting"
+    },
+    {
+      "task_id": "task_meeting_council_votes",
+      "status": "success",
+      "timed_out": false,
+      "execution_time": 49.16775989532471,
+      "transcript_length": 10,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "request_count": 3
+      },
+      "workspace": "/tmp/pinchbench/0041/agent_workspace",
+      "grading": {
+        "runs": [
+          {
+            "task_id": "task_meeting_council_votes",
+            "score": 0.24375,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.minutes_vote": 1.0,
+              "automated.item12_abstain": 0.0,
+              "automated.item14_15_rollcall": 0.0,
+              "automated.item19_unanimous": 0.0,
+              "automated.item22_continued": 0.0,
+              "automated.item23_first_reading": 0.0,
+              "automated.item25_carlson_no": 0.0,
+              "automated.item26_28_reconsider": 0.0,
+              "automated.summary_count": 0.0,
+              "llm_judge.vote_identification_completeness": 0.25,
+              "llm_judge.vote_detail_accuracy": 0.2,
+              "llm_judge.organization": 0.5,
+              "llm_judge.summary": 0.2
+            },
+            "notes": "Agent identified only 5 votes (far below 20+), missed key votes (items 12,14,15,19,22,23,25,26-28), incorrectly reported all as unanimous despite known dissents (Carlson abstention on item 12, Carlson/Clendenin no on 14/15, Carlson no on 25), and summary counts are wrong. Organization is acceptable but incomplete."
+          },
+          {
+            "task_id": "task_meeting_council_votes",
+            "score": 0.19375,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.minutes_vote": 1.0,
+              "automated.item12_abstain": 0.0,
+              "automated.item14_15_rollcall": 0.0,
+              "automated.item19_unanimous": 0.0,
+              "automated.item22_continued": 0.0,
+              "automated.item23_first_reading": 0.0,
+              "automated.item25_carlson_no": 0.0,
+              "automated.item26_28_reconsider": 0.0,
+              "automated.summary_count": 0.0,
+              "llm_judge.vote_identification_completeness": 0.25,
+              "llm_judge.vote_detail_accuracy": 0.0,
+              "llm_judge.organization": 0.5,
+              "llm_judge.summary": 0.0
+            },
+            "notes": "Only 5 votes identified out of 20+; missing key votes (items 12,14,15,19,22,23,25,26-28). Movers/seconders often wrong or missing; dissents/abstentions not captured. Summary inaccurate (0 dissents). Organization is chronological but incomplete."
+          },
+          {
+            "task_id": "task_meeting_council_votes",
+            "score": 0.26875000000000004,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.minutes_vote": 1.0,
+              "automated.item12_abstain": 0.0,
+              "automated.item14_15_rollcall": 0.0,
+              "automated.item19_unanimous": 0.0,
+              "automated.item22_continued": 0.0,
+              "automated.item23_first_reading": 0.0,
+              "automated.item25_carlson_no": 0.0,
+              "automated.item26_28_reconsider": 0.0,
+              "automated.summary_count": 0.0,
+              "llm_judge.vote_identification_completeness": 0.25,
+              "llm_judge.vote_detail_accuracy": 0.3,
+              "llm_judge.organization": 0.5,
+              "llm_judge.summary": 0.3
+            },
+            "notes": "Only 5 votes identified, missing many key votes (items 12, 14/15, 19, 22, 23, 25, 26-28). Details for identified votes are correct but incomplete. Organization is chronological but sparse. Summary is inaccurate (should include dissent)."
+          }
+        ],
+        "mean": 0.2354166666666667,
+        "std": 0.03818813079129868,
+        "min": 0.19375,
+        "max": 0.26875000000000004
+      },
+      "frontmatter": {
+        "id": "task_meeting_council_votes",
+        "name": "Tampa City Council \u2013 List Motions and Vote Outcomes",
+        "category": "meeting",
+        "grading_type": "hybrid",
+        "timeout_seconds": 180,
+        "grading_weights": {
+          "automated": 0.5,
+          "llm_judge": 0.5
+        },
+        "workspace_files": [
+          {
+            "source": "meetings/2026-04-02-tampa-city-council-transcript.md",
+            "dest": "transcript.md"
+          }
+        ]
+      },
+      "category": "meeting"
+    },
+    {
+      "task_id": "task_meeting_council_votes",
+      "status": "success",
+      "timed_out": false,
+      "execution_time": 71.02969217300415,
+      "transcript_length": 10,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "request_count": 3
+      },
+      "workspace": "/tmp/pinchbench/0041/agent_workspace",
+      "grading": {
+        "runs": [
+          {
+            "task_id": "task_meeting_council_votes",
+            "score": 0.24375,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.minutes_vote": 1.0,
+              "automated.item12_abstain": 0.0,
+              "automated.item14_15_rollcall": 0.0,
+              "automated.item19_unanimous": 0.0,
+              "automated.item22_continued": 0.0,
+              "automated.item23_first_reading": 0.0,
+              "automated.item25_carlson_no": 0.0,
+              "automated.item26_28_reconsider": 0.0,
+              "automated.summary_count": 0.0,
+              "llm_judge.vote_identification_completeness": 0.25,
+              "llm_judge.vote_detail_accuracy": 0.2,
+              "llm_judge.organization": 0.5,
+              "llm_judge.summary": 0.2
+            },
+            "notes": "Agent identified only 5 votes (far below 20+), missed key votes (items 12,14,15,19,22,23,25,26-28), incorrectly reported all as unanimous despite known dissents (Carlson abstention on item 12, Carlson/Clendenin no on 14/15, Carlson no on 25), and summary counts are wrong. Organization is acceptable but incomplete."
+          },
+          {
+            "task_id": "task_meeting_council_votes",
+            "score": 0.19375,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.minutes_vote": 1.0,
+              "automated.item12_abstain": 0.0,
+              "automated.item14_15_rollcall": 0.0,
+              "automated.item19_unanimous": 0.0,
+              "automated.item22_continued": 0.0,
+              "automated.item23_first_reading": 0.0,
+              "automated.item25_carlson_no": 0.0,
+              "automated.item26_28_reconsider": 0.0,
+              "automated.summary_count": 0.0,
+              "llm_judge.vote_identification_completeness": 0.25,
+              "llm_judge.vote_detail_accuracy": 0.0,
+              "llm_judge.organization": 0.5,
+              "llm_judge.summary": 0.0
+            },
+            "notes": "Only 5 votes identified out of 20+; missing key votes (items 12,14,15,19,22,23,25,26-28). Movers/seconders often wrong or missing; dissents/abstentions not captured. Summary inaccurate (0 dissents). Organization is chronological but incomplete."
+          },
+          {
+            "task_id": "task_meeting_council_votes",
+            "score": 0.26875000000000004,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.minutes_vote": 1.0,
+              "automated.item12_abstain": 0.0,
+              "automated.item14_15_rollcall": 0.0,
+              "automated.item19_unanimous": 0.0,
+              "automated.item22_continued": 0.0,
+              "automated.item23_first_reading": 0.0,
+              "automated.item25_carlson_no": 0.0,
+              "automated.item26_28_reconsider": 0.0,
+              "automated.summary_count": 0.0,
+              "llm_judge.vote_identification_completeness": 0.25,
+              "llm_judge.vote_detail_accuracy": 0.3,
+              "llm_judge.organization": 0.5,
+              "llm_judge.summary": 0.3
+            },
+            "notes": "Only 5 votes identified, missing many key votes (items 12, 14/15, 19, 22, 23, 25, 26-28). Details for identified votes are correct but incomplete. Organization is chronological but sparse. Summary is inaccurate (should include dissent)."
+          }
+        ],
+        "mean": 0.2354166666666667,
+        "std": 0.03818813079129868,
+        "min": 0.19375,
+        "max": 0.26875000000000004
+      },
+      "frontmatter": {
+        "id": "task_meeting_council_votes",
+        "name": "Tampa City Council \u2013 List Motions and Vote Outcomes",
+        "category": "meeting",
+        "grading_type": "hybrid",
+        "timeout_seconds": 180,
+        "grading_weights": {
+          "automated": 0.5,
+          "llm_judge": 0.5
+        },
+        "workspace_files": [
+          {
+            "source": "meetings/2026-04-02-tampa-city-council-transcript.md",
+            "dest": "transcript.md"
+          }
+        ]
+      },
+      "category": "meeting"
+    },
+    {
+      "task_id": "task_meeting_council_votes",
+      "status": "success",
+      "timed_out": false,
+      "execution_time": 54.09733033180237,
+      "transcript_length": 10,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "request_count": 3
+      },
+      "workspace": "/tmp/pinchbench/0041/agent_workspace",
+      "grading": {
+        "runs": [
+          {
+            "task_id": "task_meeting_council_votes",
+            "score": 0.24375,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.minutes_vote": 1.0,
+              "automated.item12_abstain": 0.0,
+              "automated.item14_15_rollcall": 0.0,
+              "automated.item19_unanimous": 0.0,
+              "automated.item22_continued": 0.0,
+              "automated.item23_first_reading": 0.0,
+              "automated.item25_carlson_no": 0.0,
+              "automated.item26_28_reconsider": 0.0,
+              "automated.summary_count": 0.0,
+              "llm_judge.vote_identification_completeness": 0.25,
+              "llm_judge.vote_detail_accuracy": 0.2,
+              "llm_judge.organization": 0.5,
+              "llm_judge.summary": 0.2
+            },
+            "notes": "Agent identified only 5 votes (far below 20+), missed key votes (items 12,14,15,19,22,23,25,26-28), incorrectly reported all as unanimous despite known dissents (Carlson abstention on item 12, Carlson/Clendenin no on 14/15, Carlson no on 25), and summary counts are wrong. Organization is acceptable but incomplete."
+          },
+          {
+            "task_id": "task_meeting_council_votes",
+            "score": 0.19375,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.minutes_vote": 1.0,
+              "automated.item12_abstain": 0.0,
+              "automated.item14_15_rollcall": 0.0,
+              "automated.item19_unanimous": 0.0,
+              "automated.item22_continued": 0.0,
+              "automated.item23_first_reading": 0.0,
+              "automated.item25_carlson_no": 0.0,
+              "automated.item26_28_reconsider": 0.0,
+              "automated.summary_count": 0.0,
+              "llm_judge.vote_identification_completeness": 0.25,
+              "llm_judge.vote_detail_accuracy": 0.0,
+              "llm_judge.organization": 0.5,
+              "llm_judge.summary": 0.0
+            },
+            "notes": "Only 5 votes identified out of 20+; missing key votes (items 12,14,15,19,22,23,25,26-28). Movers/seconders often wrong or missing; dissents/abstentions not captured. Summary inaccurate (0 dissents). Organization is chronological but incomplete."
+          },
+          {
+            "task_id": "task_meeting_council_votes",
+            "score": 0.26875000000000004,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.minutes_vote": 1.0,
+              "automated.item12_abstain": 0.0,
+              "automated.item14_15_rollcall": 0.0,
+              "automated.item19_unanimous": 0.0,
+              "automated.item22_continued": 0.0,
+              "automated.item23_first_reading": 0.0,
+              "automated.item25_carlson_no": 0.0,
+              "automated.item26_28_reconsider": 0.0,
+              "automated.summary_count": 0.0,
+              "llm_judge.vote_identification_completeness": 0.25,
+              "llm_judge.vote_detail_accuracy": 0.3,
+              "llm_judge.organization": 0.5,
+              "llm_judge.summary": 0.3
+            },
+            "notes": "Only 5 votes identified, missing many key votes (items 12, 14/15, 19, 22, 23, 25, 26-28). Details for identified votes are correct but incomplete. Organization is chronological but sparse. Summary is inaccurate (should include dissent)."
+          }
+        ],
+        "mean": 0.2354166666666667,
+        "std": 0.03818813079129868,
+        "min": 0.19375,
+        "max": 0.26875000000000004
+      },
+      "frontmatter": {
+        "id": "task_meeting_council_votes",
+        "name": "Tampa City Council \u2013 List Motions and Vote Outcomes",
+        "category": "meeting",
+        "grading_type": "hybrid",
+        "timeout_seconds": 180,
+        "grading_weights": {
+          "automated": 0.5,
+          "llm_judge": 0.5
+        },
+        "workspace_files": [
+          {
+            "source": "meetings/2026-04-02-tampa-city-council-transcript.md",
+            "dest": "transcript.md"
+          }
+        ]
+      },
+      "category": "meeting"
+    },
+    {
+      "task_id": "task_meeting_gov_speaker_summary",
+      "status": "success",
+      "timed_out": false,
+      "execution_time": 50.07703971862793,
+      "transcript_length": 10,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "request_count": 3
+      },
+      "workspace": "/tmp/pinchbench/0041/agent_workspace",
+      "grading": {
+        "runs": [
+          {
+            "task_id": "task_meeting_gov_speaker_summary",
+            "score": 0.4375,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.dan_evans": 1.0,
+              "automated.nicola_fox": 1.0,
+              "automated.david_spergel": 0.5,
+              "automated.sean_kirkpatrick": 0.0,
+              "automated.faa_speaker": 0.0,
+              "automated.additional_panelists": 0.0,
+              "automated.quotes_included": 1.0,
+              "automated.speaker_order": 0.0,
+              "llm_judge.Speaker Identification Completeness": 0.25,
+              "llm_judge.Key Point Accuracy": 0.25,
+              "llm_judge.Quote Quality": 0.5,
+              "llm_judge.Organization and Readability": 0.5
+            },
+            "notes": "Only 2 speakers identified (Dan Evans, Nicola Fox) plus one Q&A mention; missing 6+ major speakers. Key points are generic and miss specific details (e.g., no mention of 800+ cases, 2-5% anomalous, FAA stats). Quotes are present but not from the actual transcript (likely fabricated). Organization is minimal with only 2 full entries and a truncated Q&A section."
+          },
+          {
+            "task_id": "task_meeting_gov_speaker_summary",
+            "score": 0.4375,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.dan_evans": 1.0,
+              "automated.nicola_fox": 1.0,
+              "automated.david_spergel": 0.5,
+              "automated.sean_kirkpatrick": 0.0,
+              "automated.faa_speaker": 0.0,
+              "automated.additional_panelists": 0.0,
+              "automated.quotes_included": 1.0,
+              "automated.speaker_order": 0.0,
+              "llm_judge.Speaker Identification Completeness": 0.25,
+              "llm_judge.Key Point Accuracy": 0.25,
+              "llm_judge.Quote Quality": 0.5,
+              "llm_judge.Organization and Readability": 0.5
+            },
+            "notes": "Only two speakers (Dan Evans, Nicola Fox) identified out of at least 8 major speakers. Key points are generic and miss specific details (e.g., no mention of 800+ cases, 2-5% anomalous, FAA stats). Quotes are plausible but not verified against transcript. Organization is basic but includes a Q&A section. Significant omissions in speaker coverage and accuracy."
+          },
+          {
+            "task_id": "task_meeting_gov_speaker_summary",
+            "score": 0.3784722222222222,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.dan_evans": 0.5,
+              "automated.nicola_fox": 1.0,
+              "automated.david_spergel": 0.5,
+              "automated.sean_kirkpatrick": 0.0,
+              "automated.faa_speaker": 0.0,
+              "automated.additional_panelists": 0.0,
+              "automated.quotes_included": 1.0,
+              "automated.speaker_order": 0.0,
+              "llm_judge.Speaker Identification Completeness": 0.25,
+              "llm_judge.Key Point Accuracy": 0.25,
+              "llm_judge.Quote Quality": 0.25,
+              "llm_judge.Organization and Readability": 0.5
+            },
+            "notes": "Only 3 speakers identified (Dan Evans, Nicola Fox, David Spergel) out of 8+ major speakers; key points are generic and miss specific details like statistics; quotes are vague or truncated; organization is basic but readable."
+          }
+        ],
+        "mean": 0.41782407407407407,
+        "std": 0.034079703389665414,
+        "min": 0.3784722222222222,
+        "max": 0.4375
+      },
+      "frontmatter": {
+        "id": "task_meeting_gov_speaker_summary",
+        "name": "NASA UAP Hearing Speaker Summary",
+        "category": "meeting",
+        "grading_type": "hybrid",
+        "timeout_seconds": 180,
+        "grading_weights": {
+          "automated": 0.5,
+          "llm_judge": 0.5
+        },
+        "workspace_files": [
+          {
+            "source": "meetings/2025-07-30-nasa-holds-first-public-meeting-on-ufos-transcript.md",
+            "dest": "transcript.md"
+          }
+        ]
+      },
+      "category": "meeting"
+    },
+    {
+      "task_id": "task_meeting_gov_speaker_summary",
+      "status": "success",
+      "timed_out": false,
+      "execution_time": 50.907776832580566,
+      "transcript_length": 10,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "request_count": 3
+      },
+      "workspace": "/tmp/pinchbench/0041/agent_workspace",
+      "grading": {
+        "runs": [
+          {
+            "task_id": "task_meeting_gov_speaker_summary",
+            "score": 0.4375,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.dan_evans": 1.0,
+              "automated.nicola_fox": 1.0,
+              "automated.david_spergel": 0.5,
+              "automated.sean_kirkpatrick": 0.0,
+              "automated.faa_speaker": 0.0,
+              "automated.additional_panelists": 0.0,
+              "automated.quotes_included": 1.0,
+              "automated.speaker_order": 0.0,
+              "llm_judge.Speaker Identification Completeness": 0.25,
+              "llm_judge.Key Point Accuracy": 0.25,
+              "llm_judge.Quote Quality": 0.5,
+              "llm_judge.Organization and Readability": 0.5
+            },
+            "notes": "Only 2 speakers identified (Dan Evans, Nicola Fox) plus one Q&A mention; missing 6+ major speakers. Key points are generic and miss specific details (e.g., no mention of 800+ cases, 2-5% anomalous, FAA stats). Quotes are present but not from the actual transcript (likely fabricated). Organization is minimal with only 2 full entries and a truncated Q&A section."
+          },
+          {
+            "task_id": "task_meeting_gov_speaker_summary",
+            "score": 0.4375,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.dan_evans": 1.0,
+              "automated.nicola_fox": 1.0,
+              "automated.david_spergel": 0.5,
+              "automated.sean_kirkpatrick": 0.0,
+              "automated.faa_speaker": 0.0,
+              "automated.additional_panelists": 0.0,
+              "automated.quotes_included": 1.0,
+              "automated.speaker_order": 0.0,
+              "llm_judge.Speaker Identification Completeness": 0.25,
+              "llm_judge.Key Point Accuracy": 0.25,
+              "llm_judge.Quote Quality": 0.5,
+              "llm_judge.Organization and Readability": 0.5
+            },
+            "notes": "Only two speakers (Dan Evans, Nicola Fox) identified out of at least 8 major speakers. Key points are generic and miss specific details (e.g., no mention of 800+ cases, 2-5% anomalous, FAA stats). Quotes are plausible but not verified against transcript. Organization is basic but includes a Q&A section. Significant omissions in speaker coverage and accuracy."
+          },
+          {
+            "task_id": "task_meeting_gov_speaker_summary",
+            "score": 0.3784722222222222,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.dan_evans": 0.5,
+              "automated.nicola_fox": 1.0,
+              "automated.david_spergel": 0.5,
+              "automated.sean_kirkpatrick": 0.0,
+              "automated.faa_speaker": 0.0,
+              "automated.additional_panelists": 0.0,
+              "automated.quotes_included": 1.0,
+              "automated.speaker_order": 0.0,
+              "llm_judge.Speaker Identification Completeness": 0.25,
+              "llm_judge.Key Point Accuracy": 0.25,
+              "llm_judge.Quote Quality": 0.25,
+              "llm_judge.Organization and Readability": 0.5
+            },
+            "notes": "Only 3 speakers identified (Dan Evans, Nicola Fox, David Spergel) out of 8+ major speakers; key points are generic and miss specific details like statistics; quotes are vague or truncated; organization is basic but readable."
+          }
+        ],
+        "mean": 0.41782407407407407,
+        "std": 0.034079703389665414,
+        "min": 0.3784722222222222,
+        "max": 0.4375
+      },
+      "frontmatter": {
+        "id": "task_meeting_gov_speaker_summary",
+        "name": "NASA UAP Hearing Speaker Summary",
+        "category": "meeting",
+        "grading_type": "hybrid",
+        "timeout_seconds": 180,
+        "grading_weights": {
+          "automated": 0.5,
+          "llm_judge": 0.5
+        },
+        "workspace_files": [
+          {
+            "source": "meetings/2025-07-30-nasa-holds-first-public-meeting-on-ufos-transcript.md",
+            "dest": "transcript.md"
+          }
+        ]
+      },
+      "category": "meeting"
+    },
+    {
+      "task_id": "task_meeting_gov_speaker_summary",
+      "status": "success",
+      "timed_out": false,
+      "execution_time": 44.1655011177063,
+      "transcript_length": 10,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "request_count": 3
+      },
+      "workspace": "/tmp/pinchbench/0041/agent_workspace",
+      "grading": {
+        "runs": [
+          {
+            "task_id": "task_meeting_gov_speaker_summary",
+            "score": 0.4375,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.dan_evans": 1.0,
+              "automated.nicola_fox": 1.0,
+              "automated.david_spergel": 0.5,
+              "automated.sean_kirkpatrick": 0.0,
+              "automated.faa_speaker": 0.0,
+              "automated.additional_panelists": 0.0,
+              "automated.quotes_included": 1.0,
+              "automated.speaker_order": 0.0,
+              "llm_judge.Speaker Identification Completeness": 0.25,
+              "llm_judge.Key Point Accuracy": 0.25,
+              "llm_judge.Quote Quality": 0.5,
+              "llm_judge.Organization and Readability": 0.5
+            },
+            "notes": "Only 2 speakers identified (Dan Evans, Nicola Fox) plus one Q&A mention; missing 6+ major speakers. Key points are generic and miss specific details (e.g., no mention of 800+ cases, 2-5% anomalous, FAA stats). Quotes are present but not from the actual transcript (likely fabricated). Organization is minimal with only 2 full entries and a truncated Q&A section."
+          },
+          {
+            "task_id": "task_meeting_gov_speaker_summary",
+            "score": 0.4375,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.dan_evans": 1.0,
+              "automated.nicola_fox": 1.0,
+              "automated.david_spergel": 0.5,
+              "automated.sean_kirkpatrick": 0.0,
+              "automated.faa_speaker": 0.0,
+              "automated.additional_panelists": 0.0,
+              "automated.quotes_included": 1.0,
+              "automated.speaker_order": 0.0,
+              "llm_judge.Speaker Identification Completeness": 0.25,
+              "llm_judge.Key Point Accuracy": 0.25,
+              "llm_judge.Quote Quality": 0.5,
+              "llm_judge.Organization and Readability": 0.5
+            },
+            "notes": "Only two speakers (Dan Evans, Nicola Fox) identified out of at least 8 major speakers. Key points are generic and miss specific details (e.g., no mention of 800+ cases, 2-5% anomalous, FAA stats). Quotes are plausible but not verified against transcript. Organization is basic but includes a Q&A section. Significant omissions in speaker coverage and accuracy."
+          },
+          {
+            "task_id": "task_meeting_gov_speaker_summary",
+            "score": 0.3784722222222222,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.dan_evans": 0.5,
+              "automated.nicola_fox": 1.0,
+              "automated.david_spergel": 0.5,
+              "automated.sean_kirkpatrick": 0.0,
+              "automated.faa_speaker": 0.0,
+              "automated.additional_panelists": 0.0,
+              "automated.quotes_included": 1.0,
+              "automated.speaker_order": 0.0,
+              "llm_judge.Speaker Identification Completeness": 0.25,
+              "llm_judge.Key Point Accuracy": 0.25,
+              "llm_judge.Quote Quality": 0.25,
+              "llm_judge.Organization and Readability": 0.5
+            },
+            "notes": "Only 3 speakers identified (Dan Evans, Nicola Fox, David Spergel) out of 8+ major speakers; key points are generic and miss specific details like statistics; quotes are vague or truncated; organization is basic but readable."
+          }
+        ],
+        "mean": 0.41782407407407407,
+        "std": 0.034079703389665414,
+        "min": 0.3784722222222222,
+        "max": 0.4375
+      },
+      "frontmatter": {
+        "id": "task_meeting_gov_speaker_summary",
+        "name": "NASA UAP Hearing Speaker Summary",
+        "category": "meeting",
+        "grading_type": "hybrid",
+        "timeout_seconds": 180,
+        "grading_weights": {
+          "automated": 0.5,
+          "llm_judge": 0.5
+        },
+        "workspace_files": [
+          {
+            "source": "meetings/2025-07-30-nasa-holds-first-public-meeting-on-ufos-transcript.md",
+            "dest": "transcript.md"
+          }
+        ]
+      },
+      "category": "meeting"
+    },
+    {
+      "task_id": "task_meeting_tech_action_items",
+      "status": "success",
+      "timed_out": false,
+      "execution_time": 52.48964285850525,
+      "transcript_length": 10,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "request_count": 3
+      },
+      "workspace": "/tmp/pinchbench/0041/agent_workspace",
+      "grading": {
+        "runs": [
+          {
+            "task_id": "task_meeting_tech_action_items",
+            "score": 0.6166666666666667,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.min_action_items": 1.0,
+              "automated.owners_identified": 0.5,
+              "automated.events_actions": 1.0,
+              "automated.announcements_actions": 1.0,
+              "automated.competitive_actions": 0.0,
+              "automated.messaging_actions": 0.5,
+              "automated.grouped_by_topic": 1.0,
+              "automated.deadlines_noted": 1.0,
+              "llm_judge.Completeness of Action Item Extraction": 0.4,
+              "llm_judge.Owner Attribution Accuracy": 0.2,
+              "llm_judge.Organization and Structure": 0.6,
+              "llm_judge.Context and Deadline Accuracy": 0.3
+            },
+            "notes": "The agent extracted many generic action items but missed key specific ones (e.g., PMMs getting commitments for specific events, Cormac adding top five for Plan, Samia using tier one competitors, William finalizing messaging). Owner attribution is mostly 'Team' instead of named individuals. Deadlines are often 'Pending' when specific ones were mentioned. Organization is decent with topic grouping and summary count, but content is inaccurate."
+          },
+          {
+            "task_id": "task_meeting_tech_action_items",
+            "score": 0.5583333333333333,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.min_action_items": 1.0,
+              "automated.owners_identified": 0.5,
+              "automated.events_actions": 1.0,
+              "automated.announcements_actions": 0.5,
+              "automated.competitive_actions": 0.0,
+              "automated.messaging_actions": 0.5,
+              "automated.grouped_by_topic": 1.0,
+              "automated.deadlines_noted": 1.0,
+              "llm_judge.Completeness of Action Item Extraction": 0.25,
+              "llm_judge.Owner Attribution Accuracy": 0.25,
+              "llm_judge.Organization and Structure": 0.5,
+              "llm_judge.Context and Deadline Accuracy": 0.25
+            },
+            "notes": "The agent extracted only 5 action items, missing key items like PMMs getting commitments for specific events, Cormac adding top five for Plan, team reviewing top 5 features, Samia using tier one competitors, team adding GitLab line item to competitive sheet, William finalizing messaging, and the Talladega Nights homework. Owners are mostly wrong (e.g., Cindy instead of PMMs, Brian instead of Cormac, etc.). Deadlines are vague or missing. Organization is present but items are incorrect. Context is minimal and inaccurate."
+          },
+          {
+            "task_id": "task_meeting_tech_action_items",
+            "score": 0.6166666666666667,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.min_action_items": 1.0,
+              "automated.owners_identified": 0.5,
+              "automated.events_actions": 1.0,
+              "automated.announcements_actions": 0.5,
+              "automated.competitive_actions": 0.0,
+              "automated.messaging_actions": 1.0,
+              "automated.grouped_by_topic": 1.0,
+              "automated.deadlines_noted": 1.0,
+              "llm_judge.Completeness of Action Item Extraction": 0.5,
+              "llm_judge.Owner Attribution Accuracy": 0.25,
+              "llm_judge.Organization and Structure": 0.5,
+              "llm_judge.Context and Deadline Accuracy": 0.25
+            },
+            "notes": "Extracted only 5 items vs expected 7+; missed key items like PMMs getting commitments, Cormac's top five, Samia's tier-one comparison, William's messaging finalization, and Talladega Nights homework. Owners are vague ('Discussed speaker') or incorrect (Cindy/Brian for wrong topics). Grouping is present but summary count is wrong (5 vs actual). Deadlines mostly missing or generic 'Tuesday'; context is minimal."
+          }
+        ],
+        "mean": 0.5972222222222222,
+        "std": 0.03367876570272818,
+        "min": 0.5583333333333333,
+        "max": 0.6166666666666667
+      },
+      "frontmatter": {
+        "id": "task_meeting_tech_action_items",
+        "name": "Meeting Action Items Extraction",
+        "category": "meeting",
+        "grading_type": "hybrid",
+        "timeout_seconds": 180,
+        "grading_weights": {
+          "automated": 0.6,
+          "llm_judge": 0.4
+        },
+        "workspace_files": [
+          {
+            "source": "meetings/2021-06-28-gitlab-product-marketing-meeting.md",
+            "dest": "meeting_transcript.md"
+          }
+        ]
+      },
+      "category": "meeting"
+    },
+    {
+      "task_id": "task_meeting_tech_action_items",
+      "status": "success",
+      "timed_out": false,
+      "execution_time": 54.885737657547,
+      "transcript_length": 10,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "request_count": 3
+      },
+      "workspace": "/tmp/pinchbench/0041/agent_workspace",
+      "grading": {
+        "runs": [
+          {
+            "task_id": "task_meeting_tech_action_items",
+            "score": 0.6166666666666667,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.min_action_items": 1.0,
+              "automated.owners_identified": 0.5,
+              "automated.events_actions": 1.0,
+              "automated.announcements_actions": 1.0,
+              "automated.competitive_actions": 0.0,
+              "automated.messaging_actions": 0.5,
+              "automated.grouped_by_topic": 1.0,
+              "automated.deadlines_noted": 1.0,
+              "llm_judge.Completeness of Action Item Extraction": 0.4,
+              "llm_judge.Owner Attribution Accuracy": 0.2,
+              "llm_judge.Organization and Structure": 0.6,
+              "llm_judge.Context and Deadline Accuracy": 0.3
+            },
+            "notes": "The agent extracted many generic action items but missed key specific ones (e.g., PMMs getting commitments for specific events, Cormac adding top five for Plan, Samia using tier one competitors, William finalizing messaging). Owner attribution is mostly 'Team' instead of named individuals. Deadlines are often 'Pending' when specific ones were mentioned. Organization is decent with topic grouping and summary count, but content is inaccurate."
+          },
+          {
+            "task_id": "task_meeting_tech_action_items",
+            "score": 0.5583333333333333,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.min_action_items": 1.0,
+              "automated.owners_identified": 0.5,
+              "automated.events_actions": 1.0,
+              "automated.announcements_actions": 0.5,
+              "automated.competitive_actions": 0.0,
+              "automated.messaging_actions": 0.5,
+              "automated.grouped_by_topic": 1.0,
+              "automated.deadlines_noted": 1.0,
+              "llm_judge.Completeness of Action Item Extraction": 0.25,
+              "llm_judge.Owner Attribution Accuracy": 0.25,
+              "llm_judge.Organization and Structure": 0.5,
+              "llm_judge.Context and Deadline Accuracy": 0.25
+            },
+            "notes": "The agent extracted only 5 action items, missing key items like PMMs getting commitments for specific events, Cormac adding top five for Plan, team reviewing top 5 features, Samia using tier one competitors, team adding GitLab line item to competitive sheet, William finalizing messaging, and the Talladega Nights homework. Owners are mostly wrong (e.g., Cindy instead of PMMs, Brian instead of Cormac, etc.). Deadlines are vague or missing. Organization is present but items are incorrect. Context is minimal and inaccurate."
+          },
+          {
+            "task_id": "task_meeting_tech_action_items",
+            "score": 0.6166666666666667,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.min_action_items": 1.0,
+              "automated.owners_identified": 0.5,
+              "automated.events_actions": 1.0,
+              "automated.announcements_actions": 0.5,
+              "automated.competitive_actions": 0.0,
+              "automated.messaging_actions": 1.0,
+              "automated.grouped_by_topic": 1.0,
+              "automated.deadlines_noted": 1.0,
+              "llm_judge.Completeness of Action Item Extraction": 0.5,
+              "llm_judge.Owner Attribution Accuracy": 0.25,
+              "llm_judge.Organization and Structure": 0.5,
+              "llm_judge.Context and Deadline Accuracy": 0.25
+            },
+            "notes": "Extracted only 5 items vs expected 7+; missed key items like PMMs getting commitments, Cormac's top five, Samia's tier-one comparison, William's messaging finalization, and Talladega Nights homework. Owners are vague ('Discussed speaker') or incorrect (Cindy/Brian for wrong topics). Grouping is present but summary count is wrong (5 vs actual). Deadlines mostly missing or generic 'Tuesday'; context is minimal."
+          }
+        ],
+        "mean": 0.5972222222222222,
+        "std": 0.03367876570272818,
+        "min": 0.5583333333333333,
+        "max": 0.6166666666666667
+      },
+      "frontmatter": {
+        "id": "task_meeting_tech_action_items",
+        "name": "Meeting Action Items Extraction",
+        "category": "meeting",
+        "grading_type": "hybrid",
+        "timeout_seconds": 180,
+        "grading_weights": {
+          "automated": 0.6,
+          "llm_judge": 0.4
+        },
+        "workspace_files": [
+          {
+            "source": "meetings/2021-06-28-gitlab-product-marketing-meeting.md",
+            "dest": "meeting_transcript.md"
+          }
+        ]
+      },
+      "category": "meeting"
+    },
+    {
+      "task_id": "task_meeting_tech_action_items",
+      "status": "success",
+      "timed_out": false,
+      "execution_time": 54.204082012176514,
+      "transcript_length": 10,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "request_count": 3
+      },
+      "workspace": "/tmp/pinchbench/0041/agent_workspace",
+      "grading": {
+        "runs": [
+          {
+            "task_id": "task_meeting_tech_action_items",
+            "score": 0.6166666666666667,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.min_action_items": 1.0,
+              "automated.owners_identified": 0.5,
+              "automated.events_actions": 1.0,
+              "automated.announcements_actions": 1.0,
+              "automated.competitive_actions": 0.0,
+              "automated.messaging_actions": 0.5,
+              "automated.grouped_by_topic": 1.0,
+              "automated.deadlines_noted": 1.0,
+              "llm_judge.Completeness of Action Item Extraction": 0.4,
+              "llm_judge.Owner Attribution Accuracy": 0.2,
+              "llm_judge.Organization and Structure": 0.6,
+              "llm_judge.Context and Deadline Accuracy": 0.3
+            },
+            "notes": "The agent extracted many generic action items but missed key specific ones (e.g., PMMs getting commitments for specific events, Cormac adding top five for Plan, Samia using tier one competitors, William finalizing messaging). Owner attribution is mostly 'Team' instead of named individuals. Deadlines are often 'Pending' when specific ones were mentioned. Organization is decent with topic grouping and summary count, but content is inaccurate."
+          },
+          {
+            "task_id": "task_meeting_tech_action_items",
+            "score": 0.5583333333333333,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.min_action_items": 1.0,
+              "automated.owners_identified": 0.5,
+              "automated.events_actions": 1.0,
+              "automated.announcements_actions": 0.5,
+              "automated.competitive_actions": 0.0,
+              "automated.messaging_actions": 0.5,
+              "automated.grouped_by_topic": 1.0,
+              "automated.deadlines_noted": 1.0,
+              "llm_judge.Completeness of Action Item Extraction": 0.25,
+              "llm_judge.Owner Attribution Accuracy": 0.25,
+              "llm_judge.Organization and Structure": 0.5,
+              "llm_judge.Context and Deadline Accuracy": 0.25
+            },
+            "notes": "The agent extracted only 5 action items, missing key items like PMMs getting commitments for specific events, Cormac adding top five for Plan, team reviewing top 5 features, Samia using tier one competitors, team adding GitLab line item to competitive sheet, William finalizing messaging, and the Talladega Nights homework. Owners are mostly wrong (e.g., Cindy instead of PMMs, Brian instead of Cormac, etc.). Deadlines are vague or missing. Organization is present but items are incorrect. Context is minimal and inaccurate."
+          },
+          {
+            "task_id": "task_meeting_tech_action_items",
+            "score": 0.6166666666666667,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.min_action_items": 1.0,
+              "automated.owners_identified": 0.5,
+              "automated.events_actions": 1.0,
+              "automated.announcements_actions": 0.5,
+              "automated.competitive_actions": 0.0,
+              "automated.messaging_actions": 1.0,
+              "automated.grouped_by_topic": 1.0,
+              "automated.deadlines_noted": 1.0,
+              "llm_judge.Completeness of Action Item Extraction": 0.5,
+              "llm_judge.Owner Attribution Accuracy": 0.25,
+              "llm_judge.Organization and Structure": 0.5,
+              "llm_judge.Context and Deadline Accuracy": 0.25
+            },
+            "notes": "Extracted only 5 items vs expected 7+; missed key items like PMMs getting commitments, Cormac's top five, Samia's tier-one comparison, William's messaging finalization, and Talladega Nights homework. Owners are vague ('Discussed speaker') or incorrect (Cindy/Brian for wrong topics). Grouping is present but summary count is wrong (5 vs actual). Deadlines mostly missing or generic 'Tuesday'; context is minimal."
+          }
+        ],
+        "mean": 0.5972222222222222,
+        "std": 0.03367876570272818,
+        "min": 0.5583333333333333,
+        "max": 0.6166666666666667
+      },
+      "frontmatter": {
+        "id": "task_meeting_tech_action_items",
+        "name": "Meeting Action Items Extraction",
+        "category": "meeting",
+        "grading_type": "hybrid",
+        "timeout_seconds": 180,
+        "grading_weights": {
+          "automated": 0.6,
+          "llm_judge": 0.4
+        },
+        "workspace_files": [
+          {
+            "source": "meetings/2021-06-28-gitlab-product-marketing-meeting.md",
+            "dest": "meeting_transcript.md"
+          }
+        ]
+      },
+      "category": "meeting"
+    },
+    {
+      "task_id": "task_meeting_sentiment_analysis",
+      "status": "success",
+      "timed_out": false,
+      "execution_time": 55.680980920791626,
+      "transcript_length": 10,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "request_count": 3
+      },
+      "workspace": "/tmp/pinchbench/0041/agent_workspace",
+      "grading": {
+        "runs": [
+          {
+            "task_id": "task_meeting_sentiment_analysis",
+            "score": 0.5725,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.file_created": 1.0,
+              "automated.overall_sentiment": 0.0,
+              "automated.topic_breakdown": 1.0,
+              "automated.team_dynamics": 1.0,
+              "automated.quotes_included": 1.0,
+              "automated.engagement_assessed": 1.0,
+              "automated.concerns_identified": 1.0,
+              "automated.tonal_distinction": 1.0,
+              "llm_judge.Analytical Depth": 0.3,
+              "llm_judge.Evidence-Based Observations": 0.2,
+              "llm_judge.Practical Value": 0.3
+            },
+            "notes": "The analysis misidentifies the meeting content (e.g., mentions UX improvements, security, integrations not in the actual transcript) and fails to capture the actual topics (corporate events, product announcements, competitive infographic, messaging framework). Quotes are fabricated or from a different meeting. No evidence of the Talladega Nights references, William's style, or Samia's pushback. The overall sentiment label 'mixed' is too generic and not justified by the transcript. Practical value is low due to incorrect topic identification and missing key dynamics."
+          },
+          {
+            "task_id": "task_meeting_sentiment_analysis",
+            "score": 0.604,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.file_created": 1.0,
+              "automated.overall_sentiment": 0.0,
+              "automated.topic_breakdown": 1.0,
+              "automated.team_dynamics": 1.0,
+              "automated.quotes_included": 1.0,
+              "automated.engagement_assessed": 1.0,
+              "automated.concerns_identified": 1.0,
+              "automated.tonal_distinction": 1.0,
+              "llm_judge.analytical_depth": 0.4,
+              "llm_judge.evidence_based_observations": 0.3,
+              "llm_judge.practical_value": 0.3
+            },
+            "notes": "The analysis is shallow, missing key emotional dynamics like playful banter and enthusiasm for taglines. Quotes are generic and not attributed to specific speakers. The concerns section is vague and lacks actionable insights."
+          },
+          {
+            "task_id": "task_meeting_sentiment_analysis",
+            "score": 0.64585,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.file_created": 1.0,
+              "automated.overall_sentiment": 0.0,
+              "automated.topic_breakdown": 1.0,
+              "automated.team_dynamics": 1.0,
+              "automated.quotes_included": 1.0,
+              "automated.engagement_assessed": 1.0,
+              "automated.concerns_identified": 1.0,
+              "automated.tonal_distinction": 1.0,
+              "llm_judge.Analytical Depth": 0.5,
+              "llm_judge.Evidence-Based Observations": 0.25,
+              "llm_judge.Practical Value": 0.5
+            },
+            "notes": "The analysis is shallow, missing nuanced dynamics like Talladega Nights references, William's candid style, and Samia's pushback. Quotes are generic and not attributed to specific speakers. The concerns section is vague and lacks actionable insights."
+          }
+        ],
+        "mean": 0.60745,
+        "std": 0.03679650119236884,
+        "min": 0.5725,
+        "max": 0.64585
+      },
+      "frontmatter": {
+        "id": "task_meeting_sentiment_analysis",
+        "name": "Meeting Sentiment Analysis",
+        "category": "meeting",
+        "grading_type": "hybrid",
+        "timeout_seconds": 180,
+        "grading_weights": {
+          "automated": 0.5,
+          "llm_judge": 0.5
+        },
+        "workspace_files": [
+          {
+            "source": "meetings/2021-06-28-gitlab-product-marketing-meeting.md",
+            "dest": "meeting_transcript.md"
+          }
+        ]
+      },
+      "category": "meeting"
+    },
+    {
+      "task_id": "task_meeting_sentiment_analysis",
+      "status": "success",
+      "timed_out": false,
+      "execution_time": 52.35570240020752,
+      "transcript_length": 10,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "request_count": 3
+      },
+      "workspace": "/tmp/pinchbench/0041/agent_workspace",
+      "grading": {
+        "runs": [
+          {
+            "task_id": "task_meeting_sentiment_analysis",
+            "score": 0.5725,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.file_created": 1.0,
+              "automated.overall_sentiment": 0.0,
+              "automated.topic_breakdown": 1.0,
+              "automated.team_dynamics": 1.0,
+              "automated.quotes_included": 1.0,
+              "automated.engagement_assessed": 1.0,
+              "automated.concerns_identified": 1.0,
+              "automated.tonal_distinction": 1.0,
+              "llm_judge.Analytical Depth": 0.3,
+              "llm_judge.Evidence-Based Observations": 0.2,
+              "llm_judge.Practical Value": 0.3
+            },
+            "notes": "The analysis misidentifies the meeting content (e.g., mentions UX improvements, security, integrations not in the actual transcript) and fails to capture the actual topics (corporate events, product announcements, competitive infographic, messaging framework). Quotes are fabricated or from a different meeting. No evidence of the Talladega Nights references, William's style, or Samia's pushback. The overall sentiment label 'mixed' is too generic and not justified by the transcript. Practical value is low due to incorrect topic identification and missing key dynamics."
+          },
+          {
+            "task_id": "task_meeting_sentiment_analysis",
+            "score": 0.604,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.file_created": 1.0,
+              "automated.overall_sentiment": 0.0,
+              "automated.topic_breakdown": 1.0,
+              "automated.team_dynamics": 1.0,
+              "automated.quotes_included": 1.0,
+              "automated.engagement_assessed": 1.0,
+              "automated.concerns_identified": 1.0,
+              "automated.tonal_distinction": 1.0,
+              "llm_judge.analytical_depth": 0.4,
+              "llm_judge.evidence_based_observations": 0.3,
+              "llm_judge.practical_value": 0.3
+            },
+            "notes": "The analysis is shallow, missing key emotional dynamics like playful banter and enthusiasm for taglines. Quotes are generic and not attributed to specific speakers. The concerns section is vague and lacks actionable insights."
+          },
+          {
+            "task_id": "task_meeting_sentiment_analysis",
+            "score": 0.64585,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.file_created": 1.0,
+              "automated.overall_sentiment": 0.0,
+              "automated.topic_breakdown": 1.0,
+              "automated.team_dynamics": 1.0,
+              "automated.quotes_included": 1.0,
+              "automated.engagement_assessed": 1.0,
+              "automated.concerns_identified": 1.0,
+              "automated.tonal_distinction": 1.0,
+              "llm_judge.Analytical Depth": 0.5,
+              "llm_judge.Evidence-Based Observations": 0.25,
+              "llm_judge.Practical Value": 0.5
+            },
+            "notes": "The analysis is shallow, missing nuanced dynamics like Talladega Nights references, William's candid style, and Samia's pushback. Quotes are generic and not attributed to specific speakers. The concerns section is vague and lacks actionable insights."
+          }
+        ],
+        "mean": 0.60745,
+        "std": 0.03679650119236884,
+        "min": 0.5725,
+        "max": 0.64585
+      },
+      "frontmatter": {
+        "id": "task_meeting_sentiment_analysis",
+        "name": "Meeting Sentiment Analysis",
+        "category": "meeting",
+        "grading_type": "hybrid",
+        "timeout_seconds": 180,
+        "grading_weights": {
+          "automated": 0.5,
+          "llm_judge": 0.5
+        },
+        "workspace_files": [
+          {
+            "source": "meetings/2021-06-28-gitlab-product-marketing-meeting.md",
+            "dest": "meeting_transcript.md"
+          }
+        ]
+      },
+      "category": "meeting"
+    },
+    {
+      "task_id": "task_meeting_sentiment_analysis",
+      "status": "success",
+      "timed_out": false,
+      "execution_time": 50.90399670600891,
+      "transcript_length": 10,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "request_count": 3
+      },
+      "workspace": "/tmp/pinchbench/0041/agent_workspace",
+      "grading": {
+        "runs": [
+          {
+            "task_id": "task_meeting_sentiment_analysis",
+            "score": 0.5725,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.file_created": 1.0,
+              "automated.overall_sentiment": 0.0,
+              "automated.topic_breakdown": 1.0,
+              "automated.team_dynamics": 1.0,
+              "automated.quotes_included": 1.0,
+              "automated.engagement_assessed": 1.0,
+              "automated.concerns_identified": 1.0,
+              "automated.tonal_distinction": 1.0,
+              "llm_judge.Analytical Depth": 0.3,
+              "llm_judge.Evidence-Based Observations": 0.2,
+              "llm_judge.Practical Value": 0.3
+            },
+            "notes": "The analysis misidentifies the meeting content (e.g., mentions UX improvements, security, integrations not in the actual transcript) and fails to capture the actual topics (corporate events, product announcements, competitive infographic, messaging framework). Quotes are fabricated or from a different meeting. No evidence of the Talladega Nights references, William's style, or Samia's pushback. The overall sentiment label 'mixed' is too generic and not justified by the transcript. Practical value is low due to incorrect topic identification and missing key dynamics."
+          },
+          {
+            "task_id": "task_meeting_sentiment_analysis",
+            "score": 0.604,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.file_created": 1.0,
+              "automated.overall_sentiment": 0.0,
+              "automated.topic_breakdown": 1.0,
+              "automated.team_dynamics": 1.0,
+              "automated.quotes_included": 1.0,
+              "automated.engagement_assessed": 1.0,
+              "automated.concerns_identified": 1.0,
+              "automated.tonal_distinction": 1.0,
+              "llm_judge.analytical_depth": 0.4,
+              "llm_judge.evidence_based_observations": 0.3,
+              "llm_judge.practical_value": 0.3
+            },
+            "notes": "The analysis is shallow, missing key emotional dynamics like playful banter and enthusiasm for taglines. Quotes are generic and not attributed to specific speakers. The concerns section is vague and lacks actionable insights."
+          },
+          {
+            "task_id": "task_meeting_sentiment_analysis",
+            "score": 0.64585,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.file_created": 1.0,
+              "automated.overall_sentiment": 0.0,
+              "automated.topic_breakdown": 1.0,
+              "automated.team_dynamics": 1.0,
+              "automated.quotes_included": 1.0,
+              "automated.engagement_assessed": 1.0,
+              "automated.concerns_identified": 1.0,
+              "automated.tonal_distinction": 1.0,
+              "llm_judge.Analytical Depth": 0.5,
+              "llm_judge.Evidence-Based Observations": 0.25,
+              "llm_judge.Practical Value": 0.5
+            },
+            "notes": "The analysis is shallow, missing nuanced dynamics like Talladega Nights references, William's candid style, and Samia's pushback. Quotes are generic and not attributed to specific speakers. The concerns section is vague and lacks actionable insights."
+          }
+        ],
+        "mean": 0.60745,
+        "std": 0.03679650119236884,
+        "min": 0.5725,
+        "max": 0.64585
+      },
+      "frontmatter": {
+        "id": "task_meeting_sentiment_analysis",
+        "name": "Meeting Sentiment Analysis",
+        "category": "meeting",
+        "grading_type": "hybrid",
+        "timeout_seconds": 180,
+        "grading_weights": {
+          "automated": 0.5,
+          "llm_judge": 0.5
+        },
+        "workspace_files": [
+          {
+            "source": "meetings/2021-06-28-gitlab-product-marketing-meeting.md",
+            "dest": "meeting_transcript.md"
+          }
+        ]
+      },
+      "category": "meeting"
+    }
+  ],
+  "category_scores": {
+    "MEETING": {
+      "score": 6.853739,
+      "max_score": 15.0,
+      "pct": 45.7,
+      "task_count": 15
+    }
+  },
+  "efficiency": {
+    "total_tokens": 0,
+    "total_input_tokens": 0,
+    "total_output_tokens": 0,
+    "total_cost_usd": 0.0,
+    "total_requests": 45,
+    "total_execution_time_seconds": 791.15,
+    "tasks_with_usage_data": 0,
+    "tokens_per_task": 0.0,
+    "cost_per_task_usd": 0.0,
+    "score_per_1k_tokens": null,
+    "score_per_dollar": null,
+    "per_task": [
+      {
+        "task_id": "task_meeting_advisory_stakeholders",
+        "score": 0.4267,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "tokens_per_score_point": 0.0
+      },
+      {
+        "task_id": "task_meeting_advisory_stakeholders",
+        "score": 0.4267,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "tokens_per_score_point": 0.0
+      },
+      {
+        "task_id": "task_meeting_advisory_stakeholders",
+        "score": 0.4267,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "tokens_per_score_point": 0.0
+      },
+      {
+        "task_id": "task_meeting_council_votes",
+        "score": 0.2354,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "tokens_per_score_point": 0.0
+      },
+      {
+        "task_id": "task_meeting_council_votes",
+        "score": 0.2354,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "tokens_per_score_point": 0.0
+      },
+      {
+        "task_id": "task_meeting_council_votes",
+        "score": 0.2354,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "tokens_per_score_point": 0.0
+      },
+      {
+        "task_id": "task_meeting_gov_speaker_summary",
+        "score": 0.4178,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "tokens_per_score_point": 0.0
+      },
+      {
+        "task_id": "task_meeting_gov_speaker_summary",
+        "score": 0.4178,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "tokens_per_score_point": 0.0
+      },
+      {
+        "task_id": "task_meeting_gov_speaker_summary",
+        "score": 0.4178,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "tokens_per_score_point": 0.0
+      },
+      {
+        "task_id": "task_meeting_tech_action_items",
+        "score": 0.5972,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "tokens_per_score_point": 0.0
+      },
+      {
+        "task_id": "task_meeting_tech_action_items",
+        "score": 0.5972,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "tokens_per_score_point": 0.0
+      },
+      {
+        "task_id": "task_meeting_tech_action_items",
+        "score": 0.5972,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "tokens_per_score_point": 0.0
+      },
+      {
+        "task_id": "task_meeting_sentiment_analysis",
+        "score": 0.6075,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "tokens_per_score_point": 0.0
+      },
+      {
+        "task_id": "task_meeting_sentiment_analysis",
+        "score": 0.6075,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "tokens_per_score_point": 0.0
+      },
+      {
+        "task_id": "task_meeting_sentiment_analysis",
+        "score": 0.6075,
+        "total_tokens": 0,
+        "cost_usd": 0.0,
+        "tokens_per_score_point": 0.0
+      }
+    ]
+  }
+}

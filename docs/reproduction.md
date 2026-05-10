@@ -335,6 +335,48 @@ python3 rl/train/train_meeting_grpo_step.py \
 参考一键 chain：`repro/clean_chain_filter_ppo.sh`（pod 上的 6 轮自动化脚本，
 含 OOM 重试 + 断点续跑 + vLLM lifecycle 管理）。
 
+### 进阶 ++：开启 PRM (with reward gate + per-turn loss)
+
+把 PRM 直接叠加到 [filter + PPO] 上**会退化**（v1 实证 -1.2pp）。两个 fix 配合
+PRM 才能拿到正向增量（+0.4pp）。详见 `algorithm.md` § "PRM 与 [filter + PPO]
+组合的实证设计要点"。
+
+```bash
+# Step 2.5：在 PRM-skip 替换为真正 PRM scoring
+PYTHONPATH=$REPO_ROOT python3 \
+  $REPO_ROOT/agent_loop/roadmap_prm/scripts/score_trajectories.py \
+  --graded-file $ROUND_DIR/rollouts/graded_trajectories.jsonl \
+  --tasks-dir   $REPO_ROOT/pinchbench_tasks/meeting_analysis \
+  --roadmaps-dir $REPO_ROOT/agent_loop/roadmap_prm/roadmaps \
+  --output-suffix _prm \
+  --max-workers 4
+# → graded_trajectories_prm.jsonl with real {-1, 0, +1} per turn
+
+# Step 3：select 同前
+
+# Step 4：quality filter 加 reward gate
+python3 rl/train/apply_quality_filter.py \
+  --input  $ROUND_DIR/selection/graded_trajectories_prm_valid.jsonl \
+  --output $ROUND_DIR/selection/graded_trajectories_quality_filtered.jsonl \
+  --report $ROUND_DIR/selection/quality_report.json \
+  --prm-reward-gate 0.5    # NEW: score >= 0.5 的 trajectory 清零 PRM
+
+# Step 6：训练加 PRM + per-turn loss
+python3 rl/train/train_meeting_grpo_step.py \
+  ... (跟前面 PPO 一样) \
+  --prm-alpha 1.0 --prm-beta 0.5 --prm-mode multiplicative \
+  --per-turn-loss      # NEW: 消除 PRM "长 turn 多放大" 偏置
+```
+
+**新 flag 解读**：
+
+| Flag | 文件 | 作用 |
+|---|---|---|
+| `--prm-reward-gate 0.5` | apply_quality_filter | score≥0.5 的 trajectory 直接清空 prm_turn_scores（避免 PRM 干扰已及格的） |
+| `--per-turn-loss` | train_meeting_grpo_step | 每个 token 权重 = 1/n_tokens_in_its_turn，每个 turn 等权 |
+| `--prm-mode multiplicative` | 同上 | 只放大正 advantage，避免 additive 翻转符号风险 |
+| `--prm-beta 0.5` | 同上 | multiplicative 公式下，PRM=+1 turn ×1.5（不是 docs 默认 1.0；实测 0.5 在我们 baseline 下最稳） |
+
 ## 5. Bench / 评估
 
 训练后，wrapper 把新 LoRA 热加载到 vLLM 并在 5 个测试任务上跑 3-run bench。
