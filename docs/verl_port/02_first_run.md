@@ -88,9 +88,28 @@ veRL 标准 reward 是 reward model 或 rule-based（GSM8K 这种 `#### 数字` 
 
 ## 当前状态（2026-05-11 晨写时）
 
-POC 跑通了第一个 9 步训练。validation 阶段超长，下一步如果继续：
-- 关掉 validation（test_freq=999 或大数）
-- 让训练跑完一个 epoch 出 checkpoint
-- 或者：缩到只 5 步的 mini-test，确认 save / checkpoint 路径通
+POC 主目标 ✅ 达成：
+- veRL 跑通 9 个训练 step
+- 第一个 checkpoint 自动保存（pod 上 `/workspace/verl_port/checkpoints/global_step_10/`，42 GB FSDP 全参）
 
-实际操作记录在 `02b_run_artifacts.md`（如果跑完）或本文 "时间线"。
+step 10 后卡死 12+ 分钟（疑似 validation hang 或 Ray 死锁），SIGKILL + ray stop
+都无法清理 GPU 内存——zombie process 持有 ~50GB/GPU，必须**重启 pod 才能恢复**。
+
+下次再跑 veRL 时：
+- 设 `test_freq=99999` 关掉验证（避免 hang）
+- 设 `save_freq=5` 早点出 checkpoint
+- 设 `actor_rollout_ref.model.lora_rank=16` 用 LoRA（避免 42 GB 全参 ckpt）
+- 启动前 `nvidia-smi` 确认 GPU 空闲
+- 注意：可能需要重启 pod 清掉本次 zombie 占用的 GPU 内存
+
+## 已知 caveats
+
+1. **GPU 内存 zombie 锁死**：本次跑完后 GPU0 + GPU1 各 ~50GB 被 defunct
+   `[ray::WorkerDict]` 进程占着，所有清理手段都无效（kill -9、ray stop、
+   nvidia-smi --gpu-reset 不支持）。需要 pod 重启或等待 driver 自动 GC。
+
+2. **Validation hang**：未确诊根因。可能是 sglang/vllm 在 hybrid engine 切换
+   时死锁，或者 Ray actor 通信卡。建议 POC 阶段直接关 validation。
+
+3. **Checkpoint 大小**：42 GB / step（全参 FSDP），跟自定义 LoRA 130 MB 相差
+   ~300x。如果继续用 veRL 必须配 LoRA 模式。
