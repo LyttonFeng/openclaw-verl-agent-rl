@@ -16,12 +16,17 @@ rollout 时运行（用于 fatal-skip 启发式以节省 judge API 成本）以�
 ## CLI
 
 ```bash
+# 完整可运行例子：自动找 bench 输出目录
+BENCH_DIR=/workspace/bench_termonly_r3_fp32   # 或你 --output-dir 指定的路径
 python -m agent_loop.diagnostics analyze \
-    --result-json /path/to/bench/result.json \
-    --transcripts-dirs results/0071_transcripts [results/0070_transcripts ...] \
-    --output diagnosis.md \
-    --output-json diagnosis.json
+    --result-json "$BENCH_DIR"/0*_*.json \
+    --transcripts-dirs "$BENCH_DIR"/0*_transcripts \
+    --output       "$BENCH_DIR"/diagnosis.md \
+    --output-json  "$BENCH_DIR"/diagnosis.json
 ```
+
+> bench 输出文件命名规律：`<NNNN>_<model_name>.json` + `<NNNN>_transcripts/` 目录，
+> NNNN 是自增 run id（PinchBench 行为）。多 round 比较时把多个目录都列在 `--transcripts-dirs`。
 
 输出结构（markdown）：
 

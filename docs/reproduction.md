@@ -14,7 +14,7 @@
 | 组件 | 版本 | 备注 |
 |---|---|---|
 | Python | 3.12 | 推荐使用 venv |
-| **veRL** | **可选** | 本配方使用的 GRPO 训练器（`train_meeting_grpo_step.py`）是一个自包含的 PyTorch + transformers + peft 循环，**不**导入 veRL。veRL 仅遗留 PPO 脚本（`launch_main_ppo.py`、`run_reinforce_lora.sh`）需要，而那些脚本不是用来产生 SOTA 结果的。如果你只需要本文档配方，可跳过下面的 veRL 安装步骤。 |
+| **veRL** | **不需要** | 当前 GRPO 训练器（`train_meeting_grpo_step.py`）是自包含 PyTorch + transformers + peft 循环，**不导入** veRL。`rl/legacy/` 下的 monkeypatch 仅作历史参考，**也无需安装 veRL**。本文档复现路径完全跳过 veRL。 |
 | vLLM | 0.10.2 | 配合 `VLLM_ALLOW_RUNTIME_LORA_UPDATING=True` 实现热加载 |
 | Transformers | 4.57.1 | |
 | PEFT | latest compatible | LoRA 训练 |
@@ -88,19 +88,16 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 从源码安装 veRL（可选 — 仅在需要遗留 PPO 时才装）
+### 从源码安装 veRL（已弃用，**默认跳过**）
 
 > **当前 GRPO 训练器（`train_meeting_grpo_step.py`）不 import veRL。**
-> 下面 §3 的端到端配方在没装 veRL 的情况下也能工作。安装它的唯一理由是
-> 你还想运行遗留的 PPO 脚本（`rl/train/launch_main_ppo.py` /
-> `run_reinforce_lora.sh`）— 这些都没有用于 `experiment_report.md`
-> 中的 SOTA 结果。
+> 本文档的所有 SOTA 数字都跑的是 `train_meeting_grpo_step.py`。仓库名
+> `openclaw-verl-agent-rl` 是历史遗留，`rl/legacy/` 下的 verl_*_patch.py
+> 也仅作历史归档，**没有任何当前路径需要装 veRL**。
 >
-> 两个 pod（新的复现 pod 和原始 2026-05 SOTA pod）所有报告数字都跑的是
-> 同一个极简的 `train_meeting_grpo_step.py` — 仓库名 `openclaw-verl-agent-rl`
-> 是历史遗留。
+> 跳过本节直接到 §"安装 OpenClaw CLI"。
 
-如果你确实想装 veRL：
+如果你出于历史考古目的想装 veRL：
 
 ```bash
 git clone https://github.com/volcengine/verl.git ~/verl
@@ -332,8 +329,8 @@ python3 rl/train/train_meeting_grpo_step.py \
 - `CUDA_VISIBLE_DEVICES=0,1`：多卡 device_map="auto" 是 fp32 + 17k+ tokens 的必要条件（单卡 OOM）
 - `--rope-scaling-factor 2.0`：必须，与 vLLM rollout 一致
 
-参考一键 chain：`repro/clean_chain_filter_ppo.sh`（pod 上的 6 轮自动化脚本，
-含 OOM 重试 + 断点续跑 + vLLM lifecycle 管理）。
+参考一键 chain：[`experiments/clean_chain_filter_ppo/chain_script.sh`](../experiments/clean_chain_filter_ppo/chain_script.sh)
+（6 轮自动化脚本，含 OOM 重试 + 断点续跑 + vLLM lifecycle 管理）。
 
 ### 进阶 ++：开启 PRM (with reward gate + per-turn loss)
 

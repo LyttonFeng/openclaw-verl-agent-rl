@@ -1,15 +1,18 @@
-# veRL is intentionally NOT pinned here — install it editable from source.
-# See docs/reproduction.md §1 for the recommended branch / commit.
-# Reference: veRL 0.8.0.dev0 (editable from /workspace/verl), tested on
-# Torch 2.8.0+cu128 / CUDA 12.8 / A100-80GB.
+# veRL is intentionally NOT pinned here — install it editable from source IF you
+# want the legacy PPO scripts. The recommended SOTA training path doesn't need veRL.
+# Reference setup: Torch 2.8.0+cu128 / CUDA 12.8 / A100-80GB.
+#
+# 关键版本约束：transformers 4.57 + peft 0.19 + bf16 + 长 context 会出现
+# NaN 数值溢出（已知问题）。新代码强制 fp32，但 transformers 版本必须 ≥4.57
+# 才能匹配 train_meeting_grpo_step.py 里的 PEFT/Qwen3 行为。
 pandas
 pyarrow
 pyyaml
 aiohttp
 packaging
-torch
+torch>=2.8.0,<2.9.0
 transformers==4.57.1
-accelerate
-peft
+accelerate>=0.34.0,<1.0
+peft>=0.13.0,<0.20
 vllm==0.10.2
 tensorboard

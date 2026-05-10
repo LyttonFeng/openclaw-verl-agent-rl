@@ -53,10 +53,9 @@ trainer 端到端做的事情：
   pipeline 不太匹配；把它 hack 进 veRL 的 `compute_advantages` 比当前 250
   行代码更具侵入性。
 
-遗留的 `rl/train/launch_main_ppo.py`、`run_reinforce_lora.sh`、
-`run_verl.sh`、`run_verl_outcome.sh`、`verl_*_patch.py` 和
-`patch_verl_core_algos_no_whiten.py` 都是**没有产出报告中 SOTA 的并行实验** —
-仅供参考。
+`rl/legacy/` 下的 `verl_*_patch.py`、`transformers_qwen3_5_patch.py` 是**早期
+veRL-based PPO 路径的 monkeypatch 遗留**，未产出报告中任何 SOTA 数字 — 当前
+训练器完全不依赖。仅作历史归档。
 
 ## 端到端流程
 

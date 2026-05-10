@@ -2,8 +2,16 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Meeting Analysis Roadmap-PRM Offline GRPO — single round
 #
-# Pipeline (one invocation = one round):
-#   1. Preflight vLLM 80K rope=2 reachable
+# ⚠️ 注意（2026-05-10）：本 wrapper 是 **老 vanilla GRPO setting**（无 quality
+# filter，无 PPO clip + KL）。在新 fp32 pod 上跑会在 R3 race-to-bottom 退化
+# (-3.1pp，详见 docs/experiment_report.md §2)。**仅作 baseline 对照保留**。
+#
+# 推荐复现路径（含 quality filter + PPO 三件套，单轮即可达 47.50%+）：
+#   - 手动命令：docs/reproduction.md §"进阶: filter + PPO" / §"进阶 ++: PRM"
+#   - 一键自动化：experiments/clean_chain_filter_ppo/chain_script.sh（6 轮 chain）
+#
+# Pipeline (one invocation = one round)：
+#   1. Preflight vLLM 64K rope=2 reachable
 #   2. Generate N rollouts per task (base 4B for round 1, LoRA otherwise)
 #   3. PRM-score trajectories (DSv4-flash judge → prm_turn_scores)
 #   4. GRPO step with per-token credit assignment (α=1.0, β=0.1)
@@ -73,7 +81,7 @@ LORA_NAME_IN_VLLM="${LORA_NAME_IN_VLLM:-meeting-lora-r5-rope}"   # vLLM-side LoR
 MODEL_PATH="${MODEL_PATH:-Qwen/Qwen3-4B}"
 N_RESPONSES="${N_RESPONSES:-2}"
 ROPE_FACTOR="${ROPE_FACTOR:-2.0}"
-MAX_SEQ_LEN="${MAX_SEQ_LEN:-81920}"
+MAX_SEQ_LEN="${MAX_SEQ_LEN:-65536}"  # 64K = rope=2 设计上限；fp32 + 80K 必 OOM
 
 LR="${LR:-2e-6}"
 LORA_RANK="${LORA_RANK:-16}"

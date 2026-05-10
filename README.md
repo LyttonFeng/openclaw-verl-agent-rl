@@ -6,9 +6,8 @@
 > **关于 repo 名字的说明**：repo 叫 `openclaw-verl-agent-rl` 是历史命名遗留，
 > 但**当前 GRPO 训练器不使用 veRL**。训练是 `rl/train/train_meeting_grpo_step.py`
 > 里一个自包含的 PyTorch + transformers + peft 循环（~250 行）。
-> veRL 源码只留给遗留 PPO 脚本（`rl/train/launch_main_ppo.py`、
-> `run_reinforce_lora.sh` 等）使用，**这些脚本不是本文档的复现路径**。
-> 详见 [`docs/algorithm.md`](docs/algorithm.md) §"训练器实现"。
+> `rl/legacy/` 下的 verl_*_patch.py 是早期 veRL-based PPO 路径的遗留 monkeypatch，
+> **当前 SOTA 训练完全不依赖**。详见 [`docs/algorithm.md`](docs/algorithm.md) §"训练器实现"。
 
 > ⚠️ **必须用 fp32 训练 + max_seq_len 64K**（2026-05-09 发现的两个独立问题）：
 >
@@ -130,7 +129,7 @@ pinchbench_tasks/meeting_analysis/       28 task definitions
 | 组件 | 版本 |
 |---|---|
 | Python | 3.12 |
-| **veRL** | **可选** — 当前 GRPO 训练器（`train_meeting_grpo_step.py`）不 import veRL。只有想运行遗留 PPO 脚本（`launch_main_ppo.py` / `run_reinforce_lora.sh`）才需要，那些脚本不是用来跑下面 SOTA 结果的。跳过 veRL 安装，§"Quick start" 的 0c-4 步骤照常工作。 |
+| **veRL** | **不需要** | 当前 SOTA 训练器（`train_meeting_grpo_step.py`）完全独立实现，不 import `verl`。`rl/legacy/` 下的 verl-based monkeypatch 也无需安装 veRL 才能查看（仅作历史参考）。**跳过 veRL 安装**完全不影响本文档的复现路径。 |
 | vLLM | 0.10.2 (with `VLLM_ALLOW_RUNTIME_LORA_UPDATING=True`) |
 | Transformers | 4.57.1 |
 | Torch | 2.8.0+cu128 |
@@ -160,6 +159,8 @@ echo 'export DEEPSEEK_API_KEY=sk-xxxxxxxxxxxx' > ~/.pinchbench_env
 chmod 600 ~/.pinchbench_env
 
 # 2. start vLLM on GPU 1 (background) — see docs/reproduction.md §3 for full args
+# 注：vLLM --max-model-len 81920 是 inference 缓存上限（rope=2 设计支持 80K）；
+# 训练侧 --max-seq-length 用 65536 (64K)，因为 fp32 + 80K 训练会 OOM。两者是不同概念。
 CUDA_VISIBLE_DEVICES=1 VLLM_ALLOW_RUNTIME_LORA_UPDATING=True \
 python -m vllm.entrypoints.openai.api_server \
     --model Qwen/Qwen3-4B --served-model-name Qwen3-4B \
@@ -176,16 +177,23 @@ python rl/train/build_meeting_analysis_prompts.py \
     --split-file rl/train/meeting_analysis_split.json \
     --output-dir data/meeting_prompts
 
-# 4a. 老路径（vanilla GRPO，会在 R3 退化，仅作 baseline 对照）
+# 4a. ⚠️ 老路径（vanilla GRPO，无 filter 无 PPO）— **仅作 baseline 对照**
+#     注意：R3 会 race-to-bottom 退化 -3.1pp。要复现 SOTA 47.80% 用 4b。
 ROUND_NUM=1 bash rl/train/run_meeting_grpo_prm_round.sh
 
-# 4b. 推荐路径：[质量过滤 + PPO] setting，单轮命令见 docs/reproduction.md §"进阶"
-#     完整 6 轮 chain 自动化脚本（含 OOM 重试 + 断点续跑）：
-#     experiments/clean_chain_filter_ppo/chain_script.sh
+# 4b. ⭐ 推荐路径：[质量过滤 + PPO + KL] setting（峰值 47.80%）
+#     单轮命令逐条见 docs/reproduction.md §"进阶: filter + PPO"
+#     一键 6 轮自动化（含 OOM 重试 + 断点续跑 + vLLM lifecycle）：
+#         bash experiments/clean_chain_filter_ppo/chain_script.sh
 
-# 4c. 进阶 ++：再加 PRM with reward-gate + per-turn-loss
-#     完整脚本见 experiments/r1_prm_ablation/v2_script.sh
+# 4c. 进阶 ++：再加 PRM (with reward-gate + per-turn-loss)
+#     单轮命令见 docs/reproduction.md §"进阶 ++: PRM"
+#     一键脚本：bash experiments/r1_prm_ablation/v2_script.sh
 ```
+
+> ⚠️ **训练时千万不要改回 bf16**：transformers 4.57 + peft 0.19 + 64K context
+> 在 bf16 下会数值溢出 → loss=NaN → 整个 LoRA 全 NaN → bench 全 0%。
+> 所有当前脚本默认 fp32，详细原理见本文件开头的 fp32 警告框。
 
 ## 状态
 
