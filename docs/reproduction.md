@@ -439,23 +439,49 @@ python -m agent_loop.diagnostics analyze \
 
 参考分数（3-run 平均，judge = `deepseek-chat`）：
 
-| 配置 | 总分 | 备注 |
-|---|---|---|
-| Baseline (rope=2, no LoRA) | **50.6%** | apples-to-apples baseline |
-| Terminal-only, R5 LoRA | 55.0% | ~5 轮收敛 |
-| **Terminal + PRM (additive judge-gate, R1)** | **57.24%** | 1 轮收敛 |
+### 2026-05 复现 pod（推荐参考）
 
-完整的 per-task 拆分和消融历史见 [`experiment_report.md`](experiment_report.md)。
+| 配置 | MEETING % | 关键设计 |
+|---|---:|---|
+| **base Qwen3-4B (rope=2 / 64K, fp32)** | **44.68** | apples-to-apples baseline |
+| 老 R1 (vanilla GRPO) | 46.20 | terminal-only |
+| R2 (vanilla GRPO，平台) | 46.40 | 已饱和 |
+| R3 v1 (续训 vanilla) | **43.30** ↓ | **退化**（race-to-bottom） |
+| R3 v2 (+ 质量过滤) | 46.20 | 止退化 |
+| **R3 v3 (+ PPO + KL)** | **47.50** | 单轮破 R2 |
+| **R4' (clean chain [filter + PPO])** | **47.80** 🏆 | 6 轮 chain 峰值 |
+| R1' + PRM v1 (naive) | 45.69 ↓ | 失败：PRM 拖累强项 |
+| **R1' + PRM v2 (+ reward gate + per-turn loss)** | **47.80** | 修复后单轮持平峰值 |
+
+如果你用本文件 §4 "进阶 ++" 的 PRM with reward gate + per-turn loss 配方跑，
+**单轮预期得到 47-48% 之间的总分**。
+
+### 历史 SOTA pod 数据（仅作设计参考，不可比）
+
+> ⚠️ **不要用这个表来验证你的复现**——它来自 2026-04 之前的旧 pod (bf16 + 80K
+> + 旧 transformers/peft)。新 pod 必须 fp32 + 64K，base 重跑 = 44.68% 而不是 50.6%。
+
+| 配置 | 老 pod 总分 |
+|---|---|
+| Baseline (rope=2, no LoRA) | 50.6% |
+| Terminal-only, R5 LoRA | 55.0% |
+| **Terminal + PRM (additive judge-gate, R1)** | **57.24%** |
+
+完整 per-task 拆分和消融历史见 [`experiment_report.md`](experiment_report.md)。
 
 ## 8. 常见陷阱
 
+- **不要用 bf16 训练**：新 transformers 4.57 + peft 0.19 + 长 context 必出 NaN
+  （详见 §1 dtype 警告）。必须 fp32。
 - **rope mismatch**：训练用 rope=2 但 bench 用 rope=1（或反过来）会得出
-  不一致的分数。两者必须 `factor=2.0, max_model_len=81920`。
-- **单次 run 验证有噪声**：测试集始终用 3-run。
-- **不要用默认配方继续 R2 之后**：R2-additive 因 reward hacking 回退 -1.9pp
-  （模型把输出字符从 `.md` 文件转移到 chat reply）。Diagnostics 模块能捕获
-  这个；见 `experiment_report.md` §15。
+  不一致的分数。两者必须 `factor=2.0`。
+- **单卡装不下 fp32 + 17k+ tokens 训练**：multi-GPU device_map="auto" 必需，
+  CUDA_VISIBLE_DEVICES=0,1（详见进阶节）。
+- **vanilla GRPO 在 R3 会 race-to-bottom 退化** —— 必须配合质量过滤
+  ([`apply_quality_filter.py`](../rl/train/apply_quality_filter.py))。
+- **质量过滤后单加 PRM 会退化**：v1 naive PRM 在 [filter + PPO] 上 -1.2pp。
+  必须配合 `--prm-reward-gate 0.5` + `--per-turn-loss`（详见 §4 进阶 ++）。
+- **clean chain 跑到 R4-R5 就停**，继续训会过训退化（见 experiment_report.md §3.4）。
+- **单次 run 验证有噪声**：测试集始终用 3-run；5-task × 3-run = ±1pp 噪声。
 - **Workspace 覆盖**：rollout 共享 `/tmp/pinchbench/<NNNN>/agent_workspace`。
-  每个 rollout 在下一个任务覆盖之前先快照自己的 workspace。
 - **不要关闭 thinking**：Qwen3-4B 的 tool calling 依赖 `<think>...</think>`。
-  关闭 thinking 会无声地破坏 rollout。

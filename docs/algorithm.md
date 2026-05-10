@@ -124,8 +124,8 @@ assistant turn 给出的分数。
 从不惩罚。原因：per-turn judge 在难任务上有不可忽略的假阴性率
 （judge 看到的是部分轨迹，不一定能判断一个 turn 是错路还是只是慢的探索步骤）。
 让 -1 直接从 advantage 中扣减会惩罚 judge 误分类的探索步骤，伤害恰恰是
-PRM 最该帮助的那些任务。经验上（`experiment_report.md` §"Judge-gate
-ablation"），pos-only clip 是我们配置中单一最大的设计杠杆
+PRM 最该帮助的那些任务。经验上（`experiment_report.md` §5.4 "Judge-gate 消融"
+老 SOTA pod 数据），pos-only clip 是老 pod 配置中单一最大的设计杠杆
 （在其他条件不变的情况下，相对 no-clip 变体 +3.1pp）。
 
 ## Roadmap PRM 设计
