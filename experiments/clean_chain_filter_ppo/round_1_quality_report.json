@@ -1,0 +1,157 @@
+{
+  "input_total": 26,
+  "kept_total": 20,
+  "dropped_total": 6,
+  "pos_adv_total": 13,
+  "neg_adv_total": 13,
+  "zero_adv": 0,
+  "pos_adv_kept": 7,
+  "pos_adv_dropped": 6,
+  "thresholds": {
+    "min_group_max_score": 0.4,
+    "min_total_output_chars": 500,
+    "min_tool_success": 1
+  },
+  "dropped_records": [
+    {
+      "task_id": "task_meeting_advisory_acronyms",
+      "response_idx": 0,
+      "score": 0.35,
+      "group_max": 0.35,
+      "advantage": 1.0,
+      "reasons": [
+        "group_max_too_low (0.350<0.4)"
+      ],
+      "feats": {
+        "final_text_chars": 1588,
+        "n_tool_calls": 2,
+        "n_tool_success": 2,
+        "n_tool_errors": 1,
+        "written_files": [
+          [
+            "/tmp/pinchbench/rollout_1778347695/worker_0/agent_workspace/acronym_glossary.md",
+            1335
+          ]
+        ]
+      }
+    },
+    {
+      "task_id": "task_meeting_advisory_technical",
+      "response_idx": 1,
+      "score": 0.31499999999999995,
+      "group_max": 0.31499999999999995,
+      "advantage": 1.0,
+      "reasons": [
+        "group_max_too_low (0.315<0.4)"
+      ],
+      "feats": {
+        "final_text_chars": 2876,
+        "n_tool_calls": 3,
+        "n_tool_success": 3,
+        "n_tool_errors": 0,
+        "written_files": [
+          [
+            "/tmp/pinchbench/rollout_1778347695/worker_5/agent_workspace/technical_discussions.md",
+            2602
+          ]
+        ]
+      }
+    },
+    {
+      "task_id": "task_meeting_council_public_comment",
+      "response_idx": 1,
+      "score": 0.1486111111111111,
+      "group_max": 0.1486111111111111,
+      "advantage": 1.0,
+      "reasons": [
+        "group_max_too_low (0.149<0.4)"
+      ],
+      "feats": {
+        "final_text_chars": 745,
+        "n_tool_calls": 4,
+        "n_tool_success": 4,
+        "n_tool_errors": 0,
+        "written_files": [
+          [
+            "public_comments_report.md",
+            1384
+          ]
+        ]
+      }
+    },
+    {
+      "task_id": "task_meeting_tech_competitors",
+      "response_idx": 0,
+      "score": 0.16666666666666666,
+      "group_max": 0.16666666666666666,
+      "advantage": 1.0,
+      "reasons": [
+        "group_max_too_low (0.167<0.4)"
+      ],
+      "feats": {
+        "final_text_chars": 392,
+        "n_tool_calls": 2,
+        "n_tool_success": 2,
+        "n_tool_errors": 0,
+        "written_files": [
+          [
+            "competitor_analysis.md",
+            1645
+          ]
+        ]
+      }
+    },
+    {
+      "task_id": "task_meeting_gov_qa_extract",
+      "response_idx": 0,
+      "score": 0.2361111111111111,
+      "group_max": 0.2361111111111111,
+      "advantage": 1.0,
+      "reasons": [
+        "group_max_too_low (0.236<0.4)"
+      ],
+      "feats": {
+        "final_text_chars": 1182,
+        "n_tool_calls": 8,
+        "n_tool_success": 8,
+        "n_tool_errors": 0,
+        "written_files": [
+          [
+            "qa_exchanges.md",
+            787
+          ],
+          [
+            "qa_exchanges.md",
+            1307
+          ],
+          [
+            "qa_exchanges.md",
+            1307
+          ]
+        ]
+      }
+    },
+    {
+      "task_id": "task_meeting_tech_messaging",
+      "response_idx": 1,
+      "score": 0.23333333333333334,
+      "group_max": 0.23333333333333334,
+      "advantage": 1.0,
+      "reasons": [
+        "group_max_too_low (0.233<0.4)"
+      ],
+      "feats": {
+        "final_text_chars": 493,
+        "n_tool_calls": 2,
+        "n_tool_success": 2,
+        "n_tool_errors": 0,
+        "written_files": [
+          [
+            "messaging_framework.md",
+            2103
+          ]
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "n_records": 14,
+  "n_skipped": 4,
+  "n_optimizer_steps": 5,
+  "avg_loss": 8.82001593708992e-05,
+  "lr": 1e-06,
+  "lora_rank": 16,
+  "grad_accum_steps": 2,
+  "max_seq_length": 65536,
+  "prm_alpha": 1.0,
+  "prm_beta": 0.0,
+  "prm_mode": "additive",
+  "ppo_enabled": true,
+  "clip_eps": 0.2,
+  "kl_beta": 0.02,
+  "avg_kl": 0.0011893558781594037
+}
