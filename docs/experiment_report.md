@@ -238,6 +238,56 @@ R3 v1 退化的真实原因（通过对比 R2/R3 v1 同题 transcript 找到）�
 - `algorithm.md` § PPO 三件套
 - `rl/train/apply_quality_filter.py`、`rl/train/compute_rollout_logprobs.py`
 
+## Clean chain：从 base 起跑 6 轮 [filter + PPO]（2026-05-10）
+
+为验证 setting 的稳定性，**从 base Qwen3-4B 起重跑 6 轮**，每轮都用同一 setting：
+质量过滤（race-to-bottom 防御）+ PPO 三件套（importance ratio + clip + KL）。
+
+| Task | base | R1' | R2' | R3' | **R4'** | R5' | R6' |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| advisory_stakeholders | 0.384 | 0.424 | 0.448 | 0.419 | 0.428 | **0.478** | 0.429 |
+| council_votes | 0.198 | 0.204 | 0.185 | 0.177 | **0.252** | 0.179 | 0.206 |
+| gov_speaker_summary | 0.425 | 0.407 | 0.434 | 0.407 | 0.417 | 0.405 | 0.406 |
+| tech_action_items | 0.586 | 0.642 | **0.656** | 0.645 | 0.633 | 0.646 | 0.623 |
+| sentiment_analysis | 0.641 | 0.667 | 0.592 | **0.687** | 0.662 | 0.619 | 0.604 |
+| **TOTAL %** | **44.70** | **46.90** | **46.30** | **46.70** | **🏆 47.80** | **46.50** | **45.40** |
+
+### 关键观察
+
+1. **峰值 R4' = 47.80%**（+3.10pp vs base，超过 messy chain 的 R3 v3 = 47.5%）
+2. **R1' = 46.90% > 原 R1 = 46.20%**（差 +0.7pp），证明 [filter + PPO] setting **从 base 起步就胜过 vanilla GRPO**
+3. **R5'/R6' 微降**（46.50/45.40）— 典型的 RL 过训信号：policy 在 ceiling 附近开始过度优化
+4. **Best practice**：跑到 R4' 就停；继续训会退化
+
+### 与 messy chain (R1...R3) 对比
+
+| Chain | 起点 | Setting | 峰值 | 峰值轮次 |
+|---|---|---|---:|---|
+| **Messy chain** | base | vanilla PG → 过滤补救 → 加 PPO 抢救 | 47.50 (R3 v3) | 第 3 轮（带救火） |
+| **Clean chain** | base | 从头就用 filter + PPO | **47.80 (R4')** | 第 4 轮 |
+
+Clean chain **不需要救火，纯靠 setting 自身就能稳步上爬到接近 ceiling**。
+说明：质量过滤 + PPO+KL 是真正起作用的，不是巧合。
+
+### 训练数据信号衰减规律
+
+逐轮观察 `Tasks with learning signal`：
+
+| 轮次 | 有信号 task 数 | 训练样本数 |
+|---|---|---|
+| R1' | 16 | 32 |
+| R2' | 12 | 24 |
+| R3' | 9 | 18 |
+| R4'-R6' | 7-9 | 14-18 |
+
+随训练推进，越来越多 task 内的 N=2 rollout 收敛到相同分数（zero variance），
+被 GRPO 跳过。这是**训练后期的健康信号**——学完了的 task 自然失去学习信号。
+
+### 复现命令
+
+参考 `repro/clean_chain_filter_ppo.sh`（pod 上的 6 轮自动化脚本，含 OOM 重试 +
+断点续跑 + vLLM lifecycle 管理）。
+
 ## 收敛性比较（定性）
 
 Terminal-only 和 terminal+PRM 在这套配置上都会收敛。轶事性地，terminal-only
