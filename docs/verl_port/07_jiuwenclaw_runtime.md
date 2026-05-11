@@ -85,19 +85,22 @@ session_id 维护，history.json 落盘。Workspace 用 `~/.jiuwenclaw/agent/jiu
 （直到 timeout）
 ```
 
-**Root cause: tool-name confusion**——LoRA RL 训练时 OpenClaw 暴露的工具
-集跟 jiuwenclaw 的不一样。
+**Root cause: tool-name confusion + path-style mismatch**。
 
-- **OpenClaw**：文件操作走 `write_file` 之类的通用工具
-- **JiuwenClaw**：暴露 `write_file` AND `write_memory`。`write_memory` 是
-  jiuwen 专用的 memory subsystem，路径受限只能写 `memory/` 子目录
+- **OpenClaw**：文件操作走 `write_file`，接受绝对路径
+- **JiuwenClaw**：暴露 `write_file` AND `write_memory`。`write_memory` 限制路径，
+  **只接受相对 `memory/...` 路径**；绝对路径会触发 `Invalid path: directory traversal not allowed`
 
-LoRA RL fine-tuning 把 policy 推向某种"偏好"工具，碰巧 jiuwenclaw 里有同名
-工具但语义截然不同。LoRA 选了 `write_memory`（路径校验失败），陷入死循环，
-直到超时。
+LoRA RL fine-tuning 后：
+- 倾向调 `write_memory`（不是 jiuwen 期望任务用的 `write_file`）
+- 而且**传绝对路径**给 `write_memory`（这是从 OpenClaw `write_file` 学来的路径风格）
 
-base 4B 用 plain Qwen3-4B 的判断力还能选对 `write_file`；越训练，LoRA 越
-"自信"地选错。
+两个 bias 叠加 → write 永远失败 → 死循环重试同样的 `write_memory(absolute_path)` 直到 timeout。
+
+从 gateway log 验证：base 4B 用 `write_memory("memory/daily_memory/...", ...)`
+（相对路径，append=True）→ success；step_16 LoRA 用 `write_memory("/root/.../sentiment_analysis.md", ...)`（绝对路径）→ "directory traversal not allowed"。
+
+**所以 LoRA 不仅工具选错，连参数风格都错了**——RL 训练把 OpenClaw 的"绝对路径 + write_file"分布灌进了 policy，到 jiuwenclaw 里这两个 distribution 都不适用。
 
 ### Implication
 
