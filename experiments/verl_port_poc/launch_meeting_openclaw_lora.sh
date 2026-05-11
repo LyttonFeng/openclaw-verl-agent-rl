@@ -99,18 +99,19 @@ export OPENCLAW_MODEL_REASONING=0
 export AGENT_TIMEOUT=300
 export PINCHBENCH_AGENT_MAX_PROMPT_TOKENS=24000
 
-# vLLM rollout (A100-80GB)
-export VLLM_GPU_MEM_UTIL=0.40
-export VLLM_MAX_MODEL_LEN=32768
-export VLLM_MAX_NUM_SEQS=32
+# vLLM rollout (A100-80GB) — 64K context via rope=2 YARN, matches main repo
+# run_meeting_grpo_prm_round.sh which uses MAX_SEQ_LEN=65536 + ROPE_FACTOR=2.0
+export VLLM_GPU_MEM_UTIL=0.45
+export VLLM_MAX_MODEL_LEN=65536
+export VLLM_MAX_NUM_SEQS=16   # halve from 32 to keep KV cache from blowing up
 
 ACTOR_PARAM_OFFLOAD=False
 ACTOR_OPTIMIZER_OFFLOAD=False
 REF_PARAM_OFFLOAD=True
-ACTOR_PPO_MAX_TOKEN_LEN_PER_GPU=32768
+ACTOR_PPO_MAX_TOKEN_LEN_PER_GPU=65536
 
-MAX_PROMPT_LENGTH=24000
-MAX_RESPONSE_LENGTH=8000
+MAX_PROMPT_LENGTH=48000   # accommodate multi-turn OpenClaw growth (transcript read + reasoning)
+MAX_RESPONSE_LENGTH=12000
 
 # Cadence: 28 tasks / batch 2 = 14 steps per epoch
 TOTAL_EPOCHS=2
@@ -172,6 +173,8 @@ env PYTHONPATH="${REPO_INTEGRATION}:${REPO_DATA}:${PYTHONPATH:-}" python3 -m rl.
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     +actor_rollout_ref.model.override_config.attn_implementation=sdpa \
+    +actor_rollout_ref.model.override_config.max_position_embeddings=65536 \
+    '+actor_rollout_ref.model.override_config.rope_scaling={type:yarn,factor:2.0,original_max_position_embeddings:32768}' \
     actor_rollout_ref.model.lora_rank="${LORA_RANK}" \
     actor_rollout_ref.model.lora_alpha="${LORA_ALPHA}" \
     actor_rollout_ref.model.target_modules="${LORA_TARGET_MODULES}" \
