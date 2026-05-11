@@ -37,6 +37,9 @@ if [ -f /root/.pinchbench_env ]; then
   source /root/.pinchbench_env
   set +a
 fi
+# pinchbench_env on this pod hardcodes OPENCLAW_HOST to an ECS IP — force
+# localhost since we want pod-local OpenClaw.
+export OPENCLAW_HOST=localhost
 : "${DEEPSEEK_API_KEY:?Set DEEPSEEK_API_KEY (terminal judge)}"
 export PINCHBENCH_GRADE_JUDGE_MODEL="${PINCHBENCH_GRADE_JUDGE_MODEL:-deepseek-chat}"
 export PINCHBENCH_GRADE_JUDGE_BACKEND="${PINCHBENCH_GRADE_JUDGE_BACKEND:-api}"
@@ -148,9 +151,12 @@ from lib_grading import preflight_judge_connection
 preflight_judge_connection(judge_model='deepseek-chat', judge_backend='api', judge_base_url='https://api.deepseek.com/v1', judge_api_key='${DEEPSEEK_API_KEY}')
 "
 
-cd /root/verl
+cd "${REPO_INTEGRATION}"
+echo "[debug] cwd=$(pwd)"
+echo "[debug] PYTHONPATH=${PYTHONPATH}"
+echo "[debug] which python3: $(which python3)"
 
-python3 -m rl.train.launch_main_ppo \
+env PYTHONPATH="${REPO_INTEGRATION}:${REPO_DATA}:${PYTHONPATH:-}" python3 -m rl.train.launch_main_ppo \
     algorithm.adv_estimator=grpo \
     algorithm.use_kl_in_reward=False \
     algorithm.norm_adv_by_std_in_grpo=False \
