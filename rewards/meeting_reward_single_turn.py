@@ -61,6 +61,36 @@ def _copy_inputs(task, workspace: Path) -> None:
             target.write_text(wf["content"], encoding="utf-8")
 
 
+def _quality_gate(solution_str: str, auto_score: float, judge_score: float) -> tuple[bool, str]:
+    """Race-to-bottom defense.
+
+    The automated checks reward keyword presence (e.g. "tuesday" → deadline_mentioned),
+    so a degenerate response that just spams criteria words can earn a high auto_score.
+    Penalize those by gating on cheap structural signals.
+
+    Returns (passed, reason). When passed=False, the caller should return score=0
+    so the GRPO group baseline does not reward this trajectory.
+
+    Set MEETING_REWARD_QUALITY_OFF=1 to disable (useful for A/B comparing).
+    """
+    if os.environ.get("MEETING_REWARD_QUALITY_OFF", "0") == "1":
+        return True, "disabled"
+    s = (solution_str or "").strip()
+    words = s.split()
+    n_words = len(words)
+    if n_words < 30:
+        return False, f"too short ({n_words} words)"
+    n_lines = sum(1 for ln in s.splitlines() if ln.strip())
+    if n_lines < 3:
+        return False, f"too flat ({n_lines} non-empty lines)"
+    n_unique = len(set(w.lower() for w in words))
+    if n_words >= 50 and n_unique / n_words < 0.35:
+        return False, f"low lexical diversity ({n_unique}/{n_words})"
+    if auto_score >= 0.6 and judge_score > 0 and judge_score < 0.25:
+        return False, f"keyword-salad: auto={auto_score:.2f} judge={judge_score:.2f}"
+    return True, "ok"
+
+
 def compute_score(
     data_source: str,
     solution_str: str,
@@ -123,10 +153,16 @@ def compute_score(
         denom = auto_weight + judge_weight
         final = (auto_score * auto_weight + judge_score * judge_weight) / denom if denom > 0 else 0.0
 
+    passed, reason = _quality_gate(solution_str, auto_score, judge_score)
+    if not passed:
+        final = 0.0
+
     return {
         "score": final,
         "automated_score": auto_score,
         "judge_score": judge_score,
+        "quality_passed": passed,
+        "quality_reason": reason,
         "task_id": task_id,
         "output_filename": output_name,
     }
