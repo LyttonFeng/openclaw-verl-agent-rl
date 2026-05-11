@@ -64,7 +64,7 @@ export PINCHBENCH_DIR="${REPO_DATA}"
 export PYTHONPATH="${REPO_INTEGRATION}:${REPO_DATA}:${PYTHONPATH:-}"
 
 # HF cache
-export HF_HOME="${HF_HOME:-/workspace/hf_cache}"
+export HF_HOME="${HF_HOME:-/root/hf_cache}"
 export HF_HUB_CACHE="${HF_HUB_CACHE:-${HF_HOME}/hub}"
 export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-${HF_HUB_CACHE}}"
 
@@ -211,6 +211,9 @@ env PYTHONPATH="${REPO_INTEGRATION}:${REPO_DATA}:${PYTHONPATH:-}" python3 -m rl.
     trainer.val_before_train=False \
     trainer.logger='["console"]' \
     +ray_kwargs.ray_init.include_dashboard=False \
+    +ray_kwargs.ray_init.runtime_env.env_vars.HF_HOME=/root/hf_cache \
+    +ray_kwargs.ray_init.runtime_env.env_vars.HF_HUB_CACHE=/root/hf_cache/hub \
+    +ray_kwargs.ray_init.runtime_env.env_vars.TRANSFORMERS_CACHE=/root/hf_cache/hub \
     +ray_kwargs.ray_init.runtime_env.env_vars.OPENCLAW_HOST="'${OPENCLAW_HOST}'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.OPENCLAW_USER="'${OPENCLAW_USER}'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.OPENCLAW_PORT="'${OPENCLAW_PORT}'" \
