@@ -1,0 +1,363 @@
+{
+  "runner": "jiuwenclaw_ws",
+  "run_id": "20260511_161431",
+  "timestamp": 1778516537.8758295,
+  "ws_url": "ws://127.0.0.1:611/ws",
+  "suite": "task_meeting_advisory_stakeholders,task_meeting_council_votes,task_meeting_gov_speaker_summary,task_meeting_tech_action_items,task_meeting_sentiment_analysis",
+  "task_count": 5,
+  "tasks_completed": 5,
+  "completed": false,
+  "tasks": [
+    {
+      "task_id": "task_meeting_advisory_stakeholders",
+      "status": "timeout",
+      "timed_out": true,
+      "execution_time": 180.0345847606659,
+      "transcript_length": 40,
+      "usage": {
+        "input_tokens": 134953,
+        "output_tokens": 3353,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 138306,
+        "cost_usd": 0.0,
+        "request_count": 23
+      },
+      "workspace": "/workspace/verl_port/bench/jiuwen_base_4b/20260511_161431/workspaces/task_meeting_advisory_stakeholders",
+      "grading": {
+        "runs": [
+          {
+            "task_id": "task_meeting_advisory_stakeholders",
+            "score": 0.0,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 0.0,
+              "automated.gov_stakeholders": 0.0,
+              "automated.commercial_stakeholders": 0.0,
+              "automated.sharing_preference": 0.0,
+              "automated.relocation_cost": 0.0,
+              "automated.sharing_vs_relocation": 0.0,
+              "automated.common_parameters": 0.0,
+              "automated.conflicts_identified": 0.0,
+              "automated.member_positions": 0.0
+            },
+            "notes": "Skipped: task execution failed (timeout), no valid transcript to evaluate"
+          }
+        ],
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "category": "meeting",
+      "grading_type": "hybrid",
+      "frontmatter": {
+        "id": "task_meeting_advisory_stakeholders",
+        "name": "NTIA Advisory Board Stakeholder Interests",
+        "category": "meeting",
+        "grading_type": "hybrid",
+        "timeout_seconds": 180,
+        "grading_weights": {
+          "automated": 0.6,
+          "llm_judge": 0.4
+        },
+        "workspace_files": [
+          {
+            "source": "meetings/2012-05-30-meeting-transcript-ntia-csmac.md",
+            "dest": "meeting-transcript.md"
+          }
+        ]
+      },
+      "session_id": "pb_jw_task_meeting_advisory_stakeholders_05455559",
+      "request_id": "req_e7f85add6f"
+    },
+    {
+      "task_id": "task_meeting_council_votes",
+      "status": "success",
+      "timed_out": false,
+      "execution_time": 76.84882879257202,
+      "transcript_length": 17,
+      "usage": {
+        "input_tokens": 1967418,
+        "output_tokens": 15852,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 1983270,
+        "cost_usd": 0.0,
+        "request_count": 11
+      },
+      "workspace": "/workspace/verl_port/bench/jiuwen_base_4b/20260511_161431/workspaces/task_meeting_council_votes",
+      "grading": {
+        "runs": [
+          {
+            "task_id": "task_meeting_council_votes",
+            "score": 0.0,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 0.0,
+              "automated.minutes_vote": 0.0,
+              "automated.item12_abstain": 0.0,
+              "automated.item14_15_rollcall": 0.0,
+              "automated.item19_unanimous": 0.0,
+              "automated.item22_continued": 0.0,
+              "automated.item23_first_reading": 0.0,
+              "automated.item25_carlson_no": 0.0,
+              "automated.item26_28_reconsider": 0.0,
+              "automated.summary_count": 0.0,
+              "llm_judge.Vote Identification Completeness": 0.0,
+              "llm_judge.Vote Detail Accuracy": 0.0,
+              "llm_judge.Organization": 0.0,
+              "llm_judge.Summary": 0.0
+            },
+            "notes": "The agent did not produce a votes_report.md file. It only wrote a partial summary to memory and attempted to send a non-existent file. No actual votes were extracted from the transcript."
+          }
+        ],
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "category": "meeting",
+      "grading_type": "hybrid",
+      "frontmatter": {
+        "id": "task_meeting_council_votes",
+        "name": "Tampa City Council – List Motions and Vote Outcomes",
+        "category": "meeting",
+        "grading_type": "hybrid",
+        "timeout_seconds": 180,
+        "grading_weights": {
+          "automated": 0.5,
+          "llm_judge": 0.5
+        },
+        "workspace_files": [
+          {
+            "source": "meetings/2026-04-02-tampa-city-council-transcript.md",
+            "dest": "transcript.md"
+          }
+        ]
+      },
+      "session_id": "pb_jw_task_meeting_council_votes_6e340191",
+      "request_id": "req_f9b075aede"
+    },
+    {
+      "task_id": "task_meeting_gov_speaker_summary",
+      "status": "success",
+      "timed_out": false,
+      "execution_time": 65.12720203399658,
+      "transcript_length": 17,
+      "usage": {
+        "input_tokens": 1105770,
+        "output_tokens": 16734,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 1122504,
+        "cost_usd": 0.0,
+        "request_count": 11
+      },
+      "workspace": "/workspace/verl_port/bench/jiuwen_base_4b/20260511_161431/workspaces/task_meeting_gov_speaker_summary",
+      "grading": {
+        "runs": [
+          {
+            "task_id": "task_meeting_gov_speaker_summary",
+            "score": 0.6423611111111112,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.dan_evans": 0.5,
+              "automated.nicola_fox": 1.0,
+              "automated.david_spergel": 1.0,
+              "automated.sean_kirkpatrick": 0.5,
+              "automated.faa_speaker": 0.0,
+              "automated.additional_panelists": 0.5,
+              "automated.quotes_included": 1.0,
+              "automated.speaker_order": 1.0,
+              "llm_judge.Speaker Identification Completeness": 0.5,
+              "llm_judge.Key Point Accuracy": 0.5,
+              "llm_judge.Quote Quality": 0.5,
+              "llm_judge.Organization and Readability": 0.75
+            },
+            "notes": "Only 4 speakers identified (Dan Evans, Nicky Fox, David Spergel, Sean Kirkpatrick) with roles; missing many key speakers like Mike Freie, Nadia Drake, Paula Bontempi, Federica Bianco, David Grinspoon. Key points are generic and lack specific details (e.g., 800+ cases, 2-5% anomalous, 45,000 flights/day). Quotes are paraphrased and not direct from transcript. Organization is acceptable but Q&A section is sparse."
+          }
+        ],
+        "mean": 0.6423611111111112,
+        "std": 0.0,
+        "min": 0.6423611111111112,
+        "max": 0.6423611111111112
+      },
+      "category": "meeting",
+      "grading_type": "hybrid",
+      "frontmatter": {
+        "id": "task_meeting_gov_speaker_summary",
+        "name": "NASA UAP Hearing Speaker Summary",
+        "category": "meeting",
+        "grading_type": "hybrid",
+        "timeout_seconds": 180,
+        "grading_weights": {
+          "automated": 0.5,
+          "llm_judge": 0.5
+        },
+        "workspace_files": [
+          {
+            "source": "meetings/2025-07-30-nasa-holds-first-public-meeting-on-ufos-transcript.md",
+            "dest": "transcript.md"
+          }
+        ]
+      },
+      "session_id": "pb_jw_task_meeting_gov_speaker_summary_9fe5cf3a",
+      "request_id": "req_577c1acdc8"
+    },
+    {
+      "task_id": "task_meeting_tech_action_items",
+      "status": "success",
+      "timed_out": false,
+      "execution_time": 67.71466207504272,
+      "transcript_length": 17,
+      "usage": {
+        "input_tokens": 1233966,
+        "output_tokens": 17658,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 1251624,
+        "cost_usd": 0.0,
+        "request_count": 11
+      },
+      "workspace": "/workspace/verl_port/bench/jiuwen_base_4b/20260511_161431/workspaces/task_meeting_tech_action_items",
+      "grading": {
+        "runs": [
+          {
+            "task_id": "task_meeting_tech_action_items",
+            "score": 0.575,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.report_created": 1.0,
+              "automated.min_action_items": 1.0,
+              "automated.owners_identified": 0.0,
+              "automated.events_actions": 1.0,
+              "automated.announcements_actions": 1.0,
+              "automated.competitive_actions": 0.5,
+              "automated.messaging_actions": 1.0,
+              "automated.grouped_by_topic": 1.0,
+              "automated.deadlines_noted": 1.0,
+              "llm_judge.Completeness of Action Item Extraction": 0.25,
+              "llm_judge.Owner Attribution Accuracy": 0.0,
+              "llm_judge.Organization and Structure": 0.5,
+              "llm_judge.Context and Deadline Accuracy": 0.0
+            },
+            "notes": "The agent failed to read the actual meeting transcript and instead hallucinated generic action items (e.g., 'GTM Team', 'Product Team') that do not match the specific owners and tasks described in the task prompt. No real extraction from the file occurred. The output is poorly organized and lacks accurate owners, deadlines, and context."
+          }
+        ],
+        "mean": 0.575,
+        "std": 0.0,
+        "min": 0.575,
+        "max": 0.575
+      },
+      "category": "meeting",
+      "grading_type": "hybrid",
+      "frontmatter": {
+        "id": "task_meeting_tech_action_items",
+        "name": "Meeting Action Items Extraction",
+        "category": "meeting",
+        "grading_type": "hybrid",
+        "timeout_seconds": 180,
+        "grading_weights": {
+          "automated": 0.6,
+          "llm_judge": 0.4
+        },
+        "workspace_files": [
+          {
+            "source": "meetings/2021-06-28-gitlab-product-marketing-meeting.md",
+            "dest": "meeting_transcript.md"
+          }
+        ]
+      },
+      "session_id": "pb_jw_task_meeting_tech_action_items_b6a6e0bb",
+      "request_id": "req_564aa7e2d0"
+    },
+    {
+      "task_id": "task_meeting_sentiment_analysis",
+      "status": "success",
+      "timed_out": false,
+      "execution_time": 62.411027908325195,
+      "transcript_length": 13,
+      "usage": {
+        "input_tokens": 524584,
+        "output_tokens": 12204,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_tokens": 536788,
+        "cost_usd": 0.0,
+        "request_count": 8
+      },
+      "workspace": "/workspace/verl_port/bench/jiuwen_base_4b/20260511_161431/workspaces/task_meeting_sentiment_analysis",
+      "grading": {
+        "runs": [
+          {
+            "task_id": "task_meeting_sentiment_analysis",
+            "score": 0.875,
+            "max_score": 1.0,
+            "grading_type": "hybrid",
+            "breakdown": {
+              "automated.file_created": 1.0,
+              "automated.overall_sentiment": 1.0,
+              "automated.topic_breakdown": 1.0,
+              "automated.team_dynamics": 1.0,
+              "automated.quotes_included": 1.0,
+              "automated.engagement_assessed": 1.0,
+              "automated.concerns_identified": 1.0,
+              "automated.tonal_distinction": 1.0,
+              "llm_judge.Analytical Depth": 0.75,
+              "llm_judge.Evidence-Based Observations": 0.75,
+              "llm_judge.Practical Value": 0.75
+            },
+            "notes": "Good topic-by-topic breakdown with clear sentiment labels and some nuance. Quotes are relevant but could be more specific to individuals. Practical value is solid, identifying team dynamics and concerns, though could be more actionable."
+          }
+        ],
+        "mean": 0.875,
+        "std": 0.0,
+        "min": 0.875,
+        "max": 0.875
+      },
+      "category": "meeting",
+      "grading_type": "hybrid",
+      "frontmatter": {
+        "id": "task_meeting_sentiment_analysis",
+        "name": "Meeting Sentiment Analysis",
+        "category": "meeting",
+        "grading_type": "hybrid",
+        "timeout_seconds": 180,
+        "grading_weights": {
+          "automated": 0.5,
+          "llm_judge": 0.5
+        },
+        "workspace_files": [
+          {
+            "source": "meetings/2021-06-28-gitlab-product-marketing-meeting.md",
+            "dest": "meeting_transcript.md"
+          }
+        ]
+      },
+      "session_id": "pb_jw_task_meeting_sentiment_analysis_b0062e65",
+      "request_id": "req_12baaa9b47"
+    }
+  ],
+  "summary": {
+    "total_score": 2.092361,
+    "max_score": 5.0,
+    "overall_pct": 41.85
+  },
+  "efficiency": {
+    "total_tokens": 5032492,
+    "total_input_tokens": 4966691,
+    "total_output_tokens": 65801,
+    "total_cost_usd": 0.0,
+    "total_requests": 64,
+    "total_execution_time_seconds": 452.14,
+    "tasks_with_usage_data": 5,
+    "tokens_per_task": 1006498.4,
+    "cost_per_task_usd": 0.0
+  }
+}
