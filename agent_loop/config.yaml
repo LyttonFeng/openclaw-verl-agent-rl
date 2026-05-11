@@ -1,5 +1,8 @@
-# OpenClaw Agent Loop configuration for veRL
-# Loaded by veRL's AgentLoopWorker via agent_loop_config_path
+# Agent loop registry — loaded by veRL's AgentLoopWorker via agent_loop_config_path.
+# Pick which loop a training run uses via actor_rollout_ref.rollout.agent.default_agent_loop.
 
 - name: openclaw_agent
   _target_: agent_loop.openclaw_agent_loop.OpenClawAgentLoop
+
+- name: jiuwenclaw_agent
+  _target_: experiments.verl_port_poc.jiuwenclaw_agent_loop.JiuwenClawAgentLoop

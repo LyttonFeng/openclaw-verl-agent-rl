@@ -171,11 +171,21 @@ class JiuwenClawAgentLoop(AgentLoopBase):
     on the assembled trajectory (which knows the task_id from extra_info).
     """
 
+    # Class-level lock serializes rollouts that share the jiuwenclaw
+    # workspace dir (~/.jiuwenclaw/agent/jiuwenclaw_workspace/). The stack
+    # server hardcodes this path, so concurrent rollouts within one
+    # AgentLoopWorker process would race on it. Per-process workers can
+    # still parallelize because each has its own lock instance; if you set
+    # JIUWENCLAW_DATA_DIR per worker, the lock becomes a no-op contention-wise.
+    _workspace_lock: asyncio.Lock | None = None
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.cfg = JiuwenWSConfig.from_env()
         # Tokenizer is needed for re-tokenizing assistant turns + tool results
         # so we can build response_mask. AgentLoopBase exposes it via self.tokenizer.
+        if type(self)._workspace_lock is None:
+            type(self)._workspace_lock = asyncio.Lock()
 
     def _build_workspace(self, workspace_files: list[dict], target: Path) -> None:
         """Copy task workspace files into jiuwenclaw workspace dir.
@@ -364,11 +374,6 @@ class JiuwenClawAgentLoop(AgentLoopBase):
         session_id = f"jw_{task_id}_{uuid.uuid4().hex[:8]}"
         request_id = f"req_{uuid.uuid4().hex[:10]}"
 
-        # Build isolated workspace
-        jc_workspace = self.cfg.data_root / "agent" / "jiuwenclaw_workspace"
-        workspace_files = extra_info.get("workspace_files") or []
-        self._build_workspace(workspace_files, jc_workspace)
-
         # Apply chat template to get baseline prompt_ids (tokenizer comes from AgentLoopBase)
         prompt_messages = prompt if isinstance(prompt, list) else [{"role": "user", "content": prompt}]
         prompt_text = self.tokenizer.apply_chat_template(
@@ -383,18 +388,27 @@ class JiuwenClawAgentLoop(AgentLoopBase):
                 user_content = msg.get("content", "")
                 break
 
-        # Send WS request, wait for chat.final
-        status, timed_out = await _run_one_ws_session(
-            ws_url=self.cfg.ws_url,
-            session_id=session_id,
-            prompt=user_content,
-            timeout_seconds=self.cfg.timeout_seconds,
-            request_id=request_id,
-        )
-
-        # Read assembled transcript from history.json
-        await asyncio.sleep(0.5)   # let jiuwenclaw flush final records
-        history = _load_history(_history_path(self.cfg.data_root, session_id))
+        # Serialize workspace prep + WS roundtrip on the shared jiuwenclaw
+        # workspace dir. The stack server reads files from
+        # ~/.jiuwenclaw/agent/jiuwenclaw_workspace/ (hardcoded) so concurrent
+        # rollouts within one worker process would race. The lock makes this
+        # safe at the cost of in-worker serial execution; parallelism still
+        # comes from multiple AgentLoopWorker processes (each gets its own lock).
+        jc_workspace = self.cfg.data_root / "agent" / "jiuwenclaw_workspace"
+        workspace_files = extra_info.get("workspace_files") or []
+        if type(self)._workspace_lock is None:
+            type(self)._workspace_lock = asyncio.Lock()
+        async with type(self)._workspace_lock:
+            self._build_workspace(workspace_files, jc_workspace)
+            status, timed_out = await _run_one_ws_session(
+                ws_url=self.cfg.ws_url,
+                session_id=session_id,
+                prompt=user_content,
+                timeout_seconds=self.cfg.timeout_seconds,
+                request_id=request_id,
+            )
+            await asyncio.sleep(0.5)   # let jiuwenclaw flush final records
+            history = _load_history(_history_path(self.cfg.data_root, session_id))
 
         response_ids, response_mask, num_turns = self._build_response_from_history(
             history, prompt_token_ids,
