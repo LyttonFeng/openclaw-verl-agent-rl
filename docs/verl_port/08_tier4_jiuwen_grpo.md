@@ -57,6 +57,24 @@ OpenClaw runtime 47.8%，原因是 OpenClaw-trained policy 学了 `write_memory`
    (`port=0`)，启动后通过 stdout 行 `LLMServerManager: ['IP:PORT']` 暴露。无需 auth。
    `launch_meeting_jiuwen_path_a.sh` 已经 grep stdout 拿地址。
 
+### stdout-grep regex 已用真实 veRL 日志验证
+
+`launch_meeting_jiuwen_path_a.sh` 在 step 3 用 `grep -oE "'[0-9.]+:[0-9]+'"` 抓
+URL。这个 regex 用 2026-05-11 v3 OpenClaw GRPO 训练日志验证过——line 6404：
+
+```
+(TaskRunner pid=409860) LLMServerManager: ['172.20.0.2:35991', '172.20.0.2:41155']
+```
+
+时序（v3 run）：
+- `08:30:01` vLLMHttpServer Ray actor 启动
+- `08:31:35` `LLMServerManager:` 行打印（vLLM HTTP 完全就绪）
+- `08:32:55` 第一次 `OpenClawAgentLoop.run` 调用（首次 rollout）
+
+→ 我们的 launcher 有 **~90 秒窗口**起 headless jiuwenclaw，绰绰有余。
+
+注意：N_GPUS=2 + TP=1 → 2 个 replica；当前 launcher 只取第一个。要全负载需要接 `GlobalRequestLoadBalancer`（veRL 内部组件），目前不上。
+
 ### 跑通的 smoke 验证
 
 ```
