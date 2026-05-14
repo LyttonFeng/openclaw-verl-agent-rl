@@ -819,18 +819,22 @@ class JiuwenClawAgentLoop(AgentLoopBase):
         # reward_score is None — veRL trainer's reward_fn will compute it from
         # the full trajectory using compute_score (e.g., meeting_reward_single_turn
         # adapted for jiuwenclaw transcripts).
-        # Pad logprobs to match response_ids length if rail-v1 was used.
-        # rail_response_logprobs may be shorter than response_ids if truncation
-        # / empty-rollout placeholders adjusted the latter — keep them aligned.
+        # response_logprobs must be uniform across the batch — veRL's
+        # _postprocess (agent_loop.py:819) does
+        #   torch.cat([input.response_logprobs for input in inputs])
+        # which crashes with TypeError when some inputs are None (history.json
+        # fallback) and others are tensors (rail-v1 hit). Solution: always set
+        # to None and let veRL compute old_log_probs from a fresh actor forward
+        # pass. We lose the rail-v1 logprob shortcut, but:
+        #   (a) avoids batch-mixed crashes when rail upload races us
+        #   (b) rail's logprobs were captured on the UNtruncated prompt
+        #       anyway, so they'd be slightly off after our left-truncation —
+        #       trainer recomputing on the actual truncated prompt is more
+        #       consistent with veRL's downstream loss math.
         response_logprobs = None
-        if rail_response_logprobs:
-            if len(rail_response_logprobs) < len(response_ids):
-                rail_response_logprobs = rail_response_logprobs + [0.0] * (
-                    len(response_ids) - len(rail_response_logprobs)
-                )
-            elif len(rail_response_logprobs) > len(response_ids):
-                rail_response_logprobs = rail_response_logprobs[: len(response_ids)]
-            response_logprobs = rail_response_logprobs
+        # rail_response_logprobs kept as extra_fields metadata for downstream
+        # tools that want to inspect rail-captured logprobs without affecting
+        # veRL's training math.
 
         return AgentLoopOutput(
             prompt_ids=prompt_token_ids,
