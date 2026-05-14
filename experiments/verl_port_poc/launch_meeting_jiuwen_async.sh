@@ -1,45 +1,32 @@
 #!/usr/bin/env bash
-# Path A orchestrator: veRL hybrid engine + headless jiuwenclaw (no separate vLLM).
+# Tier 4 ALT: veRL FullyAsyncTrainer + JiuwenClaw rollout.
 #
-# Architecture:
-#   veRL hybrid engine
-#     ├─ FSDP actor (on GPUs)
-#     ├─ vLLM (hybrid, on same GPUs) ← always-latest weights, exposed as HTTP
-#     │    serves /v1/chat/completions at $VERL_VLLM_URL
-#     └─ AgentLoopWorker → JiuwenClawAgentLoop.run() → WS to port 611
-#   Headless jiuwenclaw (no own vLLM)
-#     ├─ agent_server (WS port 611) ← veRL's entry point for rollouts
-#     ├─ gateway (port 613)
-#     └─ OpenAIModelClient reads $API_BASE → POSTs back to $VERL_VLLM_URL
+# Vs launch_meeting_jiuwen_path_a.sh (sync): this uses the async trainer in
+# verl/experimental/fully_async_policy/. Key wins:
+#   - No asyncio.gather() blocking on slow rollouts (one chat.error 不再卡死整步)
+#   - Trainer and Rollout split onto separate GPUs (no hybrid engine contention)
+#   - Importance-sampling correction for stale rollouts
 #
-# Bootstrap order:
-#   1. Pre-flight (kill stale stacks, check GPUs).
-#   2. Start veRL in background — its vLLM HTTP server comes up during init
-#      and prints "LLMServerManager: ['IP:PORT', ...]" to stdout.
-#   3. Tail veRL log, extract URL; bail if not seen within timeout.
-#   4. Start headless jiuwenclaw with API_BASE = that URL.
-#   5. veRL's first rollout fires shortly after; if jiuwenclaw WS is up by
-#      then, training proceeds normally.
+# GPU layout (2× A100 80GB):
+#   GPU 0 → Trainer (FSDP actor + ref + optim)
+#   GPU 1 → Rollout vLLM (49k context, max_num_seqs=4)
 #
-# DRY RUN: pass `--dry-run` to skip launching veRL — just verifies the
-# headless stack + external vLLM wiring works. Useful for smoke testing
-# this script against an already-running vLLM on the pod.
+# Note: still uses headless jiuwenclaw + Path A (vLLM HTTP served by veRL's
+# rollout side, jiuwenclaw points API_BASE there).
 
 set -euo pipefail
 
 DRY_RUN=0
-for arg in "$@"; do
-  [ "$arg" = "--dry-run" ] && DRY_RUN=1
-done
+for arg in "$@"; do [ "$arg" = "--dry-run" ] && DRY_RUN=1; done
 
 # ─── Paths ────────────────────────────────────────────────
 REPO_INTEGRATION=/workspace/verl_port/openclaw_integration
 REPO_DATA=/workspace/openclaw-verl-agent-rl
 DATA_DIR=/workspace/verl_port/data_meeting
-OUTPUT_DIR=/workspace/verl_port/ckpt_jw
+OUTPUT_DIR=/workspace/verl_port/ckpt_jw_async
 AGENT_LOOP_CONFIG="${REPO_DATA}/agent_loop/config.yaml"
-LOG_DIR=/tmp/jw_path_a
-mkdir -p "$LOG_DIR"
+LOG_DIR=/tmp/jw_async
+mkdir -p "$LOG_DIR" "$OUTPUT_DIR"
 TS=$(date +%Y%m%d_%H%M%S)
 VERL_LOG="$LOG_DIR/verl_$TS.log"
 JW_LOG_DIR="$LOG_DIR/jw_$TS"
@@ -52,69 +39,92 @@ export PINCHBENCH_GRADE_JUDGE_BASE_URL="${PINCHBENCH_GRADE_JUDGE_BASE_URL:-https
 export PINCHBENCH_GRADE_JUDGE_API_KEY="${PINCHBENCH_GRADE_JUDGE_API_KEY:-$DEEPSEEK_API_KEY}"
 export REWARD_MODE="baseline"
 export PINCHBENCH_REWARD_RETURN_MODE="scalar"
+export VLLM_USE_V1=1
 
 MODEL_NAME="${MODEL_NAME:-Qwen3-4B}"
 
 # ─── Pre-flight ───────────────────────────────────────────
-echo "[path-a] pre-flight: clean stale jiuwenclaw/veRL processes..."
+echo "[async] pre-flight: clean stale processes..."
 pkill -9 -f 'run_online_rl' 2>/dev/null || true
 pkill -9 -f 'jiuwenclaw.gateway\|jiuwenclaw.server\|jiuwenclaw.app' 2>/dev/null || true
 pkill -9 -f 'vllm.entrypoints' 2>/dev/null || true
-pkill -9 -f 'launch_main_ppo' 2>/dev/null || true
+pkill -9 -f 'launch_main_ppo\|fully_async_main' 2>/dev/null || true
 sleep 4
 GPU_USED=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | sort -n | tail -1)
-echo "[path-a] post-cleanup GPU max used: ${GPU_USED} MiB"
+echo "[async] post-cleanup GPU max used: ${GPU_USED} MiB"
 if [ "$GPU_USED" -gt 5000 ]; then
-  echo "[path-a] WARN: GPU still has ${GPU_USED}MiB used — stale process? Continuing anyway."
+  echo "[async] WARN: GPU still has ${GPU_USED}MiB used."
 fi
 
-# ─── Hyperparams (mirror launch_meeting_openclaw_lora.sh) ─
+# ─── Hyperparams (healthier defaults) ──────────────────────
 MODEL=/root/hf_cache/hub/models--Qwen--Qwen3-4B/snapshots/1cfa9a7208912126459214e8b04321603b3df60c
-N_GPUS="${N_GPUS:-2}"
+N_GPUS_TRAINER="${N_GPUS_TRAINER:-1}"   # FSDP actor + ref on GPU 0
+N_GPUS_ROLLOUT="${N_GPUS_ROLLOUT:-1}"   # vLLM on GPU 1
 BATCH_SIZE="${BATCH_SIZE:-4}"
 MICRO_BATCH="${MICRO_BATCH:-1}"
 ROLLOUT_N="${ROLLOUT_N:-2}"
-MAX_TURNS="${MAX_TURNS:-20}"
+MAX_TURNS="${MAX_TURNS:-15}"                   # healthy middle: not 20 (累积爆) not 10 (too short)
+
+# Multi-stack jiuwenclaw for true rollout parallelism (each stack = independent
+# WS / workspace / agent_server / gateway). agent_loop round-robins. Ports
+# allocated starting at 611,612,... matched by JW_DATA_DIRS index.
+JW_N_STACKS="${JW_N_STACKS:-2}"
+JIUWENCLAW_WS_URLS=""
+JIUWENCLAW_DATA_DIRS=""
+for _i in $(seq 0 $((JW_N_STACKS - 1))); do
+  _port=$((611 + _i))
+  _dd="$HOME/.jiuwenclaw_${_i}"
+  [ -z "$JIUWENCLAW_WS_URLS" ] && JIUWENCLAW_WS_URLS="ws://127.0.0.1:${_port}/ws" || JIUWENCLAW_WS_URLS="${JIUWENCLAW_WS_URLS},ws://127.0.0.1:${_port}/ws"
+  [ -z "$JIUWENCLAW_DATA_DIRS" ] && JIUWENCLAW_DATA_DIRS="$_dd" || JIUWENCLAW_DATA_DIRS="${JIUWENCLAW_DATA_DIRS},$_dd"
+done
+echo "[async] planned JW_N_STACKS=$JW_N_STACKS WS_URLS=$JIUWENCLAW_WS_URLS"
 MAX_PROMPT_LENGTH="${MAX_PROMPT_LENGTH:-20000}"
-MAX_RESPONSE_LENGTH="${MAX_RESPONSE_LENGTH:-12000}"
+MAX_RESPONSE_LENGTH="${MAX_RESPONSE_LENGTH:-8000}"  # 6k 太紧 12k 太宽，8k 中庸
 LR="${LR:-2e-6}"
 LORA_RANK="${LORA_RANK:-32}"
 LORA_ALPHA="${LORA_ALPHA:-64}"
 LORA_TARGET_MODULES='[q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj]'
 VLLM_MAX_MODEL_LEN="${VLLM_MAX_MODEL_LEN:-49152}"
-VLLM_MAX_NUM_SEQS="${VLLM_MAX_NUM_SEQS:-1}"
-VLLM_GPU_MEM_UTIL="${VLLM_GPU_MEM_UTIL:-0.4}"
+VLLM_MAX_NUM_SEQS="${VLLM_MAX_NUM_SEQS:-4}"          # 可恢复 4：rollout 独占 GPU 没 OOM 压力
+VLLM_GPU_MEM_UTIL="${VLLM_GPU_MEM_UTIL:-0.5}"        # rollout 独占 GPU，可拉回 0.5
 ACTOR_PPO_MAX_TOKEN_LEN_PER_GPU="${ACTOR_PPO_MAX_TOKEN_LEN_PER_GPU:-32000}"
-SAVE_FREQ="${SAVE_FREQ:-4}"
+SAVE_FREQ="${SAVE_FREQ:-1}"
 TEST_FREQ="${TEST_FREQ:--1}"
 TOTAL_EPOCHS="${TOTAL_EPOCHS:-1}"
 TOTAL_TRAINING_STEPS="${TOTAL_TRAINING_STEPS:-24}"
 AGENT_TIMEOUT="${AGENT_TIMEOUT:-300}"
-EXPERIMENT_NAME="${EXPERIMENT_NAME:-verl_jw_path_a_$TS}"
 
-REWARD_MANAGER_PATH="${REPO_DATA}/rewards/meeting_reward_single_turn.py"
+# Async-specific
+STALENESS_THRESHOLD="${STALENESS_THRESHOLD:-0.3}"     # 30% stale 上限
+TRIGGER_PARAM_SYNC_STEP="${TRIGGER_PARAM_SYNC_STEP:-2}"
+REQUIRE_BATCHES="${REQUIRE_BATCHES:-4}"
 
-mkdir -p "$OUTPUT_DIR"
+EXPERIMENT_NAME="${EXPERIMENT_NAME:-verl_jw_async_$TS}"
+REWARD_MANAGER_PATH="${REPO_DATA}/rewards/meeting_reward.py"
 
-# ─── Step 2: launch veRL in background ────────────────────
+# ─── Launch veRL FullyAsyncTrainer ─────────────────────────
 if [ "$DRY_RUN" = "0" ]; then
-  echo "[path-a] launching veRL → $VERL_LOG"
-  # Must cd to REPO_INTEGRATION first — REPO_DATA also has rl/train/ (different
-  # files, no launch_main_ppo.py) and Python's CWD takes precedence in sys.path,
-  # which would shadow REPO_INTEGRATION's rl.train and fail with
-  # "No module named rl.train.launch_main_ppo".
+  echo "[async] launching veRL FullyAsyncTrainer → $VERL_LOG"
   cd "$REPO_INTEGRATION"
-  env PYTHONPATH="${REPO_INTEGRATION}:${REPO_DATA}:${PYTHONPATH:-}" \
-  nohup python3 -m rl.train.launch_main_ppo \
+  env PYTHONPATH="${REPO_INTEGRATION}:${REPO_DATA}:${PYTHONPATH:-}" VLLM_USE_V1=1 \
+  nohup python3 -m verl.experimental.fully_async_policy.fully_async_main \
+      --config-name fully_async_ppo_trainer \
       algorithm.adv_estimator=grpo \
       algorithm.use_kl_in_reward=False \
       algorithm.norm_adv_by_std_in_grpo=False \
+      algorithm.rollout_correction.bypass_mode=False \
       data.train_files="${DATA_DIR}/train.parquet" \
-      data.val_files="${DATA_DIR}/val.parquet" \
-      data.train_batch_size="${BATCH_SIZE}" \
+      data.val_files="${DATA_DIR}/val_5test.parquet" \
+      data.train_batch_size=0 \
+      data.gen_batch_size=1 \
       data.max_prompt_length="${MAX_PROMPT_LENGTH}" \
       data.max_response_length="${MAX_RESPONSE_LENGTH}" \
       data.filter_overlong_prompts=True data.truncation=left data.return_raw_chat=True \
+      async_training.staleness_threshold="${STALENESS_THRESHOLD}" \
+      async_training.trigger_parameter_sync_step="${TRIGGER_PARAM_SYNC_STEP}" \
+      async_training.require_batches="${REQUIRE_BATCHES}" \
+      async_training.partial_rollout=True \
+      actor_rollout_ref.hybrid_engine=False \
       actor_rollout_ref.model.path="${MODEL}" \
       actor_rollout_ref.model.use_remove_padding=True \
       actor_rollout_ref.model.enable_gradient_checkpointing=True \
@@ -129,9 +139,13 @@ if [ "$DRY_RUN" = "0" ]; then
       actor_rollout_ref.actor.ppo_epochs=1 actor_rollout_ref.actor.use_remove_padding=True \
       actor_rollout_ref.actor.use_kl_loss=True actor_rollout_ref.actor.kl_loss_coef=0.01 \
       actor_rollout_ref.actor.kl_loss_type=low_var_kl actor_rollout_ref.actor.entropy_coeff=0.0 \
+      actor_rollout_ref.actor.use_rollout_log_probs=True \
+      actor_rollout_ref.actor.strategy=fsdp2 \
+      actor_rollout_ref.ref.strategy=fsdp2 \
       actor_rollout_ref.actor.fsdp_config.param_offload=True \
       actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
-      actor_rollout_ref.rollout.name=vllm actor_rollout_ref.rollout.n="${ROLLOUT_N}" \
+      actor_rollout_ref.rollout.name=vllm actor_rollout_ref.rollout.mode=async \
+      actor_rollout_ref.rollout.n="${ROLLOUT_N}" \
       actor_rollout_ref.rollout.temperature=0.7 actor_rollout_ref.rollout.top_p=0.9 \
       actor_rollout_ref.rollout.gpu_memory_utilization="${VLLM_GPU_MEM_UTIL}" \
       actor_rollout_ref.rollout.max_model_len="${VLLM_MAX_MODEL_LEN}" \
@@ -140,6 +154,7 @@ if [ "$DRY_RUN" = "0" ]; then
       actor_rollout_ref.rollout.load_format=safetensors \
       +actor_rollout_ref.rollout.engine_kwargs.vllm.enable_auto_tool_choice=true \
       +actor_rollout_ref.rollout.engine_kwargs.vllm.tool_call_parser=hermes \
+      actor_rollout_ref.rollout.calculate_log_probs=True \
       actor_rollout_ref.rollout.layered_summon=True \
       actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=2 \
       actor_rollout_ref.rollout.multi_turn.enable=True \
@@ -147,6 +162,10 @@ if [ "$DRY_RUN" = "0" ]; then
       actor_rollout_ref.rollout.agent.default_agent_loop=jiuwenclaw_agent \
       actor_rollout_ref.rollout.agent.agent_loop_config_path="${AGENT_LOOP_CONFIG}" \
       actor_rollout_ref.rollout.agent.num_workers=1 \
+      actor_rollout_ref.rollout.checkpoint_engine.backend=nccl \
+      rollout.nnodes=1 \
+      rollout.n_gpus_per_node="${N_GPUS_ROLLOUT}" \
+      rollout.total_rollout_steps=1536 \
       actor_rollout_ref.ref.fsdp_config.param_offload=True \
       actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=2 \
       +reward.custom_reward_function.path="${REWARD_MANAGER_PATH}" \
@@ -154,9 +173,12 @@ if [ "$DRY_RUN" = "0" ]; then
       trainer.critic_warmup=0 trainer.val_before_train=False \
       trainer.logger='["console"]' \
       +ray_kwargs.ray_init.include_dashboard=False \
+      +ray_kwargs.ray_init.num_gpus=2 \
       +ray_kwargs.ray_init.runtime_env.env_vars.HF_HOME=/root/hf_cache \
       +ray_kwargs.ray_init.runtime_env.env_vars.HF_HUB_CACHE=/root/hf_cache/hub \
       +ray_kwargs.ray_init.runtime_env.env_vars.JIUWENCLAW_WS_URL="'ws://127.0.0.1:611/ws'" \
+      +ray_kwargs.ray_init.runtime_env.env_vars.JIUWENCLAW_WS_URLS="'${JIUWENCLAW_WS_URLS}'" \
+      +ray_kwargs.ray_init.runtime_env.env_vars.JIUWENCLAW_DATA_DIRS="'${JIUWENCLAW_DATA_DIRS}'" \
       +ray_kwargs.ray_init.runtime_env.env_vars.JIUWENCLAW_TIMEOUT="'${AGENT_TIMEOUT}'" \
       +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_DIR="'${REPO_DATA}'" \
       +ray_kwargs.ray_init.runtime_env.env_vars.DEEPSEEK_API_KEY="'${DEEPSEEK_API_KEY}'" \
@@ -167,9 +189,10 @@ if [ "$DRY_RUN" = "0" ]; then
       +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_REWARD_RETURN_MODE=scalar \
       +ray_kwargs.ray_init.runtime_env.env_vars.MAX_TURNS="'${MAX_TURNS}'" \
       +ray_kwargs.ray_init.runtime_env.env_vars.AGENT_TIMEOUT="'${AGENT_TIMEOUT}'" \
+      +ray_kwargs.ray_init.runtime_env.env_vars.VLLM_USE_V1="'1'" \
       trainer.project_name=verl_port_meeting \
       trainer.experiment_name="${EXPERIMENT_NAME}" \
-      trainer.n_gpus_per_node="${N_GPUS}" trainer.nnodes=1 \
+      trainer.n_gpus_per_node="${N_GPUS_TRAINER}" trainer.nnodes=1 \
       trainer.save_freq="${SAVE_FREQ}" trainer.test_freq="${TEST_FREQ}" \
       trainer.total_epochs="${TOTAL_EPOCHS}" \
       trainer.total_training_steps="${TOTAL_TRAINING_STEPS}" \
@@ -177,101 +200,78 @@ if [ "$DRY_RUN" = "0" ]; then
       trainer.default_local_dir="${OUTPUT_DIR}" \
       >"$VERL_LOG" 2>&1 &
   VERL_PID=$!
-  echo "[path-a] veRL PID=$VERL_PID log=$VERL_LOG"
+  echo "[async] veRL PID=$VERL_PID log=$VERL_LOG"
 
-  # ─── Step 3: discover veRL HTTP vLLM URL ──────────────
-  # Primary: grep `LLMServerManager: ['IP:PORT']` from veRL stdout.
-  # Fallback: scan local listening TCP ports owned by vllm worker procs
-  # and probe each for /v1/models — Python print buffering can delay the
-  # LLMServerManager log line by tens of seconds, but the HTTP server is
-  # actually listening as soon as uvicorn returns its port.
-  echo "[path-a] waiting for vLLM HTTP server (up to 900s, dual discovery)..."
+  # Discover vLLM HTTP URL (same as Path A — port scan since fully async uses vLLMHttpServer too)
+  echo "[async] waiting for vLLM HTTP server (up to 900s, port scan)..."
   VERL_VLLM_URL=""
   for i in $(seq 1 450); do
     if ! kill -0 "$VERL_PID" 2>/dev/null; then
-      echo "[path-a] FATAL: veRL exited before vLLM HTTP came up"
+      echo "[async] FATAL: veRL exited before vLLM HTTP came up"
       tail -50 "$VERL_LOG" >&2
       exit 3
     fi
-
-    # Path A: grep the log for the printed announcement
     LINE=$(grep -m1 "LLMServerManager:" "$VERL_LOG" 2>/dev/null || true)
     if [ -n "$LINE" ]; then
       ADDR=$(echo "$LINE" | grep -oE "'[0-9.]+:[0-9]+'" | head -1 | tr -d "'")
-      if [ -n "$ADDR" ]; then
-        VERL_VLLM_URL="http://${ADDR}/v1"
-        echo "[path-a] discovered veRL vLLM HTTP via log: $VERL_VLLM_URL"
-        break
-      fi
+      [ -n "$ADDR" ] && VERL_VLLM_URL="http://${ADDR}/v1" && break
     fi
-
-    # Path B (every 10s): scan ports held by Ray vLLMHttpServer actors.
-    # NOTE: Linux truncates process names to 15 chars, so the Ray actor
-    # `vLLMHttpServer` shows as `ray::vLLMHttpSe` in `ss`. Match liberally.
     if [ $((i % 5)) -eq 0 ]; then
-      # Extract addresses (IP:PORT) where process name contains vLLMHttp.
       CANDIDATES=$(ss -tlnp 2>/dev/null | awk '/LISTEN/ && /vLLMHttp/ {print $4}' | sort -u)
       for ADDR_CAND in $CANDIDATES; do
-        # ADDR_CAND like 172.20.0.2:36127
         URL="http://${ADDR_CAND}/v1"
         if curl -sf --max-time 2 "${URL}/models" 2>/dev/null | grep -q '"data"'; then
-          VERL_VLLM_URL="$URL"
-          echo "[path-a] discovered veRL vLLM HTTP via port scan: $VERL_VLLM_URL"
-          break 2
+          VERL_VLLM_URL="$URL"; break 2
         fi
       done
     fi
     sleep 2
   done
   if [ -z "$VERL_VLLM_URL" ]; then
-    echo "[path-a] FATAL: timeout waiting for LLMServerManager. Last log lines:"
+    echo "[async] FATAL: timeout waiting for vLLM HTTP."
     tail -30 "$VERL_LOG" >&2
     kill -9 "$VERL_PID" 2>/dev/null || true
     exit 4
   fi
+  echo "[async] discovered veRL vLLM HTTP: $VERL_VLLM_URL"
 else
   VERL_VLLM_URL="${VERL_VLLM_URL:-http://127.0.0.1:614/v1}"
-  echo "[path-a] DRY RUN — using preset VERL_VLLM_URL=$VERL_VLLM_URL"
+  echo "[async] DRY RUN — using $VERL_VLLM_URL"
 fi
 
-# ─── Step 3.5: discover served model id from vLLM /v1/models ─
-# veRL exposes the model under its FULL hf_cache snapshot path
-# (e.g. /root/hf_cache/hub/models--Qwen--Qwen3-4B/snapshots/1cfa9a72...).
-# jiuwenclaw must use that exact id in /v1/chat/completions or vLLM 404s.
-echo "[path-a] querying ${VERL_VLLM_URL}/models for served id..."
-DISCOVERED_MODEL=""
-for _ in $(seq 1 20); do
-  DISCOVERED_MODEL=$(curl -sf --max-time 5 "${VERL_VLLM_URL%/}/models" 2>/dev/null \
-    | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['data'][0]['id']) if d.get('data') else None" 2>/dev/null)
-  if [ -n "$DISCOVERED_MODEL" ]; then break; fi
-  sleep 2
+# Discover model id
+DISCOVERED_MODEL=$(curl -sf --max-time 5 "${VERL_VLLM_URL%/}/models" 2>/dev/null \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['data'][0]['id']) if d.get('data') else None" 2>/dev/null)
+[ -z "$DISCOVERED_MODEL" ] && DISCOVERED_MODEL="$MODEL_NAME"
+echo "[async] using MODEL_NAME=$DISCOVERED_MODEL"
+
+# Start N headless jiuwenclaw stacks for parallelism (B fix: each stack
+# isolated workspace + WS port + agent/gateway ports; agent_loop round-robins).
+JW_N_STACKS="${JW_N_STACKS:-2}"
+JW_WS_URLS=""
+JW_DATA_DIRS=""
+for i in $(seq 0 $((JW_N_STACKS - 1))); do
+  WS_PORT=$((611 + i))
+  AGENT_SERVER_PORT=$((18092 + i))
+  GATEWAY_PORT=$((19001 + i))
+  JW_DATA_DIR="$HOME/.jiuwenclaw_${i}"
+  echo "[async] launching headless jiuwenclaw stack #$i: ws://127.0.0.1:${WS_PORT}/ws data=${JW_DATA_DIR}"
+  API_BASE="$VERL_VLLM_URL" MODEL_NAME="$DISCOVERED_MODEL" \
+    WS_PORT="$WS_PORT" AGENT_SERVER_PORT="$AGENT_SERVER_PORT" GATEWAY_PORT="$GATEWAY_PORT" \
+    JIUWENCLAW_DATA_DIR="$JW_DATA_DIR" \
+    LOG_DIR="${JW_LOG_DIR}/stack_${i}" \
+    bash "$(dirname "$0")/start_jw_headless.sh"
+  if ! (echo > /dev/tcp/127.0.0.1/${WS_PORT}) 2>/dev/null; then
+    echo "[async] FATAL: jiuwenclaw stack #$i WS not up on ${WS_PORT}"
+    exit 5
+  fi
+  [ -z "$JW_WS_URLS" ] && JW_WS_URLS="ws://127.0.0.1:${WS_PORT}/ws" || JW_WS_URLS="${JW_WS_URLS},ws://127.0.0.1:${WS_PORT}/ws"
+  [ -z "$JW_DATA_DIRS" ] && JW_DATA_DIRS="$JW_DATA_DIR" || JW_DATA_DIRS="${JW_DATA_DIRS},${JW_DATA_DIR}"
 done
-if [ -z "$DISCOVERED_MODEL" ]; then
-  echo "[path-a] WARN: could not discover model id; falling back to $MODEL_NAME"
-  DISCOVERED_MODEL="$MODEL_NAME"
-fi
-MODEL_NAME="$DISCOVERED_MODEL"
-echo "[path-a] using MODEL_NAME=$MODEL_NAME"
+echo "[async] $JW_N_STACKS stacks up. URLs=$JW_WS_URLS"
+echo "[async] Async wiring complete."
 
-# ─── Step 4: start headless jiuwenclaw ────────────────────
-echo "[path-a] launching headless jiuwenclaw with API_BASE=$VERL_VLLM_URL MODEL_NAME=$MODEL_NAME"
-API_BASE="$VERL_VLLM_URL" MODEL_NAME="$MODEL_NAME" LOG_DIR="$JW_LOG_DIR" \
-  bash "$(dirname "$0")/start_jw_headless.sh"
+if [ "$DRY_RUN" = "1" ]; then exit 0; fi
 
-# ─── Step 5: ws-side smoke check ──────────────────────────
-echo "[path-a] verifying ws://127.0.0.1:611 reachable..."
-if ! (echo > /dev/tcp/127.0.0.1/611) 2>/dev/null; then
-  echo "[path-a] FATAL: jiuwenclaw WS not up. Check $JW_LOG_DIR/agent_server_*.log"
-  exit 5
-fi
-echo "[path-a] WS up. Path A wiring complete."
-
-if [ "$DRY_RUN" = "1" ]; then
-  echo "[path-a] DRY RUN done — verify with the smoke script:"
-  echo "    python3 experiments/verl_port_poc/smoke_jiuwenclaw_agent_loop.py --prompt 'say hi'"
-  exit 0
-fi
-
-# Foreground: tail veRL log so this script blocks while training runs
-echo "[path-a] tailing veRL log (Ctrl-C exits tail; veRL continues in background as PID=$VERL_PID)"
+echo "[async] tailing veRL log (Ctrl-C exits tail; veRL continues as PID=$VERL_PID)"
 tail -f "$VERL_LOG"

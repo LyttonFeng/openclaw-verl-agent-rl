@@ -93,6 +93,70 @@ def _history_path(data_root: Path, session_id: str) -> Path:
     return data_root / "agent" / "sessions" / session_id / "history.json"
 
 
+def _load_task_workspace_files(task_id: str) -> list[dict[str, str]]:
+    """Read task YAML frontmatter to get input files list.
+
+    Each task .md has frontmatter like:
+        workspace_files:
+          - source: meetings/foo-transcript.md
+            dest: transcript.md
+
+    Returns list of {"source": abs_path, "dest": basename} dicts.
+    The dataset's extra_info is missing this field, so we resolve from task_id.
+    """
+    pinchbench_dir = os.environ.get("PINCHBENCH_DIR", "/workspace/openclaw-verl-agent-rl")
+    task_file = Path(pinchbench_dir) / "pinchbench_tasks" / "meeting_analysis" / f"{task_id}.md"
+    if not task_file.exists():
+        return []
+    try:
+        content = task_file.read_text(encoding="utf-8")
+        # Extract YAML frontmatter between --- markers
+        if not content.startswith("---"):
+            return []
+        end = content.find("\n---", 4)
+        if end < 0:
+            return []
+        fm = content[4:end]
+        # Tiny YAML parser for workspace_files list — avoid pyyaml dep
+        files: list[dict[str, str]] = []
+        in_block = False
+        cur: dict[str, str] = {}
+        for line in fm.splitlines():
+            if line.startswith("workspace_files:"):
+                in_block = True
+                continue
+            if in_block:
+                stripped = line.strip()
+                if not line.startswith(" ") and stripped:
+                    # Top-level key — exit block
+                    in_block = False
+                    if cur:
+                        files.append(cur); cur = {}
+                    continue
+                if stripped.startswith("- source:"):
+                    if cur:
+                        files.append(cur); cur = {}
+                    cur["source"] = stripped[len("- source:"):].strip()
+                elif stripped.startswith("dest:"):
+                    cur["dest"] = stripped[len("dest:"):].strip()
+                elif stripped.startswith("source:"):
+                    cur["source"] = stripped[len("source:"):].strip()
+        if cur:
+            files.append(cur)
+        # Resolve source paths to absolute (relative to assets/)
+        assets_dir = Path(pinchbench_dir) / "assets"
+        resolved: list[dict[str, str]] = []
+        for f in files:
+            if "source" in f and "dest" in f:
+                src = Path(f["source"])
+                if not src.is_absolute():
+                    src = assets_dir / f["source"]
+                resolved.append({"source": str(src), "dest": f["dest"]})
+        return resolved
+    except Exception:
+        return []
+
+
 def _load_history(path: Path) -> list[dict[str, Any]]:
     """Read jiuwenclaw session history.json, retrying on partial writes."""
     for _ in range(4):
@@ -112,47 +176,93 @@ async def _run_one_ws_session(
     prompt: str,
     timeout_seconds: float,
     request_id: str,
+    connect_retries: int = 60,
+    connect_retry_delay: float = 4.0,
 ) -> tuple[str, bool]:
     """Send one chat.send and wait for chat.final or chat.error.
+
+    Retries the initial WS connect — veRL launches agent_loop workers
+    BEFORE vLLM HTTP fully readies (Training Progress prints at 0/24 while
+    CUDA graphs are still being captured), and the Path A launcher's
+    headless jiuwenclaw only comes up after the `LLMServerManager:` line
+    appears (~1–2 min in). So agent_loop's first run() can fire when
+    nothing is listening on the WS port yet. Default: 60 retries × 4s =
+    240s grace window covers the entire bootstrap.
 
     Returns: (status, timed_out)
     status ∈ {success, error, timeout}
     """
     start = time.time()
+    # Retry WS connect (jiuwenclaw may still be coming up)
+    ws = None
+    last_connect_err: Optional[Exception] = None
+    for attempt in range(connect_retries):
+        try:
+            ws = await websockets.connect(ws_url, max_size=30_000_000)
+            break
+        except Exception as e:  # noqa: BLE001
+            last_connect_err = e
+            if attempt < connect_retries - 1:
+                await asyncio.sleep(connect_retry_delay)
+    if ws is None:
+        logger.warning("jiuwenclaw WS connect failed after %d retries to %s: %r",
+                       connect_retries, ws_url, last_connect_err)
+        return "error", False
     try:
-        async with websockets.connect(ws_url, max_size=30_000_000) as ws:
-            req = {
-                "type": "req",
-                "id": request_id,
-                "method": "chat.send",
-                "params": {"session_id": session_id, "content": prompt},
-            }
-            await ws.send(json.dumps(req, ensure_ascii=False))
-            while True:
-                remaining = timeout_seconds - (time.time() - start)
-                if remaining <= 0:
-                    return "timeout", True
-                raw = await asyncio.wait_for(ws.recv(), timeout=min(20.0, max(0.1, remaining)))
-                data = json.loads(raw)
-                t = data.get("type")
-                if t == "res" and data.get("id") == request_id:
-                    if not data.get("ok", False):
-                        return "error", False
-                    continue
-                if t != "event":
-                    continue
-                payload = data.get("payload") or {}
-                if str(payload.get("session_id") or "") != session_id:
-                    continue
-                ev = data.get("event")
-                if ev == "chat.error":
+        req = {
+            "type": "req",
+            "id": request_id,
+            "method": "chat.send",
+            # enable_memory=False alone is silently ignored (jiuwenclaw
+            # gateway_normalize.py:128 requires all three flags). Setting the
+            # avatar/group flags is what actually disables memory writes.
+            "params": {
+                "session_id": session_id,
+                "content": prompt,
+                "enable_memory": False,
+                "group_digital_avatar": True,
+                "is_group_chat": True,
+            },
+        }
+        await ws.send(json.dumps(req, ensure_ascii=False))
+        got_any_event = False
+        while True:
+            remaining = timeout_seconds - (time.time() - start)
+            if remaining <= 0:
+                return "timeout", True
+            # Cold-start: jiuwenclaw needs 25-40s to load identity / memory
+            # before first event. Old 20s cap caused fake-dead 假死 timeouts:
+            # trajectory abort → status=timeout, history_len=0, 50% empty batch.
+            # Use 120s before first event, 45s for inter-event gaps.
+            inner_to = min(120.0 if not got_any_event else 45.0, max(0.1, remaining))
+            raw = await asyncio.wait_for(ws.recv(), timeout=inner_to)
+            got_any_event = True
+            data = json.loads(raw)
+            t = data.get("type")
+            if t == "res" and data.get("id") == request_id:
+                if not data.get("ok", False):
                     return "error", False
-                if ev == "chat.final":
-                    return "success", False
+                continue
+            if t != "event":
+                continue
+            payload = data.get("payload") or {}
+            if str(payload.get("session_id") or "") != session_id:
+                continue
+            ev = data.get("event")
+            if ev == "chat.error":
+                return "error", False
+            if ev == "chat.final":
+                return "success", False
     except asyncio.TimeoutError:
         return "timeout", True
-    except Exception:
+    except Exception as e:  # noqa: BLE001
+        logger.warning("jiuwenclaw WS session error: %r", e)
         return "error", False
+    finally:
+        try:
+            await ws.close()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 class JiuwenClawAgentLoop(AgentLoopBase):
@@ -171,21 +281,43 @@ class JiuwenClawAgentLoop(AgentLoopBase):
     on the assembled trajectory (which knows the task_id from extra_info).
     """
 
-    # Class-level lock serializes rollouts that share the jiuwenclaw
-    # workspace dir (~/.jiuwenclaw/agent/jiuwenclaw_workspace/). The stack
-    # server hardcodes this path, so concurrent rollouts within one
-    # AgentLoopWorker process would race on it. Per-process workers can
-    # still parallelize because each has its own lock instance; if you set
-    # JIUWENCLAW_DATA_DIR per worker, the lock becomes a no-op contention-wise.
-    _workspace_lock: asyncio.Lock | None = None
+    # Multi-stack parallelism: per-stack lock + round-robin selection. Each
+    # stack has independent WS / workspace dir, so different stacks can run
+    # concurrently. Within one stack, lock serializes rollouts that share
+    # workspace. Stacks defined via env JIUWENCLAW_WS_URLS (comma list) and
+    # JIUWENCLAW_DATA_DIRS (comma list, matched by index). Falls back to
+    # single-stack mode if URLs list missing.
+    _stack_locks: dict[int, asyncio.Lock] | None = None
+    _stack_rr: int = 0
+    _stacks: list[tuple[str, Path]] | None = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.cfg = JiuwenWSConfig.from_env()
         # Tokenizer is needed for re-tokenizing assistant turns + tool results
         # so we can build response_mask. AgentLoopBase exposes it via self.tokenizer.
-        if type(self)._workspace_lock is None:
-            type(self)._workspace_lock = asyncio.Lock()
+        if type(self)._stacks is None:
+            urls = os.environ.get("JIUWENCLAW_WS_URLS", "").strip()
+            dirs = os.environ.get("JIUWENCLAW_DATA_DIRS", "").strip()
+            if urls and dirs:
+                url_list = [u.strip() for u in urls.split(",") if u.strip()]
+                dir_list = [Path(d.strip()).resolve() for d in dirs.split(",") if d.strip()]
+                if len(url_list) == len(dir_list):
+                    type(self)._stacks = list(zip(url_list, dir_list))
+            # Fallback: single stack from JiuwenWSConfig.from_env (legacy mode)
+            if type(self)._stacks is None:
+                type(self)._stacks = [(self.cfg.ws_url, self.cfg.data_root)]
+            type(self)._stack_locks = {i: asyncio.Lock() for i in range(len(type(self)._stacks))}
+            logger.info("JiuwenClawAgentLoop multi-stack: %d stacks: %s",
+                        len(type(self)._stacks), type(self)._stacks)
+
+    def _pick_stack(self) -> tuple[int, str, Path, asyncio.Lock]:
+        """Round-robin a stack for this rollout."""
+        cls = type(self)
+        idx = cls._stack_rr % len(cls._stacks)
+        cls._stack_rr += 1
+        ws_url, data_root = cls._stacks[idx]
+        return idx, ws_url, data_root, cls._stack_locks[idx]
 
     def _build_workspace(self, workspace_files: list[dict], target: Path) -> None:
         """Copy task workspace files into jiuwenclaw workspace dir.
@@ -394,25 +526,93 @@ class JiuwenClawAgentLoop(AgentLoopBase):
         # rollouts within one worker process would race. The lock makes this
         # safe at the cost of in-worker serial execution; parallelism still
         # comes from multiple AgentLoopWorker processes (each gets its own lock).
-        jc_workspace = self.cfg.data_root / "agent" / "jiuwenclaw_workspace"
+        # Pick a stack (round-robin). Each stack has independent WS + data_root.
+        stack_idx, stack_ws_url, stack_data_root, stack_lock = self._pick_stack()
+        jc_workspace = stack_data_root / "agent" / "jiuwenclaw_workspace"
         workspace_files = extra_info.get("workspace_files") or []
-        if type(self)._workspace_lock is None:
-            type(self)._workspace_lock = asyncio.Lock()
-        async with type(self)._workspace_lock:
+        # 训推一致 fix: dataset's extra_info doesn't carry workspace_files,
+        # so fallback to loading from task YAML frontmatter (same source bench
+        # harness uses). Otherwise model finds empty workspace, can't read
+        # transcript.md, just does <think> reasoning forever → reward=0.
+        if not workspace_files and task_id and task_id != "unknown":
+            workspace_files = _load_task_workspace_files(task_id)
+            if workspace_files:
+                logger.info("loaded %d workspace_files from task %s YAML",
+                            len(workspace_files), task_id)
+        async with stack_lock:
+            # 训推一致 fix: clean workspace BEFORE rollout to avoid leakage from
+            # previous rollout's files (each judge call should see only this
+            # rollout's writes).
+            if jc_workspace.exists():
+                for _it in jc_workspace.iterdir():
+                    try:
+                        if _it.is_file() or _it.is_symlink():
+                            _it.unlink()
+                        elif _it.is_dir():
+                            shutil.rmtree(_it)
+                    except Exception:
+                        pass
             self._build_workspace(workspace_files, jc_workspace)
             status, timed_out = await _run_one_ws_session(
-                ws_url=self.cfg.ws_url,
+                ws_url=stack_ws_url,
                 session_id=session_id,
                 prompt=user_content,
                 timeout_seconds=self.cfg.timeout_seconds,
                 request_id=request_id,
             )
             await asyncio.sleep(0.5)   # let jiuwenclaw flush final records
-            history = _load_history(_history_path(self.cfg.data_root, session_id))
+            history = _load_history(_history_path(stack_data_root, session_id))
+            # 训推一致 fix: snapshot workspace AFTER rollout, BEFORE releasing
+            # lock (otherwise next rollout clears jc_workspace). Pass snapshot
+            # path via extra_fields → reward.compute_score reads real files.
+            ws_snapshot = stack_data_root / "agent" / "sessions" / session_id / "ws_snapshot"
+            try:
+                if ws_snapshot.exists():
+                    shutil.rmtree(ws_snapshot)
+                ws_snapshot.parent.mkdir(parents=True, exist_ok=True)
+                if jc_workspace.exists():
+                    shutil.copytree(jc_workspace, ws_snapshot)
+                else:
+                    ws_snapshot.mkdir(parents=True, exist_ok=True)
+            except Exception as _e:
+                logger.warning("workspace snapshot failed: %s", _e)
+                ws_snapshot.mkdir(parents=True, exist_ok=True)
 
         response_ids, response_mask, num_turns = self._build_response_from_history(
             history, prompt_token_ids,
         )
+
+        # Truncate to veRL's max_response_length — otherwise long multi-turn
+        # jiuwenclaw sessions can accumulate >12k tokens, breaking veRL's
+        # _postprocess `torch.cat` which expects all rollouts padded to a
+        # uniform shape. Mirrors OpenClawAgentLoop's `[:response_length]`.
+        max_resp_len = int(self.rollout_config.response_length)
+        if len(response_ids) > max_resp_len:
+            logger.warning(
+                "jiuwenclaw response_ids %d > max_response_length %d, truncating",
+                len(response_ids), max_resp_len,
+            )
+            response_ids = response_ids[:max_resp_len]
+            response_mask = response_mask[:max_resp_len]
+
+        # veRL's _agent_loop_postprocess (line 575) does tokenizer.pad on
+        # response_ids and expects a tensor result. Empty list[int] makes pad
+        # return {"input_ids": []} (still a list), which then fails .dim().
+        # Emit a single EOS-as-placeholder so postprocess produces a valid
+        # (all-padding) tensor. mask=0 so it contributes nothing to training.
+        # Mirrors OpenClawAgentLoop's empty-response guard.
+        if not response_ids:
+            eos_id = self.tokenizer.eos_token_id or 0
+            logger.warning(
+                "jiuwenclaw run produced empty response_ids "
+                "(status=%s, timed_out=%s, history_len=%d) — emitting EOS placeholder",
+                status, timed_out, len(history),
+            )
+            response_ids = [eos_id]
+            response_mask = [0]
+        if not prompt_token_ids:
+            eos_id = self.tokenizer.eos_token_id or 0
+            prompt_token_ids = [eos_id]
 
         # reward_score is None — veRL trainer's reward_fn will compute it from
         # the full trajectory using compute_score (e.g., meeting_reward_single_turn
@@ -430,6 +630,13 @@ class JiuwenClawAgentLoop(AgentLoopBase):
                 "task_id": task_id,
                 "status": status,
                 "timed_out": timed_out,
-                "history_path": str(_history_path(self.cfg.data_root, session_id)),
+                "history_path": str(_history_path(stack_data_root, session_id)),
+                "stack_idx": stack_idx,
+                # 训推一致 fix: pass real workspace path + transcript so reward
+                # function (meeting_reward.py) reads actual files instead of
+                # judging raw response_str dummy summary. veRL's reward_manager
+                # merges extra_fields → extra_info before compute_score().
+                "workspace_path": str(ws_snapshot),
+                "transcript": history,
             },
         )

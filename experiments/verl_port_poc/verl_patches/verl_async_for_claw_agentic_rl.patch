@@ -1,0 +1,305 @@
+diff --git a/verl/checkpoint_engine/base.py b/verl/checkpoint_engine/base.py
+index 499e28a6..522d68b7 100644
+--- a/verl/checkpoint_engine/base.py
++++ b/verl/checkpoint_engine/base.py
+@@ -446,19 +446,27 @@ class CheckpointEngineManager:
+         self.build_process_group(rollout)
+ 
+         # 5. update weights of all workers
++        print("[DBG-CEM] step5: about to ray.get trainer+rollout update_weights", flush=True)
+         ray.get(trainer.update_weights(global_steps=global_steps) + rollout.update_weights(global_steps=global_steps))
++        print("[DBG-CEM] step5: ray.get returned", flush=True)
+ 
+         # 6. finalize all workers
++        print("[DBG-CEM] step6: about to ray.get finalize", flush=True)
+         ray.get(
+             trainer.execute_checkpoint_engine(["finalize"] * trainer.world_size)
+             + rollout.execute_checkpoint_engine(["finalize"] * rollout.world_size)
+         )
++        print("[DBG-CEM] step6: finalize returned", flush=True)
+ 
+         # 7. resume replicas to recover kv_cache (for free_cache_engine scenarios)
++        print("[DBG-CEM] step7: about to wake_up_replicas", flush=True)
+         await self.wake_up_replicas()
++        print("[DBG-CEM] step7: wake_up_replicas returned", flush=True)
+ 
+         # 8. resume all unfinished requests for partial rollout
++        print("[DBG-CEM] step8: about to resume_generation", flush=True)
+         await asyncio.gather(*[r.resume_generation() for r in self.replicas])
++        print("[DBG-CEM] step8: resume_generation returned", flush=True)
+ 
+ 
+ async def split_weight_chunks(
+diff --git a/verl/experimental/fully_async_policy/detach_utils.py b/verl/experimental/fully_async_policy/detach_utils.py
+index 9796d4cf..7e50ed49 100644
+--- a/verl/experimental/fully_async_policy/detach_utils.py
++++ b/verl/experimental/fully_async_policy/detach_utils.py
+@@ -159,7 +159,10 @@ def assemble_batch_from_rollout_samples(
+ 
+     param_version_start = final_batch.non_tensor_batch["min_global_steps"]
+     param_version_end = final_batch.non_tensor_batch["max_global_steps"]
+-    param_version_diff = [abs(a - b) for a, b in zip(param_version_end, param_version_start, strict=False)]
++    # Patch: vLLM standalone mode may leave these as None; treat None as 0 to avoid TypeError
++    _vs = [0 if v is None else v for v in param_version_start]
++    _ve = [0 if v is None else v for v in param_version_end]
++    param_version_diff = [abs(a - b) for a, b in zip(_ve, _vs, strict=False)]
+     num_diff0 = param_version_diff.count(0)
+     partial_stats = {
+         "fully_async/partial/total_partial_num": len(param_version_diff) - num_diff0,
+@@ -167,7 +170,7 @@ def assemble_batch_from_rollout_samples(
+         "fully_async/partial/max_partial_span": max(param_version_diff),
+     }
+     # add meta_info
+-    trajectory_param_versions = final_batch.non_tensor_batch["max_global_steps"]
++    trajectory_param_versions = [0 if v is None else v for v in final_batch.non_tensor_batch["max_global_steps"]]
+ 
+     final_batch.meta_info.update(
+         {
+diff --git a/verl/experimental/fully_async_policy/fully_async_rollouter.py b/verl/experimental/fully_async_policy/fully_async_rollouter.py
+index 00021c65..90d28939 100644
+--- a/verl/experimental/fully_async_policy/fully_async_rollouter.py
++++ b/verl/experimental/fully_async_policy/fully_async_rollouter.py
+@@ -263,13 +263,26 @@ class FullyAsyncRollouter(SeparateRayPPOTrainer):
+         Reset staleness samples after parameter update.
+         Returns timing_raw dictionary for metrics.
+         """
++        def _dbg(msg):
++            try:
++                with open('/tmp/dbg_rs.log', 'a') as _f:
++                    _f.write(repr(time.time()) + ' ' + msg + '\n')
++                    _f.flush()
++            except Exception:
++                pass
++        _dbg('reset_staleness entered, about to acquire lock')
+         async with self.lock:
++            _dbg('lock acquired')
+             self.paused = False
+-            # Wake the drain loop in _processor_worker so it can exit early and resume submitting
+-            # new samples to idle replicas instead of waiting for long-tail in-flight tasks.
+             self._resume_event.set()
+-            # every time param change, reset staleness_samples
+-            self.staleness_samples = len(self.active_tasks) + await self.message_queue_client.get_queue_size()
++            _dbg('resume_event set, about to await get_queue_size')
++            try:
++                qsz = await asyncio.wait_for(self.message_queue_client.get_queue_size(), timeout=30.0)
++                _dbg('get_queue_size returned: ' + str(qsz))
++            except asyncio.TimeoutError:
++                _dbg('get_queue_size TIMEOUT after 30s')
++                raise
++            self.staleness_samples = len(self.active_tasks) + qsz
+             timing_raw = {}
+             rollout_version_time = max(time.time() - self.step_start_time, 1e-6)
+             if self.idle_start_time > self.step_start_time:
+@@ -618,6 +631,21 @@ class FullyAsyncRollouter(SeparateRayPPOTrainer):
+         # Calling asynchronous generation methods
+         ret = await self.async_rollout_manager.generate_sequences_single(rollout_sample.full_batch)
+         rollout_sample.full_batch = ret
++        # === 训推一致 fix: drop all-empty trajectories (jiuwenclaw timeout
++        # placeholders with response_mask=0). Without this, trainer pulls
++        # them as valid samples, ZeroMaskFix forces mask=1 reward=0, leading
++        # to zero gradient + wasted step counter. ===
++        _rmask = ret.batch.get("response_mask") if hasattr(ret, "batch") else None
++        if _rmask is not None:
++            try:
++                _valid = int(_rmask.sum().item())
++                if _valid == 0:
++                    print(f"[RolloutFilter] dropping empty trajectory sample_id={rollout_sample.sample_id} (response_mask all zero)", flush=True)
++                    self.dropped_stale_samples += 1
++                    self.processed_sample_count += 1
++                    return
++            except Exception as _e:
++                print(f"[RolloutFilter] WARN check failed: {_e}", flush=True)
+         rollout_sample.full_batch.non_tensor_batch["uid"] = np.array(
+             [f"uid_{rollout_sample.sample_id}"] * len(rollout_sample.full_batch), dtype=object
+         )
+diff --git a/verl/experimental/fully_async_policy/fully_async_trainer.py b/verl/experimental/fully_async_policy/fully_async_trainer.py
+index 4edf5268..afdf305a 100644
+--- a/verl/experimental/fully_async_policy/fully_async_trainer.py
++++ b/verl/experimental/fully_async_policy/fully_async_trainer.py
+@@ -534,8 +534,10 @@ class FullyAsyncTrainer(SeparateRayPPOTrainer):
+         if self.local_trigger_step != 1:
+             return
+ 
++        print("[DBG-TR] about to call checkpoint_manager.update_weights", flush=True)
+         with marked_timer("timing_s/param_sync", self.timing_raw):
+             await self.checkpoint_manager.update_weights(global_steps=self.current_param_version)
++        print("[DBG-TR] checkpoint_manager.update_weights returned", flush=True)
+         print(
+             f"[FullyAsyncTrainer] _fit_update_weights, "
+             f"timing_s/param_sync: {self.timing_raw['timing_s/param_sync']:.4f} seconds "
+@@ -543,7 +545,9 @@ class FullyAsyncTrainer(SeparateRayPPOTrainer):
+         )
+ 
+         # Reset staleness in rollouter
++        print("[DBG-TR] about to await reset_staleness", flush=True)
+         timing_raw = await asyncio.wrap_future(self.rollouter.reset_staleness.remote().future())
++        print("[DBG-TR] reset_staleness returned", flush=True)
+         self.logger.log(
+             data=timing_raw,
+             step=self.current_param_version,
+diff --git a/verl/experimental/fully_async_policy/message_queue.py b/verl/experimental/fully_async_policy/message_queue.py
+index 8d419d36..1a7dc22c 100644
+--- a/verl/experimental/fully_async_policy/message_queue.py
++++ b/verl/experimental/fully_async_policy/message_queue.py
+@@ -23,7 +23,7 @@ from omegaconf import DictConfig
+ logger = logging.getLogger(__name__)
+ 
+ 
+-@ray.remote(num_cpus=2, max_concurrency=20)
++@ray.remote(num_cpus=0, max_concurrency=20)
+ class MessageQueue:
+     """
+     Simplified Ray-based asynchronous message queue for communication between Rollouter and Trainer
+@@ -51,6 +51,13 @@ class MessageQueue:
+         self.dropped_samples = 0
+ 
+         print(f"[MessageQueue] initialized with max_queue_size={max_queue_size}")
++        try:
++            import time as _t
++            with open('/tmp/dbg_mq.log', 'a') as _f:
++                _f.write(repr(_t.time()) + ' MessageQueue __init__ done max_queue_size=' + str(max_queue_size) + chr(10))
++                _f.flush()
++        except Exception:
++            pass
+ 
+     async def put_sample(self, sample: Any) -> bool:
+         """
+@@ -104,7 +111,18 @@ class MessageQueue:
+ 
+     async def get_queue_size(self) -> int:
+         """Get current queue length"""
++        try:
++            import time as _t
++            with open('/tmp/dbg_mq.log', 'a') as _f:
++                _f.write(repr(_t.time()) + ' get_queue_size called' + chr(10)); _f.flush()
++        except Exception:
++            pass
+         async with self._lock:
++            try:
++                with open('/tmp/dbg_mq.log', 'a') as _f:
++                    _f.write('  -> lock acquired, returning ' + str(len(self.queue)) + chr(10)); _f.flush()
++            except Exception:
++                pass
+             return len(self.queue)
+ 
+     async def get_statistics(self) -> dict[str, Any]:
+diff --git a/verl/experimental/separation/ray_trainer.py b/verl/experimental/separation/ray_trainer.py
+index 9f3e5270..80f43cd7 100644
+--- a/verl/experimental/separation/ray_trainer.py
++++ b/verl/experimental/separation/ray_trainer.py
+@@ -574,6 +574,63 @@ class SeparateRayPPOTrainer(RayPPOTrainer):
+             else:
+                 batch.batch["token_level_rewards"] = batch.batch["token_level_scores"]
+ 
++            # === Drop response_mask=all-zero rows to prevent NaN propagation ===
++            # Empty EOS placeholders (jiuwenclaw timeout) have response_mask all 0.
++            # log_prob compute on these div-by-zero → NaN → poisons entire batch loss.
++            # Zero out their rewards so they don't contribute to advantage computation;
++            # token_level_rewards on response_mask=0 positions are masked out anyway,
++            # but compute_advantage normalizes by sum which can div-by-zero with all-empty group.
++            try:
++                _resp_mask = batch.batch.get("response_mask")
++                if _resp_mask is not None:
++                    _valid_per_row = _resp_mask.sum(dim=-1)
++                    _zero_rows = (_valid_per_row == 0).sum().item()
++                    if _zero_rows > 0:
++                        # Force minimum 1 valid token by setting first response token mask=1 with reward=0
++                        _zero_idx = (_valid_per_row == 0).nonzero(as_tuple=True)[0]
++                        for _i in _zero_idx.tolist():
++                            batch.batch["response_mask"][_i, 0] = 1
++                            batch.batch["token_level_rewards"][_i, 0] = 0.0
++                            if "token_level_scores" in batch.batch:
++                                batch.batch["token_level_scores"][_i, 0] = 0.0
++                        print(f"[ZeroMaskFix] forced 1 valid token on {_zero_rows} all-empty rows to prevent NaN", flush=True)
++                        metrics["filter/zero_mask_rows"] = _zero_rows
++            except Exception as _e:
++                print(f"[ZeroMaskFix] WARN: {_e}", flush=True)
++
++            # === GRPO race-to-bottom quality filter ===
++            # If group_max(reward) < 0.4, zero out token_level_rewards for that group
++            # so GRPO advantage = 0, no learning signal. This prevents the model from
++            # imitating lazy/garbage samples that happened to win within a low-reward group.
++            try:
++
++                _n_repeat = int(self.config.actor_rollout_ref.rollout.n)
++                _traj_rewards = batch.batch["token_level_rewards"].sum(dim=-1).cpu().numpy()
++                _num_groups = len(_traj_rewards) // _n_repeat
++                _dropped = 0
++                _to_zero = []
++                for _g in range(_num_groups):
++                    _lo = _g * _n_repeat
++                    _hi = _lo + _n_repeat
++                    _group_max = _traj_rewards[_lo:_hi].max()
++                    if _group_max < 0.05:
++                        _to_zero.append((_lo, _hi))
++                        _dropped += 1
++                # Fallback: if filter would drop >50% of groups, don't apply (avoid noop training)
++                if _dropped / max(_num_groups, 1) > 0.5:
++                    print(f"[QualityFilter] SKIPPED: {_dropped}/{_num_groups} too many to drop (>50%), preserving signal", flush=True)
++                    _dropped = 0
++                else:
++                    for _lo, _hi in _to_zero:
++                        batch.batch["token_level_rewards"][_lo:_hi] = 0
++                    print(f"[QualityFilter] race-to-bottom: {_dropped}/{_num_groups} groups dropped (max_reward<0.05)", flush=True)
++                metrics["filter/race_to_bottom_groups"] = _dropped
++                metrics["filter/total_groups"] = _num_groups
++                metrics["filter/race_to_bottom_ratio"] = _dropped / max(_num_groups, 1)
++            except Exception as _e:
++                print(f"[QualityFilter] WARN: filter failed: {_e}", flush=True)
++            # === end filter ===
++
+             # Compute rollout correction: IS weights, rejection sampling, and metrics
+             # Only runs in decoupled mode (computes once per batch using stable π_old)
+             # In bypass mode, this is skipped - actor computes metrics from evolving π_θ vs π_rollout
+diff --git a/verl/workers/engine/fsdp/transformer_impl.py b/verl/workers/engine/fsdp/transformer_impl.py
+index 657d3e2e..d5502033 100644
+--- a/verl/workers/engine/fsdp/transformer_impl.py
++++ b/verl/workers/engine/fsdp/transformer_impl.py
+@@ -744,9 +744,44 @@ class FSDPEngine(BaseEngine):
+         max_ckpt_to_keep: Optional[int] = None,
+         **kwargs,
+     ) -> None:
+-        """
+-        Save FSDP checkpoint, handling parameter offload as needed.
+-        """
++        # _pinchbench_lora_only_inlined: write only LoRA adapter (130 MB)
++        # to avoid MooseFS truncating 8 GB FSDP shards on RunPod.
++        if os.environ.get("PINCHBENCH_LORA_ONLY_CKPT", "").strip().lower() in ("1", "true", "yes", "on") and getattr(self, "_is_lora", False):
++            import json as _json
++            import sys as _sys
++            from dataclasses import asdict as _asdict
++            from pathlib import Path as _Path
++            from safetensors.torch import save_file as _save_file
++            from verl.utils.fsdp_utils import collect_lora_params as _collect_lora_params
++            if self._is_offload_param:
++                load_fsdp_model_to_gpu(self.module)
++            _peft_model = getattr(self.module, "_fsdp_wrapped_module", self.module)
++            _peft_cfg = {}
++            if torch.distributed.get_rank() == 0 and hasattr(_peft_model, "peft_config"):
++                _cfg = _peft_model.peft_config.get("default", None)
++                if _cfg is not None:
++                    _peft_cfg = _asdict(_cfg)
++                    if hasattr(_peft_cfg.get("task_type"), "value"):
++                        _peft_cfg["task_type"] = _peft_cfg["task_type"].value
++                    if hasattr(_peft_cfg.get("peft_type"), "value"):
++                        _peft_cfg["peft_type"] = _peft_cfg["peft_type"].value
++                    if isinstance(_peft_cfg.get("target_modules"), set):
++                        _peft_cfg["target_modules"] = list(_peft_cfg["target_modules"])
++            _lora_params = _collect_lora_params(module=self.module, layered_summon=False, base_sync_done=True)
++            if torch.distributed.get_rank() == 0:
++                _out = _Path(local_path) / "lora_adapter"
++                _out.mkdir(parents=True, exist_ok=True)
++                if not _lora_params:
++                    raise RuntimeError("LoRA collection returned 0 tensors")
++                _cpu = {k: v.detach().contiguous().cpu() for k, v in _lora_params.items()}
++                _save_file(_cpu, str(_out / "adapter_model.safetensors"))
++                with (_out / "adapter_config.json").open("w", encoding="utf-8") as f:
++                    _json.dump(_peft_cfg, f, ensure_ascii=False, indent=2)
++                print(f"[lora_only_ckpt] step={global_step} wrote {len(_lora_params)} tensors -> {_out}", file=_sys.stderr)
++            torch.distributed.barrier()
++            if self._is_offload_param:
++                offload_fsdp_model_to_cpu(self.module)
++            return
+         origin_module_device = next(self.module.parameters()).device.type
+         if self._is_offload_param or origin_module_device == "cpu":
+             load_fsdp_model_to_gpu(self.module)

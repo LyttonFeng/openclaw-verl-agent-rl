@@ -39,10 +39,18 @@ GATEWAY_PORT="${GATEWAY_PORT:-19001}"    # internal gateway service port (defaul
 JIUWENCLAW_DATA_DIR="${JIUWENCLAW_DATA_DIR:-$HOME/.jiuwenclaw}"
 LOG_DIR="${LOG_DIR:-/tmp/jw_headless}"
 JIUWENCLAW_REPO="${JIUWENCLAW_REPO:-/root/jiuwen_work/jiuwenclaw}"
+# Cap jiuwenclaw ReAct iterations (default 15 in jiuwenclaw; 40-turn long-tail
+# trajectories in v50 wasted GPU). Maps to MAX_ITERATIONS env in
+# app_web_handlers.py:304.
+MAX_ITERATIONS="${MAX_ITERATIONS:-8}"
 JW_VENV_PY="${JW_VENV_PY:-$JIUWENCLAW_REPO/.venv/bin/python}"
 
 mkdir -p "$LOG_DIR" "$JIUWENCLAW_DATA_DIR"
 TS=$(date +%Y%m%d_%H%M%S)
+# Note: we intentionally do NOT seed identity files (SOUL/IDENTITY/HEARTBEAT/USER).
+# jiuwenclaw runs without persona prompt and logs File not found warnings, but
+# trajectories still complete. Bench MUST use the same script (no seed) for
+# train/inference consistency — see bench_jw_async.sh.
 
 if [ ! -x "$JW_VENV_PY" ]; then
   echo "[headless] FATAL: $JW_VENV_PY not executable. Set JW_VENV_PY." >&2
@@ -77,6 +85,8 @@ WEB_PATH=/ws
 GATEWAY_PORT=${GATEWAY_PORT}
 # Per-instance workspace dir (avoid clashing with concurrent stacks)
 JIUWENCLAW_DATA_DIR=${JIUWENCLAW_DATA_DIR}
+# Cap ReAct iterations per chat.send (default 15)
+MAX_ITERATIONS=${MAX_ITERATIONS}
 EOF
 echo "[headless] dotenv: $ENV_FILE"
 
@@ -88,7 +98,7 @@ cd "$JIUWENCLAW_REPO"
 export API_BASE API_KEY MODEL_NAME MODEL_PROVIDER
 export AGENT_SERVER_HOST=127.0.0.1
 export AGENT_SERVER_PORT WEB_PORT="$WS_PORT" WEB_HOST=0.0.0.0 WEB_PATH=/ws
-export GATEWAY_PORT JIUWENCLAW_DATA_DIR
+export GATEWAY_PORT JIUWENCLAW_DATA_DIR MAX_ITERATIONS
 
 # Also drop a .env at the standard location so jiuwenclaw's own bootstrap
 # (which auto-creates $DATA_DIR/config/) picks it up.
