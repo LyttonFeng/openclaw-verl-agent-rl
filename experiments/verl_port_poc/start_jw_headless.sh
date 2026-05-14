@@ -28,6 +28,9 @@
 #   JIUWENCLAW_REPO       default /root/jiuwen_work/jiuwenclaw
 set -euo pipefail
 
+# Resolve script dir BEFORE any cd (later we cd into $JIUWENCLAW_REPO)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 : "${API_BASE:?Set API_BASE (external vLLM, e.g. http://127.0.0.1:8000/v1)}"
 : "${MODEL_NAME:?Set MODEL_NAME (must match served_model_name on the external vLLM)}"
 : "${API_KEY:=dummy}"
@@ -149,7 +152,7 @@ echo "[headless] launching jiuwenclaw.app -> $LOG"
 # imports our monkey-patch (DeepAgent.configure → also adds RLOnlineRail
 # when USE_RL_ONLINE_RAIL=1). Colleague's Rail isn't auto-wired into the
 # normal stack; this is the activation hook.
-INJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INJECT_DIR="$SCRIPT_DIR"
 export PYTHONPATH="${INJECT_DIR}${PYTHONPATH:+:$PYTHONPATH}"
 echo "[headless] PYTHONPATH=$PYTHONPATH USE_RL_ONLINE_RAIL=$USE_RL_ONLINE_RAIL TRAJECTORY_GATEWAY_URL=$TRAJECTORY_GATEWAY_URL"
 
