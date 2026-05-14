@@ -76,9 +76,19 @@ class JiuwenWSConfig:
     data_root: Path = Path.home() / ".jiuwenclaw"
     timeout_seconds: float = 600.0
     max_session_retries: int = 2
+    # Online RL Rail: when True, build (response_ids, response_mask, logprobs)
+    # from rail-v1 PerTurnSample JSONL files written by colleague's RLOnlineRail
+    # via TrajectoryUploader → mock_trajectory_gateway. Bypasses history.json
+    # reverse-engineering. Requires USE_RL_ONLINE_RAIL=1 in the jiuwenclaw stack.
+    use_rail_v1: bool = False
+    rail_v1_dir: Path = Path("/tmp/jw_rail_v1")
+    rail_v1_wait_seconds: float = 15.0
 
     @classmethod
     def from_env(cls) -> "JiuwenWSConfig":
+        use_rail_v1 = os.environ.get("USE_RL_ONLINE_RAIL", "").strip().lower() in (
+            "1", "true", "yes", "on",
+        )
         return cls(
             ws_url=os.environ.get("JIUWENCLAW_WS_URL", "ws://127.0.0.1:611/ws"),
             data_root=Path(
@@ -86,6 +96,9 @@ class JiuwenWSConfig:
             ).resolve(),
             timeout_seconds=float(os.environ.get("JIUWENCLAW_TIMEOUT", "600")),
             max_session_retries=int(os.environ.get("JIUWENCLAW_MAX_RETRIES", "2")),
+            use_rail_v1=use_rail_v1,
+            rail_v1_dir=Path(os.environ.get("RAIL_V1_DIR", "/tmp/jw_rail_v1")),
+            rail_v1_wait_seconds=float(os.environ.get("RAIL_V1_WAIT_S", "15")),
         )
 
 
@@ -167,6 +180,135 @@ def _load_history(path: Path) -> list[dict[str, Any]]:
         except Exception:
             time.sleep(0.15)
     return []
+
+
+def _load_rail_v1_samples(
+    rail_dir: Path, session_id: str, wait_seconds: float = 15.0
+) -> list[dict[str, Any]]:
+    """Find PerTurnSamples for a given session_id from gateway JSONL output.
+
+    The gateway writes one file per trajectory_id (jiuwenclaw UUID). trajectory_id
+    is jiuwenclaw-internal — we don't know it, so we scan files for matches on
+    session_id. Poll with backoff because TrajectoryUploader is async (POST
+    happens AFTER trajectory.run_evolution completes, may lag a few seconds).
+
+    Returns samples sorted by step_index. Empty list if nothing found within
+    wait_seconds.
+    """
+    if not rail_dir.exists():
+        return []
+    deadline = time.time() + wait_seconds
+    while time.time() < deadline:
+        matches: list[dict[str, Any]] = []
+        try:
+            for path in sorted(rail_dir.glob("*.jsonl")):
+                try:
+                    with path.open("r", encoding="utf-8") as f:
+                        # Cheap pre-filter: skip files that don't mention our session_id
+                        head = f.read(2048)
+                        if session_id not in head and not head:
+                            continue
+                        f.seek(0)
+                        for line in f:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            try:
+                                sample = json.loads(line)
+                            except Exception:
+                                continue
+                            if str(sample.get("session_id") or "") == session_id:
+                                matches.append(sample)
+                except FileNotFoundError:
+                    continue
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        if matches:
+            matches.sort(key=lambda s: int(s.get("step_index") or 0))
+            return matches
+        time.sleep(0.5)
+    return []
+
+
+def _build_response_from_rail_samples(
+    samples: list[dict[str, Any]],
+    eos_token_id: int,
+) -> tuple[list[int], list[int], list[int], list[float], int]:
+    """Build (prompt_ids, response_ids, response_mask, logprobs, num_turns) from rail samples.
+
+    Strategy: prompt_ids comes from samples[0].prompt_ids (the *actual* prompt
+    vLLM saw — train-inference consistent). Between turns, the model gets
+    additional tokens (tool results, system reminders) which appear at the
+    head of samples[i+1].prompt_ids beyond samples[i].prompt_ids +
+    samples[i].response_tokens. We mark those as mask=0 (model didn't generate
+    them) and the assistant tokens as mask=1.
+
+    Args:
+        samples: PerTurnSample list sorted by step_index.
+        eos_token_id: emitted if samples is empty.
+
+    Returns:
+        prompt_ids: list[int]   the initial prompt vLLM consumed (turn 0)
+        response_ids: list[int] all subsequent tokens: turn 0 response +
+                                (tool gap + turn 1 response) + ...
+        response_mask: list[int] 1 for assistant-generated, 0 for inter-turn
+                                 tool/system tokens
+        logprobs: list[float]    aligned with response_ids; 0.0 for mask=0 tokens
+        num_turns: int           len(samples)
+    """
+    if not samples:
+        return [eos_token_id], [eos_token_id], [0], [0.0], 0
+
+    s0 = samples[0]
+    prompt_ids: list[int] = [int(x) for x in (s0.get("prompt_ids") or [])]
+    if not prompt_ids:
+        # Hard fallback — sample missing prompt_ids; we can't reconstruct
+        prompt_ids = [eos_token_id]
+
+    response_ids: list[int] = []
+    response_mask: list[int] = []
+    logprobs: list[float] = []
+
+    # End-of-turn cumulative token count (prompt + response so far)
+    cum_after_turn: list[int] = []
+
+    for i, sample in enumerate(samples):
+        s_prompt = [int(x) for x in (sample.get("prompt_ids") or [])]
+        s_resp = [int(x) for x in (sample.get("response_tokens") or [])]
+        s_lp = [float(x) for x in (sample.get("logprobs") or [])]
+        if len(s_lp) != len(s_resp):
+            # Pad / truncate to match response length (rail may report top_logprobs
+            # only; ensure 1:1 with response tokens, missing → 0.0)
+            if len(s_lp) < len(s_resp):
+                s_lp = s_lp + [0.0] * (len(s_resp) - len(s_lp))
+            else:
+                s_lp = s_lp[: len(s_resp)]
+
+        if i > 0:
+            # New tokens at head of this turn's prompt_ids beyond what model saw
+            # at end of previous turn = tool result / system reminder gap.
+            prev_end = cum_after_turn[i - 1]
+            gap = s_prompt[prev_end:] if len(s_prompt) > prev_end else []
+            if gap:
+                response_ids.extend(gap)
+                response_mask.extend([0] * len(gap))
+                logprobs.extend([0.0] * len(gap))
+
+        # This turn's assistant tokens
+        response_ids.extend(s_resp)
+        response_mask.extend([1] * len(s_resp))
+        logprobs.extend(s_lp)
+
+        cum_after_turn.append(len(s_prompt) + len(s_resp))
+
+    if not response_ids:
+        response_ids = [eos_token_id]
+        response_mask = [0]
+        logprobs = [0.0]
+
+    return prompt_ids, response_ids, response_mask, logprobs, len(samples)
 
 
 async def _run_one_ws_session(
@@ -578,9 +720,45 @@ class JiuwenClawAgentLoop(AgentLoopBase):
                 logger.warning("workspace snapshot failed: %s", _e)
                 ws_snapshot.mkdir(parents=True, exist_ok=True)
 
-        response_ids, response_mask, num_turns = self._build_response_from_history(
-            history, prompt_token_ids,
-        )
+        # Path A: rail-v1 (preferred) — read PerTurnSamples from the gateway
+        # output dir. Each sample is what vLLM actually saw + generated, so
+        # token_ids / logprobs are train-inference consistent. No
+        # reverse-engineering history.json's chunked event stream.
+        # Path B: legacy history.json reverse-engineering (fallback).
+        rail_samples: list[dict[str, Any]] = []
+        rail_response_logprobs: list[float] = []
+        if self.cfg.use_rail_v1:
+            rail_samples = _load_rail_v1_samples(
+                self.cfg.rail_v1_dir,
+                session_id,
+                wait_seconds=self.cfg.rail_v1_wait_seconds,
+            )
+            if rail_samples:
+                eos_id = self.tokenizer.eos_token_id or 0
+                (
+                    prompt_token_ids,
+                    response_ids,
+                    response_mask,
+                    rail_response_logprobs,
+                    num_turns,
+                ) = _build_response_from_rail_samples(rail_samples, eos_id)
+                logger.info(
+                    "rail-v1: built response from %d samples session=%s "
+                    "prompt_len=%d response_len=%d num_turns=%d",
+                    len(rail_samples), session_id,
+                    len(prompt_token_ids), len(response_ids), num_turns,
+                )
+            else:
+                logger.warning(
+                    "rail-v1: no samples found for session=%s within %.1fs "
+                    "(rail_dir=%s) — falling back to history.json",
+                    session_id, self.cfg.rail_v1_wait_seconds, self.cfg.rail_v1_dir,
+                )
+
+        if not rail_samples:
+            response_ids, response_mask, num_turns = self._build_response_from_history(
+                history, prompt_token_ids,
+            )
 
         # Truncate to veRL's max_response_length — otherwise long multi-turn
         # jiuwenclaw sessions can accumulate >12k tokens, breaking veRL's
@@ -594,6 +772,8 @@ class JiuwenClawAgentLoop(AgentLoopBase):
             )
             response_ids = response_ids[:max_resp_len]
             response_mask = response_mask[:max_resp_len]
+            if rail_response_logprobs:
+                rail_response_logprobs = rail_response_logprobs[:max_resp_len]
 
         # veRL's _agent_loop_postprocess (line 575) does tokenizer.pad on
         # response_ids and expects a tensor result. Empty list[int] makes pad
@@ -617,11 +797,24 @@ class JiuwenClawAgentLoop(AgentLoopBase):
         # reward_score is None — veRL trainer's reward_fn will compute it from
         # the full trajectory using compute_score (e.g., meeting_reward_single_turn
         # adapted for jiuwenclaw transcripts).
+        # Pad logprobs to match response_ids length if rail-v1 was used.
+        # rail_response_logprobs may be shorter than response_ids if truncation
+        # / empty-rollout placeholders adjusted the latter — keep them aligned.
+        response_logprobs = None
+        if rail_response_logprobs:
+            if len(rail_response_logprobs) < len(response_ids):
+                rail_response_logprobs = rail_response_logprobs + [0.0] * (
+                    len(response_ids) - len(rail_response_logprobs)
+                )
+            elif len(rail_response_logprobs) > len(response_ids):
+                rail_response_logprobs = rail_response_logprobs[: len(response_ids)]
+            response_logprobs = rail_response_logprobs
+
         return AgentLoopOutput(
             prompt_ids=prompt_token_ids,
             response_ids=response_ids,
             response_mask=response_mask,
-            response_logprobs=None,
+            response_logprobs=response_logprobs,
             reward_score=None,
             num_turns=num_turns,
             metrics=AgentLoopMetrics(),
@@ -632,6 +825,9 @@ class JiuwenClawAgentLoop(AgentLoopBase):
                 "timed_out": timed_out,
                 "history_path": str(_history_path(stack_data_root, session_id)),
                 "stack_idx": stack_idx,
+                # rail-v1 metadata (None when use_rail_v1=False or no samples found)
+                "rail_v1_samples": len(rail_samples) if rail_samples else 0,
+                "rail_v1_used": bool(rail_samples),
                 # 训推一致 fix: pass real workspace path + transcript so reward
                 # function (meeting_reward.py) reads actual files instead of
                 # judging raw response_str dummy summary. veRL's reward_manager
