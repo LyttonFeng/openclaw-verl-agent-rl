@@ -1,11 +1,11 @@
 # OpenClaw vs JiuwenClaw —— 作为 Claw Runtime for RL Training 的对比
 
-写给 jiuwenclaw 团队的工程同事。基于本仓库两条已落地分支的实测对比：
+写给 jiuwenclaw 团队同事。基于本仓库两条已落地分支的实测对比：
 
 - `experiment/verl-port` —— OpenClaw runtime + veRL GRPO（**已跑通**，main baseline 47.8% mean on 5 meeting test tasks）
 - `jiuwenclaw-agent-loop-impl` —— JiuwenClaw runtime + veRL async GRPO（**未跑通到出 LoRA**，本次夜跑 v32→v50 一路 patch 但 critic score 仍在退化）
 
-目标：让工程同事看清楚 JiuwenClaw 用于 RL 训练时差在哪里，需要在 runtime 侧改什么才能让它真正能训。
+目标：让同事看清楚 JiuwenClaw 用于 RL 训练时差在哪里，需要在 runtime 侧改什么才能让它真正能训。
 
 ---
 
@@ -418,7 +418,7 @@ rewards/meeting_reward.py:compute_score(
 
 ---
 
-## 5. 给 jiuwenclaw 工程同事的建议（按优先级）
+## 5. 给 jiuwenclaw 团队同事的建议（按优先级）
 
 ### P0 —— 让 trajectory 可靠
 
