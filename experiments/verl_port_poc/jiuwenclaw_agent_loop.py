@@ -736,12 +736,34 @@ class JiuwenClawAgentLoop(AgentLoopBase):
             if rail_samples:
                 eos_id = self.tokenizer.eos_token_id or 0
                 (
-                    prompt_token_ids,
+                    rail_prompt_ids,
                     response_ids,
                     response_mask,
                     rail_response_logprobs,
                     num_turns,
                 ) = _build_response_from_rail_samples(rail_samples, eos_id)
+                # veRL's _postprocess (agent_loop.py:811) torch.cats prompt_ids
+                # across rollouts in a batch — all must share the same padded
+                # length (data.max_prompt_length). Jiuwenclaw prompts can hit
+                # 39k+ (SOUL+IDENTITY+34 tool defs), so left-truncate to the
+                # configured cap to keep batch shapes consistent. Note: logprobs
+                # captured by rail are conditioned on the *full* (untruncated)
+                # prompt vLLM actually saw, so trainer's recomputed logprobs
+                # will differ slightly from rail's — small importance-ratio
+                # drift, treated like staleness.
+                max_prompt_len = int(
+                    getattr(self.rollout_config, "prompt_length", 0)
+                    or getattr(self.rollout_config, "max_prompt_length", 0)
+                    or 20000
+                )
+                if len(rail_prompt_ids) > max_prompt_len:
+                    logger.warning(
+                        "rail-v1: prompt_ids %d > max_prompt_length %d, "
+                        "left-truncating (logprobs IS drift accepted)",
+                        len(rail_prompt_ids), max_prompt_len,
+                    )
+                    rail_prompt_ids = rail_prompt_ids[-max_prompt_len:]
+                prompt_token_ids = rail_prompt_ids
                 logger.info(
                     "rail-v1: built response from %d samples session=%s "
                     "prompt_len=%d response_len=%d num_turns=%d",
