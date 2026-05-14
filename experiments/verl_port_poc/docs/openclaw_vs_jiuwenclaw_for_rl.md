@@ -186,12 +186,6 @@ experiments/verl_port_poc/
 ├── launch_meeting_cispo_lora.sh           # CISPO 变种
 ├── launch_meeting_vanilla_lora_v2.sh      # baseline 对照
 └── run_bench_step{8,16}.sh                # bench LoRA on 5 test tasks
-
-# 外部依赖（pod 上）
-/workspace/verl_port/openclaw_integration/rl/
-├── agent_loop/config.yaml                 # openclaw_agent loop 注册
-├── agent_loop/openclaw_agent.py           # AgentLoopBase 子类
-└── train/reward_manager.py                # compute_score 入口
 ```
 
 OpenClaw 的 reward 直接读 CLI stdout，**训练 reward function 和 bench reward function 用同一字符串**，零 drift 风险。
@@ -230,15 +224,22 @@ experiments/verl_port_poc/
 rewards/meeting_reward.py                  # 读 workspace_path + transcript
                                            # 训和 bench 同一字符串 = 训推一致基础
 
-# 外部依赖（pod 上，同事接手后需自己装）
-/root/jiuwen_work/jiuwenclaw/              # jiuwenclaw runtime
-/root/jiuwen_work/pinchbench/              # bench harness（同事 fork，含 WS adapter）
-/root/.jiuwenclaw_{0,1}/                   # 每 stack 独立 JIUWENCLAW_DATA_DIR
+# veRL 侧 patches（统一 diff 已沉淀到本仓库）
+experiments/verl_port_poc/verl_patches/
+├── verl_async_for_claw_agentic_rl.patch   # 7 文件 unified diff (verl@8c3bee47)
+└── README.md                              # 每个 patch 的原因 + 验证 checklist
 ```
 
-### 4.1 veRL 侧必须打的 patch（pod `/root/verl/`，重启不要丢）
+### 4.1 veRL 侧必须打的 patch
 
-⚠️ **这些 patch 没在本仓库里**，因为是直接改 veRL 源码。同事接手时按下面四段贴回去：
+直接应用 `experiments/verl_port_poc/verl_patches/verl_async_for_claw_agentic_rl.patch`：
+
+```bash
+cd /path/to/verl  # 必须基于 commit 8c3bee47
+git apply /path/to/openclaw-verl-agent-rl/experiments/verl_port_poc/verl_patches/verl_async_for_claw_agentic_rl.patch
+```
+
+下面四段是其中关键 patch 的快速说明，详见 `verl_patches/README.md`：
 
 #### Patch ① `verl/experimental/fully_async_policy/message_queue.py:26`
 
@@ -474,4 +475,4 @@ JiuwenClaw 反过来是为"长 session、有记忆、多通道分发"优化的�
 
 短期内训得通的最小集，需要 runtime 侧做的最关键的事是 **P0 三项（stateless 模式 / status code / workspace API）**。其余 patch 可以继续放在训练侧，但 P0 不做的话每条 trajectory 都在跟 framework ceremony 较劲，永远训不快也训不稳。
 
-本仓库当前所有 patch 在 `jiuwenclaw-agent-loop-impl` 分支，veRL 侧 patch 在 pod `/root/verl/`，给同事接手时可作 baseline 继续往前推。
+本仓库当前所有 patch 在 `jiuwenclaw-agent-loop-impl` 分支（含 `verl_patches/verl_async_for_claw_agentic_rl.patch` —— 7 文件 veRL 统一 diff），给同事接手时可作 baseline 继续往前推。
