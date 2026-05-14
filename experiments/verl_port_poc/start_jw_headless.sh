@@ -43,10 +43,41 @@ JIUWENCLAW_REPO="${JIUWENCLAW_REPO:-/root/jiuwen_work/jiuwenclaw}"
 # trajectories in v50 wasted GPU). Maps to MAX_ITERATIONS env in
 # app_web_handlers.py:304.
 MAX_ITERATIONS="${MAX_ITERATIONS:-8}"
+
+# ─── RL stationary-env knobs (kill cross-trajectory drift) ───
+# These make jiuwenclaw stateless so the same prompt always gets the same
+# response distribution — required for RL convergence (stationary MDP).
+# Sourced from agent-core source audit (Explore agent report, 2026-05-14):
+#   - MEMORY_ENABLED=false  → kills memory.db writes, daily_memory writes,
+#                             and daily_memory injection into system prompt
+#                             (core/memory/lite/config.py:98 default is "true")
+# SkillEvolutionRail is NOT auto-registered in the normal stack (only source),
+# so no off-switch needed. File-op history is session-scoped, safe to ignore.
+MEMORY_ENABLED="${MEMORY_ENABLED:-false}"
+
+# ─── Online RL Rail (turn-level token/logprob extraction by colleague) ───
+# When enabled, jiuwenclaw injects RLOnlineRail which captures
+# completion_token_ids / prompt_token_ids / logprobs per model call and
+# uploads PerTurnSample batches to TRAJECTORY_GATEWAY_URL.
+# See openjiuwen/agent_evolving/agent_rl/online/rail/online_rail.py
+USE_RL_ONLINE_RAIL="${USE_RL_ONLINE_RAIL:-0}"
+TRAJECTORY_GATEWAY_URL="${TRAJECTORY_GATEWAY_URL:-http://127.0.0.1:9000}"
+
 JW_VENV_PY="${JW_VENV_PY:-$JIUWENCLAW_REPO/.venv/bin/python}"
 
 mkdir -p "$LOG_DIR" "$JIUWENCLAW_DATA_DIR"
 TS=$(date +%Y%m%d_%H%M%S)
+
+# Belt-and-suspenders: wipe any prior memory/daily_memory artifacts in this
+# data dir. MEMORY_ENABLED=false should prevent new writes, but stale files
+# from a previous run can still be read on boot.
+if [ -d "$JIUWENCLAW_DATA_DIR/agent/jiuwenclaw_workspace/memory" ]; then
+  rm -f "$JIUWENCLAW_DATA_DIR/agent/jiuwenclaw_workspace/memory/memory.db"* 2>/dev/null
+  rm -f "$JIUWENCLAW_DATA_DIR/agent/jiuwenclaw_workspace/memory/daily_memory/"*.md 2>/dev/null
+  rm -f "$JIUWENCLAW_DATA_DIR/agent/jiuwenclaw_workspace/MEMORY.md" 2>/dev/null
+  echo "[headless] wiped memory.db / daily_memory / MEMORY.md for stationary RL env"
+fi
+
 # Note: we intentionally do NOT seed identity files (SOUL/IDENTITY/HEARTBEAT/USER).
 # jiuwenclaw runs without persona prompt and logs File not found warnings, but
 # trajectories still complete. Bench MUST use the same script (no seed) for
@@ -87,6 +118,11 @@ GATEWAY_PORT=${GATEWAY_PORT}
 JIUWENCLAW_DATA_DIR=${JIUWENCLAW_DATA_DIR}
 # Cap ReAct iterations per chat.send (default 15)
 MAX_ITERATIONS=${MAX_ITERATIONS}
+# Kill cross-trajectory drift: memory.db + daily_memory writes/reads OFF
+MEMORY_ENABLED=${MEMORY_ENABLED}
+# Online RL Rail (turn-level token/logprob extraction → gateway upload)
+USE_RL_ONLINE_RAIL=${USE_RL_ONLINE_RAIL}
+TRAJECTORY_GATEWAY_URL=${TRAJECTORY_GATEWAY_URL}
 EOF
 echo "[headless] dotenv: $ENV_FILE"
 
@@ -99,6 +135,7 @@ export API_BASE API_KEY MODEL_NAME MODEL_PROVIDER
 export AGENT_SERVER_HOST=127.0.0.1
 export AGENT_SERVER_PORT WEB_PORT="$WS_PORT" WEB_HOST=0.0.0.0 WEB_PATH=/ws
 export GATEWAY_PORT JIUWENCLAW_DATA_DIR MAX_ITERATIONS
+export MEMORY_ENABLED USE_RL_ONLINE_RAIL TRAJECTORY_GATEWAY_URL
 
 # Also drop a .env at the standard location so jiuwenclaw's own bootstrap
 # (which auto-creates $DATA_DIR/config/) picks it up.
@@ -107,7 +144,16 @@ cp -f "$ENV_FILE" "$JIUWENCLAW_DATA_DIR/config/.env"
 
 LOG="$LOG_DIR/jw_app_$TS.log"
 echo "[headless] launching jiuwenclaw.app -> $LOG"
-nohup "$JW_VENV_PY" -m jiuwenclaw.app --dotenv "$ENV_FILE" \
+
+# RLOnlineRail injection: launch jiuwenclaw.app through a wrapper that first
+# imports our monkey-patch (DeepAgent.configure → also adds RLOnlineRail
+# when USE_RL_ONLINE_RAIL=1). Colleague's Rail isn't auto-wired into the
+# normal stack; this is the activation hook.
+INJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH="${INJECT_DIR}${PYTHONPATH:+:$PYTHONPATH}"
+echo "[headless] PYTHONPATH=$PYTHONPATH USE_RL_ONLINE_RAIL=$USE_RL_ONLINE_RAIL TRAJECTORY_GATEWAY_URL=$TRAJECTORY_GATEWAY_URL"
+
+nohup "$JW_VENV_PY" "$INJECT_DIR/run_jw_app_with_rl_rail.py" --dotenv "$ENV_FILE" \
   > "$LOG" 2>&1 &
 APP_PID=$!
 echo "$APP_PID" > "$LOG_DIR/jw_app.pid"
