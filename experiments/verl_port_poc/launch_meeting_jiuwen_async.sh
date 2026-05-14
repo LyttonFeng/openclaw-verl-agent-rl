@@ -43,6 +43,19 @@ export VLLM_USE_V1=1
 
 MODEL_NAME="${MODEL_NAME:-Qwen3-4B}"
 
+# ─── Rail-v1 knobs (used by pre-flight gateway + later ray env) ───
+# When USE_RL_ONLINE_RAIL=1, jiuwenclaw stack injects RLOnlineRail
+# (via sitecustomize.py + inject_rl_online_rail.py), captures vLLM-original
+# prompt_ids / response_tokens / logprobs per turn, uploads PerTurnSample
+# batches to TRAJECTORY_GATEWAY_URL. agent_loop reads matching JSONL from
+# RAIL_V1_DIR by session_id (replaces history.json reverse-engineering).
+USE_RL_ONLINE_RAIL="${USE_RL_ONLINE_RAIL:-1}"
+TRAJECTORY_GATEWAY_URL="${TRAJECTORY_GATEWAY_URL:-http://127.0.0.1:9000}"
+RAIL_V1_DIR="${RAIL_V1_DIR:-/tmp/jw_rail_v1}"
+RAIL_V1_WAIT_S="${RAIL_V1_WAIT_S:-15}"
+# Kill cross-trajectory drift (memory.db + daily_memory + MEMORY.md).
+MEMORY_ENABLED="${MEMORY_ENABLED:-false}"
+
 # ─── Pre-flight ───────────────────────────────────────────
 echo "[async] pre-flight: clean stale processes..."
 pkill -9 -f 'run_online_rl' 2>/dev/null || true
@@ -54,6 +67,38 @@ GPU_USED=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | so
 echo "[async] post-cleanup GPU max used: ${GPU_USED} MiB"
 if [ "$GPU_USED" -gt 5000 ]; then
   echo "[async] WARN: GPU still has ${GPU_USED}MiB used."
+fi
+
+# ─── Mock trajectory gateway (receives RLOnlineRail PerTurnSample batches) ──
+# Required when USE_RL_ONLINE_RAIL=1. Each rollout's trajectory lands as a
+# JSONL file under RAIL_V1_DIR keyed by jiuwenclaw trajectory_id. Our
+# agent_loop scans for session_id matches after the WS chat.send completes.
+if [ "$USE_RL_ONLINE_RAIL" = "1" ]; then
+  pkill -9 -f 'mock_trajectory_gateway' 2>/dev/null || true
+  sleep 1
+  rm -rf "$RAIL_V1_DIR"; mkdir -p "$RAIL_V1_DIR"
+  GW_LOG="$LOG_DIR/mock_gateway_$TS.log"
+  echo "[async] starting mock trajectory gateway at $TRAJECTORY_GATEWAY_URL → $RAIL_V1_DIR (log=$GW_LOG)"
+  nohup python3 "$(dirname "$0")/mock_trajectory_gateway.py" \
+    --port "${TRAJECTORY_GATEWAY_URL##*:}" \
+    --out "$RAIL_V1_DIR" \
+    > "$GW_LOG" 2>&1 &
+  GW_PID=$!
+  echo "$GW_PID" > "$LOG_DIR/mock_gateway.pid"
+  # Wait for /health to respond
+  GW_HOST_PORT="${TRAJECTORY_GATEWAY_URL#http://}"
+  for i in $(seq 1 30); do
+    if curl -sf --max-time 1 "http://${GW_HOST_PORT}/health" > /dev/null 2>&1; then
+      echo "[async] mock gateway ready (${i}s)"; break
+    fi
+    sleep 1
+    if [ "$i" = "30" ]; then
+      echo "[async] FATAL: mock gateway didn't come up"
+      tail -20 "$GW_LOG" >&2
+      kill -9 "$GW_PID" 2>/dev/null || true
+      exit 6
+    fi
+  done
 fi
 
 # ─── Hyperparams (healthier defaults) ──────────────────────
@@ -190,6 +235,9 @@ if [ "$DRY_RUN" = "0" ]; then
       +ray_kwargs.ray_init.runtime_env.env_vars.MAX_TURNS="'${MAX_TURNS}'" \
       +ray_kwargs.ray_init.runtime_env.env_vars.AGENT_TIMEOUT="'${AGENT_TIMEOUT}'" \
       +ray_kwargs.ray_init.runtime_env.env_vars.VLLM_USE_V1="'1'" \
+      +ray_kwargs.ray_init.runtime_env.env_vars.USE_RL_ONLINE_RAIL="'${USE_RL_ONLINE_RAIL}'" \
+      +ray_kwargs.ray_init.runtime_env.env_vars.RAIL_V1_DIR="'${RAIL_V1_DIR}'" \
+      +ray_kwargs.ray_init.runtime_env.env_vars.RAIL_V1_WAIT_S="'${RAIL_V1_WAIT_S}'" \
       trainer.project_name=verl_port_meeting \
       trainer.experiment_name="${EXPERIMENT_NAME}" \
       trainer.n_gpus_per_node="${N_GPUS_TRAINER}" trainer.nnodes=1 \
@@ -260,6 +308,10 @@ for i in $(seq 0 $((JW_N_STACKS - 1))); do
     WS_PORT="$WS_PORT" AGENT_SERVER_PORT="$AGENT_SERVER_PORT" GATEWAY_PORT="$GATEWAY_PORT" \
     JIUWENCLAW_DATA_DIR="$JW_DATA_DIR" \
     LOG_DIR="${JW_LOG_DIR}/stack_${i}" \
+    USE_RL_ONLINE_RAIL="$USE_RL_ONLINE_RAIL" \
+    TRAJECTORY_GATEWAY_URL="$TRAJECTORY_GATEWAY_URL" \
+    MEMORY_ENABLED="$MEMORY_ENABLED" \
+    MAX_ITERATIONS="$MAX_TURNS" \
     bash "$(dirname "$0")/start_jw_headless.sh"
   if ! (echo > /dev/tcp/127.0.0.1/${WS_PORT}) 2>/dev/null; then
     echo "[async] FATAL: jiuwenclaw stack #$i WS not up on ${WS_PORT}"
