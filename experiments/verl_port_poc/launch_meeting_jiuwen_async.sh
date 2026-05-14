@@ -56,17 +56,66 @@ RAIL_V1_WAIT_S="${RAIL_V1_WAIT_S:-15}"
 # Kill cross-trajectory drift (memory.db + daily_memory + MEMORY.md).
 MEMORY_ENABLED="${MEMORY_ENABLED:-false}"
 
-# ─── Pre-flight ───────────────────────────────────────────
-echo "[async] pre-flight: clean stale processes..."
-pkill -9 -f 'run_online_rl' 2>/dev/null || true
-pkill -9 -f 'jiuwenclaw.gateway\|jiuwenclaw.server\|jiuwenclaw.app' 2>/dev/null || true
-pkill -9 -f 'vllm.entrypoints' 2>/dev/null || true
-pkill -9 -f 'launch_main_ppo\|fully_async_main' 2>/dev/null || true
+# ─── Pre-flight: kill stale procs + verify ports + GPU are free ───
+# Catastrophic past failure: v52 jiuwenclaw subprocesses survived our pkill
+# (broken regex), v53 stack startup "succeeded" because port 611/612 were
+# already bound by old stacks — so chat.send hit DEAD endpoints (their
+# vLLM URL was from v52, killed). Result: 100% chat.error, 0 rail data.
+# Bullet-proof now: enumerate by process name (no fragile regex), retry,
+# and abort if anything still bound to the ports we need.
+echo "[async] pre-flight: kill stale procs..."
+_PKILL_PATTERNS=(
+  'run_online_rl'
+  'run_jw_app_with_rl_rail'
+  'jiuwenclaw\.app$'
+  'jiuwenclaw\.server\.app_agentserver'
+  'jiuwenclaw\.gateway\.app_gateway'
+  'mock_trajectory_gateway'
+  'vllm\.entrypoints'
+  'vllm serve'
+  'fully_async_main'
+  'launch_main_ppo'
+)
+# Note: 'launch_meeting_jiuwen_async' deliberately EXCLUDED — pkill -f would
+# match this script's own cmdline (we are it) and suicide. Stale launcher
+# wrappers from prior runs are killed below by enumerating self's PID first.
+_MY_PID=$$
+for _pid in $(pgrep -f 'launch_meeting_jiuwen_async' 2>/dev/null); do
+  if [ "$_pid" != "$_MY_PID" ] && [ "$_pid" != "$PPID" ]; then
+    kill -9 "$_pid" 2>/dev/null || true
+  fi
+done
+for _pat in "${_PKILL_PATTERNS[@]}"; do
+  pkill -9 -f "$_pat" 2>/dev/null || true
+done
 sleep 4
+# VLLM engine cores are subprocesses kept alive by Ray supervisors; do a 2nd pass
+for _pid in $(pgrep -f 'VLLM::EngineCore\|VLLM::Worker' 2>/dev/null); do
+  kill -9 "$_pid" 2>/dev/null || true
+done
+sleep 2
+
+# Verify the ports we plan to bind are actually free
+_PORTS_TO_CHECK=(611 612 18092 18093 19001 19002 9000)
+_PORTS_STILL_BUSY=""
+for _p in "${_PORTS_TO_CHECK[@]}"; do
+  if ss -lnt 2>/dev/null | awk '{print $4}' | grep -q ":${_p}\$"; then
+    _PORTS_STILL_BUSY="${_PORTS_STILL_BUSY} ${_p}"
+  fi
+done
+if [ -n "$_PORTS_STILL_BUSY" ]; then
+  echo "[async] FATAL: ports still bound after pre-flight cleanup:$_PORTS_STILL_BUSY"
+  echo "[async]  ss -lntp output:"
+  ss -lntp 2>&1 | grep -E ":(611|612|18092|18093|19001|19002|9000) " || true
+  exit 7
+fi
+
 GPU_USED=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | sort -n | tail -1)
-echo "[async] post-cleanup GPU max used: ${GPU_USED} MiB"
+echo "[async] post-cleanup GPU max used: ${GPU_USED} MiB ; ports clear"
 if [ "$GPU_USED" -gt 5000 ]; then
-  echo "[async] WARN: GPU still has ${GPU_USED}MiB used."
+  echo "[async] FATAL: GPU still has ${GPU_USED}MiB after cleanup — manual kill needed"
+  nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader
+  exit 8
 fi
 
 # ─── Mock trajectory gateway (receives RLOnlineRail PerTurnSample batches) ──
