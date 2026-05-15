@@ -1,0 +1,25 @@
+--- /root/verl/verl/experimental/fully_async_policy/fully_async_rollouter.py.bak_v66	2026-05-15 07:19:27.781220023 +0000
++++ /root/verl/verl/experimental/fully_async_policy/fully_async_rollouter.py	2026-05-15 07:19:43.354082950 +0000
+@@ -643,6 +643,12 @@
+                     print(f"[RolloutFilter] dropping empty trajectory sample_id={rollout_sample.sample_id} (response_mask all zero)", flush=True)
+                     self.dropped_stale_samples += 1
+                     self.processed_sample_count += 1
++                    # FIX(deadlock): release staleness slot on empty-mask drop.
++                    # Otherwise dropped samples permanently occupy the pause
++                    # budget and the rollouter never resumes dispatching new
++                    # samples to refill the MQ (real symptom: gen plateaus
++                    # below required_samples).
++                    self.staleness_samples = max(0, self.staleness_samples - 1)
+                     return
+             except Exception as _e:
+                 print(f"[RolloutFilter] WARN check failed: {_e}", flush=True)
+@@ -658,6 +664,9 @@
+             self.total_generated_samples += 1
+         else:
+             self.dropped_stale_samples += 1
++            # FIX(deadlock): also release staleness on MQ-put failure (same
++            # reasoning as the empty-mask drop branch above).
++            self.staleness_samples = max(0, self.staleness_samples - 1)
+         self.processed_sample_count += 1
+ 
+     async def _streaming_generation_main(self):

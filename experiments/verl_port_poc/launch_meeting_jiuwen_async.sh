@@ -23,7 +23,7 @@ for arg in "$@"; do [ "$arg" = "--dry-run" ] && DRY_RUN=1; done
 REPO_INTEGRATION=/workspace/verl_port/openclaw_integration
 REPO_DATA=/workspace/openclaw-verl-agent-rl
 DATA_DIR=/workspace/verl_port/data_meeting
-OUTPUT_DIR=/workspace/verl_port/ckpt_jw_async
+OUTPUT_DIR="${OUTPUT_DIR:-/workspace/verl_port/ckpt_jw_async}"
 AGENT_LOOP_CONFIG="${REPO_DATA}/agent_loop/config.yaml"
 LOG_DIR=/tmp/jw_async
 mkdir -p "$LOG_DIR" "$OUTPUT_DIR"
@@ -55,6 +55,7 @@ RAIL_V1_DIR="${RAIL_V1_DIR:-/tmp/jw_rail_v1}"
 RAIL_V1_WAIT_S="${RAIL_V1_WAIT_S:-15}"
 # Kill cross-trajectory drift (memory.db + daily_memory + MEMORY.md).
 MEMORY_ENABLED="${MEMORY_ENABLED:-false}"
+JW_N_STACKS="${JW_N_STACKS:-2}"
 
 # ─── Pre-flight: kill stale procs + verify ports + GPU are free ───
 # Catastrophic past failure: v52 jiuwenclaw subprocesses survived our pkill
@@ -96,7 +97,10 @@ done
 sleep 2
 
 # Verify the ports we plan to bind are actually free
-_PORTS_TO_CHECK=(611 612 18092 18093 19001 19002 9000)
+_PORTS_TO_CHECK=(9000)
+for _i in $(seq 0 $((JW_N_STACKS - 1))); do
+  _PORTS_TO_CHECK+=($((611 + _i)) $((18092 + _i)) $((19001 + _i)))
+done
 _PORTS_STILL_BUSY=""
 for _p in "${_PORTS_TO_CHECK[@]}"; do
   if ss -lnt 2>/dev/null | awk '{print $4}' | grep -q ":${_p}\$"; then
@@ -154,6 +158,7 @@ fi
 MODEL=/root/hf_cache/hub/models--Qwen--Qwen3-4B/snapshots/1cfa9a7208912126459214e8b04321603b3df60c
 N_GPUS_TRAINER="${N_GPUS_TRAINER:-1}"   # FSDP actor + ref on GPU 0
 N_GPUS_ROLLOUT="${N_GPUS_ROLLOUT:-1}"   # vLLM on GPU 1
+RAY_NUM_GPUS="${RAY_NUM_GPUS:-$((N_GPUS_TRAINER + N_GPUS_ROLLOUT))}"
 BATCH_SIZE="${BATCH_SIZE:-4}"
 MICRO_BATCH="${MICRO_BATCH:-1}"
 ROLLOUT_N="${ROLLOUT_N:-2}"
@@ -162,7 +167,6 @@ MAX_TURNS="${MAX_TURNS:-15}"                   # healthy middle: not 20 (累积�
 # Multi-stack jiuwenclaw for true rollout parallelism (each stack = independent
 # WS / workspace / agent_server / gateway). agent_loop round-robins. Ports
 # allocated starting at 611,612,... matched by JW_DATA_DIRS index.
-JW_N_STACKS="${JW_N_STACKS:-2}"
 JIUWENCLAW_WS_URLS=""
 JIUWENCLAW_DATA_DIRS=""
 for _i in $(seq 0 $((JW_N_STACKS - 1))); do
@@ -175,6 +179,7 @@ echo "[async] planned JW_N_STACKS=$JW_N_STACKS WS_URLS=$JIUWENCLAW_WS_URLS"
 MAX_PROMPT_LENGTH="${MAX_PROMPT_LENGTH:-20000}"
 MAX_RESPONSE_LENGTH="${MAX_RESPONSE_LENGTH:-8000}"  # 6k 太紧 12k 太宽，8k 中庸
 LR="${LR:-2e-6}"
+KL_LOSS_COEF="${KL_LOSS_COEF:-0.01}"
 LORA_RANK="${LORA_RANK:-32}"
 LORA_ALPHA="${LORA_ALPHA:-64}"
 LORA_TARGET_MODULES='[q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj]'
@@ -195,6 +200,7 @@ REQUIRE_BATCHES="${REQUIRE_BATCHES:-4}"
 
 EXPERIMENT_NAME="${EXPERIMENT_NAME:-verl_jw_async_$TS}"
 REWARD_MANAGER_PATH="${REPO_DATA}/rewards/meeting_reward.py"
+TRAINER_RESUME_MODE="${TRAINER_RESUME_MODE:-disable}"
 
 # ─── Launch veRL FullyAsyncTrainer ─────────────────────────
 if [ "$DRY_RUN" = "0" ]; then
@@ -231,7 +237,7 @@ if [ "$DRY_RUN" = "0" ]; then
       actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu="${MICRO_BATCH}" \
       actor_rollout_ref.actor.ppo_max_token_len_per_gpu="${ACTOR_PPO_MAX_TOKEN_LEN_PER_GPU}" \
       actor_rollout_ref.actor.ppo_epochs=1 actor_rollout_ref.actor.use_remove_padding=True \
-      actor_rollout_ref.actor.use_kl_loss=True actor_rollout_ref.actor.kl_loss_coef=0.01 \
+      actor_rollout_ref.actor.use_kl_loss=True actor_rollout_ref.actor.kl_loss_coef="${KL_LOSS_COEF}" \
       actor_rollout_ref.actor.kl_loss_type=low_var_kl actor_rollout_ref.actor.entropy_coeff=0.0 \
       actor_rollout_ref.actor.use_rollout_log_probs=True \
       actor_rollout_ref.actor.strategy=fsdp2 \
@@ -255,7 +261,7 @@ if [ "$DRY_RUN" = "0" ]; then
       actor_rollout_ref.rollout.multi_turn.max_assistant_turns="${MAX_TURNS}" \
       actor_rollout_ref.rollout.agent.default_agent_loop=jiuwenclaw_agent \
       actor_rollout_ref.rollout.agent.agent_loop_config_path="${AGENT_LOOP_CONFIG}" \
-      actor_rollout_ref.rollout.agent.num_workers=1 \
+      actor_rollout_ref.rollout.agent.num_workers="${AGENT_NUM_WORKERS:-1}" \
       actor_rollout_ref.rollout.checkpoint_engine.backend=nccl \
       rollout.nnodes=1 \
       rollout.n_gpus_per_node="${N_GPUS_ROLLOUT}" \
@@ -267,7 +273,7 @@ if [ "$DRY_RUN" = "0" ]; then
       trainer.critic_warmup=0 trainer.val_before_train=False \
       trainer.logger='["console"]' \
       +ray_kwargs.ray_init.include_dashboard=False \
-      +ray_kwargs.ray_init.num_gpus=2 \
+      +ray_kwargs.ray_init.num_gpus="${RAY_NUM_GPUS}" \
       +ray_kwargs.ray_init.runtime_env.env_vars.HF_HOME=/root/hf_cache \
       +ray_kwargs.ray_init.runtime_env.env_vars.HF_HUB_CACHE=/root/hf_cache/hub \
       +ray_kwargs.ray_init.runtime_env.env_vars.JIUWENCLAW_WS_URL="'ws://127.0.0.1:611/ws'" \
@@ -293,7 +299,7 @@ if [ "$DRY_RUN" = "0" ]; then
       trainer.save_freq="${SAVE_FREQ}" trainer.test_freq="${TEST_FREQ}" \
       trainer.total_epochs="${TOTAL_EPOCHS}" \
       trainer.total_training_steps="${TOTAL_TRAINING_STEPS}" \
-      trainer.resume_mode=auto \
+      trainer.resume_mode="${TRAINER_RESUME_MODE}" \
       trainer.default_local_dir="${OUTPUT_DIR}" \
       >"$VERL_LOG" 2>&1 &
   VERL_PID=$!
@@ -331,6 +337,19 @@ if [ "$DRY_RUN" = "0" ]; then
     exit 4
   fi
   echo "[async] discovered veRL vLLM HTTP: $VERL_VLLM_URL"
+  # Multi-replica round-robin: parse ALL addrs from LLMServerManager line.
+  # vLLM rollout splits across N_GPUS_ROLLOUT replicas, but base discovery
+  # only picks the first. Distribute stacks across all replicas so GPU
+  # utilization is balanced (otherwise N-1 vLLM GPUs sit idle).
+  LLM_LINE=$(grep -m1 "LLMServerManager:" "$VERL_LOG" 2>/dev/null || true)
+  VERL_VLLM_URLS=()
+  if [ -n "$LLM_LINE" ]; then
+    while IFS= read -r _addr; do
+      [ -n "$_addr" ] && VERL_VLLM_URLS+=("http://${_addr}/v1")
+    done < <(echo "$LLM_LINE" | grep -oE "[0-9.]+:[0-9]+")
+  fi
+  if [ ${#VERL_VLLM_URLS[@]} -eq 0 ]; then VERL_VLLM_URLS=("$VERL_VLLM_URL"); fi
+  echo "[async] discovered ${#VERL_VLLM_URLS[@]} vLLM replicas: ${VERL_VLLM_URLS[*]}"
 else
   VERL_VLLM_URL="${VERL_VLLM_URL:-http://127.0.0.1:614/v1}"
   echo "[async] DRY RUN — using $VERL_VLLM_URL"
@@ -353,7 +372,8 @@ for i in $(seq 0 $((JW_N_STACKS - 1))); do
   GATEWAY_PORT=$((19001 + i))
   JW_DATA_DIR="$HOME/.jiuwenclaw_${i}"
   echo "[async] launching headless jiuwenclaw stack #$i: ws://127.0.0.1:${WS_PORT}/ws data=${JW_DATA_DIR}"
-  API_BASE="$VERL_VLLM_URL" MODEL_NAME="$DISCOVERED_MODEL" \
+  _STACK_API_BASE="${VERL_VLLM_URLS[$((i % ${#VERL_VLLM_URLS[@]}))]:-$VERL_VLLM_URL}"
+  API_BASE="$_STACK_API_BASE" MODEL_NAME="$DISCOVERED_MODEL" \
     WS_PORT="$WS_PORT" AGENT_SERVER_PORT="$AGENT_SERVER_PORT" GATEWAY_PORT="$GATEWAY_PORT" \
     JIUWENCLAW_DATA_DIR="$JW_DATA_DIR" \
     LOG_DIR="${JW_LOG_DIR}/stack_${i}" \

@@ -1,0 +1,24 @@
+--- /root/jiuwen_work/jiuwenclaw/jiuwenclaw/server/runtime/agent_adapter/interface_deep.py.bak_v65	2026-05-15 06:52:22.520482689 +0000
++++ /root/jiuwen_work/jiuwenclaw/jiuwenclaw/server/runtime/agent_adapter/interface_deep.py	2026-05-15 06:53:28.648443931 +0000
+@@ -1950,6 +1950,10 @@
+             vision_model_config=self._vision_model_config,
+             audio_model_config=self._audio_model_config,
+             completion_timeout=config.get("completion_timeout", 3600.0),
++            progressive_tool_enabled=(os.getenv("JIUWENCLAW_PROGRESSIVE_TOOLS", "0").strip().lower() in ("1", "true", "yes")),
++            progressive_tool_default_visible_tools=[t.strip() for t in (os.getenv("JIUWENCLAW_PROGRESSIVE_VISIBLE", "") or "").split(",") if t.strip()],
++            progressive_tool_always_visible_tools=[t.strip() for t in (os.getenv("JIUWENCLAW_PROGRESSIVE_ALWAYS", "") or "").split(",") if t.strip()],
++            progressive_tool_max_loaded_tools=int(os.getenv("JIUWENCLAW_PROGRESSIVE_MAX", "12")),
+         )
+ 
+     def _update_permission_rail(self, config_base: dict[str, Any] | None) -> None:
+@@ -2254,6 +2258,10 @@
+             vision_model_config=self._vision_model_config,
+             audio_model_config=self._audio_model_config,
+             completion_timeout=config.get("completion_timeout", 3600.0),
++            progressive_tool_enabled=(os.getenv("JIUWENCLAW_PROGRESSIVE_TOOLS", "0").strip().lower() in ("1", "true", "yes")),
++            progressive_tool_default_visible_tools=[t.strip() for t in (os.getenv("JIUWENCLAW_PROGRESSIVE_VISIBLE", "") or "").split(",") if t.strip()],
++            progressive_tool_always_visible_tools=[t.strip() for t in (os.getenv("JIUWENCLAW_PROGRESSIVE_ALWAYS", "") or "").split(",") if t.strip()],
++            progressive_tool_max_loaded_tools=int(os.getenv("JIUWENCLAW_PROGRESSIVE_MAX", "12")),
+         )
+         self._sync_a2x_runtime_state()
+         self._registered_mcp_server_ids.clear()

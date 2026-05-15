@@ -36,6 +36,8 @@ Outstanding work before this can run:
 from __future__ import annotations
 
 import asyncio
+import fcntl
+import zlib
 import json
 import logging
 import os
@@ -83,6 +85,7 @@ class JiuwenWSConfig:
     use_rail_v1: bool = False
     rail_v1_dir: Path = Path("/tmp/jw_rail_v1")
     rail_v1_wait_seconds: float = 15.0
+    mask_think_tokens: bool = False
 
     @classmethod
     def from_env(cls) -> "JiuwenWSConfig":
@@ -99,6 +102,9 @@ class JiuwenWSConfig:
             use_rail_v1=use_rail_v1,
             rail_v1_dir=Path(os.environ.get("RAIL_V1_DIR", "/tmp/jw_rail_v1")),
             rail_v1_wait_seconds=float(os.environ.get("RAIL_V1_WAIT_S", "15")),
+            mask_think_tokens=os.environ.get("MASK_THINK_TOKENS", "").strip().lower() in (
+                "1", "true", "yes", "on",
+            ),
         )
 
 
@@ -171,14 +177,18 @@ def _load_task_workspace_files(task_id: str) -> list[dict[str, str]]:
 
 
 def _load_history(path: Path) -> list[dict[str, Any]]:
-    """Read jiuwenclaw session history.json, retrying on partial writes."""
+    """Read jiuwenclaw session history.json, retrying on partial writes.
+
+    NOTE: this is sync; callers are usually in async context. Keep retries
+    bounded and short to avoid hogging the event loop.
+    """
     for _ in range(4):
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(payload, list):
                 return payload
         except Exception:
-            time.sleep(0.15)
+            time.sleep(0.05)
     return []
 
 
@@ -311,6 +321,50 @@ def _build_response_from_rail_samples(
     return prompt_ids, response_ids, response_mask, logprobs, len(samples)
 
 
+def _find_subsequence(haystack: list[int], needle: list[int], start: int = 0) -> int:
+    if not needle or len(needle) > len(haystack):
+        return -1
+    limit = len(haystack) - len(needle) + 1
+    for i in range(max(start, 0), limit):
+        if haystack[i : i + len(needle)] == needle:
+            return i
+    return -1
+
+
+def _mask_think_regions(
+    response_ids: list[int],
+    response_mask: list[int],
+    tokenizer: Any,
+) -> int:
+    """Set response_mask=0 for token spans inside <think>...</think>.
+
+    We search token-id patterns directly instead of decode/encode round-trips
+    over the full response, avoiding char/token offset drift from BPE spacing.
+    If a <think> is unclosed, mask through the end of the response.
+
+    Returns the number of mask=1 tokens changed to 0.
+    """
+    open_ids = tokenizer.encode("<think>", add_special_tokens=False)
+    close_ids = tokenizer.encode("</think>", add_special_tokens=False)
+    if not open_ids or not close_ids or len(response_ids) != len(response_mask):
+        return 0
+
+    masked = 0
+    pos = 0
+    while pos < len(response_ids):
+        start = _find_subsequence(response_ids, open_ids, pos)
+        if start < 0:
+            break
+        close = _find_subsequence(response_ids, close_ids, start + len(open_ids))
+        end = len(response_ids) if close < 0 else close + len(close_ids)
+        for i in range(start, end):
+            if response_mask[i]:
+                response_mask[i] = 0
+                masked += 1
+        pos = end
+    return masked
+
+
 async def _run_one_ws_session(
     *,
     ws_url: str,
@@ -318,6 +372,7 @@ async def _run_one_ws_session(
     prompt: str,
     timeout_seconds: float,
     request_id: str,
+    max_tool_calls: int | None = None,
     connect_retries: int = 60,
     connect_retry_delay: float = 4.0,
 ) -> tuple[str, bool]:
@@ -335,20 +390,27 @@ async def _run_one_ws_session(
     status ∈ {success, error, timeout}
     """
     start = time.time()
-    # Retry WS connect (jiuwenclaw may still be coming up)
+    print(f"[JC-WS] enter sess={session_id} url={ws_url} prompt_len={len(prompt)}", flush=True)
     ws = None
     last_connect_err: Optional[Exception] = None
     for attempt in range(connect_retries):
         try:
-            ws = await websockets.connect(ws_url, max_size=30_000_000)
+            print(f"[JC-WS] connect attempt={attempt} sess={session_id}", flush=True)
+            ws = await websockets.connect(
+                ws_url, max_size=30_000_000,
+                open_timeout=15, ping_interval=20, ping_timeout=20,
+            )
+            print(f"[JC-WS] connected sess={session_id} attempt={attempt}", flush=True)
             break
         except Exception as e:  # noqa: BLE001
             last_connect_err = e
+            print(f"[JC-WS] connect FAILED sess={session_id} attempt={attempt} err={e!r}", flush=True)
             if attempt < connect_retries - 1:
                 await asyncio.sleep(connect_retry_delay)
     if ws is None:
         logger.warning("jiuwenclaw WS connect failed after %d retries to %s: %r",
                        connect_retries, ws_url, last_connect_err)
+        print(f"[JC-WS] connect EXHAUSTED sess={session_id}", flush=True)
         return "error", False
     try:
         req = {
@@ -366,8 +428,12 @@ async def _run_one_ws_session(
                 "is_group_chat": True,
             },
         }
-        await ws.send(json.dumps(req, ensure_ascii=False))
+        payload = json.dumps(req, ensure_ascii=False)
+        print(f"[JC-WS] about to send chat.send sess={session_id} bytes={len(payload)}", flush=True)
+        await ws.send(payload)
+        print(f"[JC-WS] sent chat.send sess={session_id}", flush=True)
         got_any_event = False
+        tool_calls_seen = 0
         while True:
             remaining = timeout_seconds - (time.time() - start)
             if remaining <= 0:
@@ -378,27 +444,46 @@ async def _run_one_ws_session(
             # Use 120s before first event, 45s for inter-event gaps.
             inner_to = min(120.0 if not got_any_event else 45.0, max(0.1, remaining))
             raw = await asyncio.wait_for(ws.recv(), timeout=inner_to)
+            if not got_any_event:
+                print(f"[JC-WS] first event sess={session_id} after={time.time()-start:.1f}s", flush=True)
             got_any_event = True
             data = json.loads(raw)
             t = data.get("type")
             if t == "res" and data.get("id") == request_id:
                 if not data.get("ok", False):
+                    print(f"[JC-WS] res NOT OK sess={session_id} data={data}", flush=True)
                     return "error", False
                 continue
             if t != "event":
                 continue
             payload = data.get("payload") or {}
-            if str(payload.get("session_id") or "") != session_id:
-                continue
+            # NOTE: do NOT filter by session_id. Gateway emits events with
+            # session_id: null in the payload (server-side wraps without
+            # echoing back the client's session_id). The WS connection is
+            # single-session by construction (each WS open = one chat.send),
+            # so all events on this socket belong to OUR request_id anyway.
             ev = data.get("event")
             if ev == "chat.error":
+                print(f"[JC-WS] chat.error sess={session_id} payload={payload}", flush=True)
                 return "error", False
+            if ev == "chat.tool_call":
+                tool_calls_seen += 1
+                if max_tool_calls and tool_calls_seen >= max_tool_calls:
+                    logger.info(
+                        "jiuwenclaw max_tool_calls reached: session=%s count=%d",
+                        session_id, tool_calls_seen,
+                    )
+                    print(f"[JC-WS] max_tool_calls sess={session_id} count={tool_calls_seen}", flush=True)
+                    return "success", False
             if ev == "chat.final":
+                print(f"[JC-WS] chat.final sess={session_id} elapsed={time.time()-start:.1f}s tool_calls={tool_calls_seen}", flush=True)
                 return "success", False
     except asyncio.TimeoutError:
+        print(f"[JC-WS] TIMEOUT sess={session_id} elapsed={time.time()-start:.1f}s got_any={got_any_event}", flush=True)
         return "timeout", True
     except Exception as e:  # noqa: BLE001
         logger.warning("jiuwenclaw WS session error: %r", e)
+        print(f"[JC-WS] EXCEPTION sess={session_id} err={e!r} elapsed={time.time()-start:.1f}s", flush=True)
         return "error", False
     finally:
         try:
@@ -453,11 +538,20 @@ class JiuwenClawAgentLoop(AgentLoopBase):
             logger.info("JiuwenClawAgentLoop multi-stack: %d stacks: %s",
                         len(type(self)._stacks), type(self)._stacks)
 
-    def _pick_stack(self) -> tuple[int, str, Path, asyncio.Lock]:
-        """Round-robin a stack for this rollout."""
+    def _pick_stack(self, key: str | None = None) -> tuple[int, str, Path, asyncio.Lock]:
+        """Pick a stack for this rollout.
+
+        With multiple Ray AgentLoopWorker processes, class-level round-robin state
+        is per-process, so every worker would otherwise pick stack 0 first and
+        race on the same jiuwenclaw_workspace. Hashing the per-rollout session id
+        spreads work across stacks consistently across processes.
+        """
         cls = type(self)
-        idx = cls._stack_rr % len(cls._stacks)
-        cls._stack_rr += 1
+        if key:
+            idx = zlib.crc32(key.encode("utf-8")) % len(cls._stacks)
+        else:
+            idx = cls._stack_rr % len(cls._stacks)
+            cls._stack_rr += 1
         ws_url, data_root = cls._stacks[idx]
         return idx, ws_url, data_root, cls._stack_locks[idx]
 
@@ -638,6 +732,39 @@ class JiuwenClawAgentLoop(AgentLoopBase):
         return response_ids, response_mask, num_turns
 
     async def run(self, sampling_params: dict[str, Any], **kwargs) -> AgentLoopOutput:
+        try:
+            return await self._run_impl(sampling_params, **kwargs)
+        except Exception as e:  # noqa: BLE001
+            import traceback as _tb
+            task_id = (kwargs.get("extra_info") or {}).get("task_id") or "unknown"
+            print(f"[JC-RUN] FATAL exception task={task_id} err={e!r}", flush=True)
+            _tb.print_exc()
+            eos_id = self.tokenizer.eos_token_id or 0
+            return AgentLoopOutput(
+                prompt_ids=[eos_id],
+                response_ids=[eos_id],
+                response_mask=[0],
+                response_logprobs=None,
+                reward_score=None,
+                num_turns=0,
+                metrics=AgentLoopMetrics(),
+                extra_fields={
+                    "session_id": f"failed_{task_id}",
+                    "task_id": task_id,
+                    "status": "error",
+                    "timed_out": False,
+                    "history_path": "",
+                    "stack_idx": -1,
+                    "rail_v1_samples": 0,
+                    "rail_v1_used": False,
+                    "mask_think_tokens": False,
+                    "workspace_path": "",
+                    "transcript": [],
+                    "fatal_error": repr(e),
+                },
+            )
+
+    async def _run_impl(self, sampling_params: dict[str, Any], **kwargs) -> AgentLoopOutput:
         # AgentLoopBase fills `kwargs` from RLHFDataset row: prompt, extra_info,
         # data_source, reward_model, etc.
         prompt = kwargs["prompt"]
@@ -669,7 +796,7 @@ class JiuwenClawAgentLoop(AgentLoopBase):
         # safe at the cost of in-worker serial execution; parallelism still
         # comes from multiple AgentLoopWorker processes (each gets its own lock).
         # Pick a stack (round-robin). Each stack has independent WS + data_root.
-        stack_idx, stack_ws_url, stack_data_root, stack_lock = self._pick_stack()
+        stack_idx, stack_ws_url, stack_data_root, stack_lock = self._pick_stack(session_id)
         jc_workspace = stack_data_root / "agent" / "jiuwenclaw_workspace"
         workspace_files = extra_info.get("workspace_files") or []
         # 训推一致 fix: dataset's extra_info doesn't carry workspace_files,
@@ -681,44 +808,76 @@ class JiuwenClawAgentLoop(AgentLoopBase):
             if workspace_files:
                 logger.info("loaded %d workspace_files from task %s YAML",
                             len(workspace_files), task_id)
+        lock_path = stack_data_root / "agent" / ".jiuwenclaw_workspace.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        print(f"[JC-RUN] enter sess={session_id} task={task_id} stack={stack_idx}", flush=True)
         async with stack_lock:
-            # 训推一致 fix: clean workspace BEFORE rollout to avoid leakage from
-            # previous rollout's files (each judge call should see only this
-            # rollout's writes).
-            if jc_workspace.exists():
-                for _it in jc_workspace.iterdir():
-                    try:
-                        if _it.is_file() or _it.is_symlink():
-                            _it.unlink()
-                        elif _it.is_dir():
-                            shutil.rmtree(_it)
-                    except Exception:
-                        pass
-            self._build_workspace(workspace_files, jc_workspace)
-            status, timed_out = await _run_one_ws_session(
-                ws_url=stack_ws_url,
-                session_id=session_id,
-                prompt=user_content,
-                timeout_seconds=self.cfg.timeout_seconds,
-                request_id=request_id,
-            )
-            await asyncio.sleep(0.5)   # let jiuwenclaw flush final records
-            history = _load_history(_history_path(stack_data_root, session_id))
-            # 训推一致 fix: snapshot workspace AFTER rollout, BEFORE releasing
-            # lock (otherwise next rollout clears jc_workspace). Pass snapshot
-            # path via extra_fields → reward.compute_score reads real files.
-            ws_snapshot = stack_data_root / "agent" / "sessions" / session_id / "ws_snapshot"
+            print(f"[JC-RUN] got stack_lock sess={session_id} stack={stack_idx}", flush=True)
+            lock_fh = open(lock_path, "a")
+            # Non-blocking flock + asyncio.sleep poll. Blocking fcntl.flock here
+            # freezes the worker's event loop and starves other rollouts'
+            # already-open WS connections (keepalive ping/pong stalls →
+            # gateway kills connections with 1011 internal error).
+            _flock_wait_start = time.time()
+            # Wait up to 1h for flock; under heavy CRC32 hash collisions the
+            # same stack can have 5+ rollouts queued at ~60-120s each. Raising
+            # past 1h is treated as a permanent jam and returns a graceful
+            # error rollout (caught below) — NEVER let an exception leak to
+            # the rollouter, that crashes the entire processor_task.
+            while True:
+                try:
+                    fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.time() - _flock_wait_start > 3600:
+                        raise TimeoutError(
+                            f"flock timeout (>3600s) on {lock_path}"
+                        )
+                    await asyncio.sleep(0.3)
+            print(f"[JC-RUN] got fcntl sess={session_id} stack={stack_idx} flock_wait={time.time()-_flock_wait_start:.1f}s", flush=True)
             try:
-                if ws_snapshot.exists():
-                    shutil.rmtree(ws_snapshot)
-                ws_snapshot.parent.mkdir(parents=True, exist_ok=True)
+                # 训推一致 fix: clean workspace BEFORE rollout to avoid leakage from
+                # previous rollout's files (each judge call should see only this
+                # rollout's writes).
                 if jc_workspace.exists():
-                    shutil.copytree(jc_workspace, ws_snapshot)
-                else:
+                    for _it in jc_workspace.iterdir():
+                        try:
+                            if _it.is_file() or _it.is_symlink():
+                                _it.unlink()
+                            elif _it.is_dir():
+                                shutil.rmtree(_it)
+                        except Exception:
+                            pass
+                self._build_workspace(workspace_files, jc_workspace)
+                status, timed_out = await _run_one_ws_session(
+                    ws_url=stack_ws_url,
+                    session_id=session_id,
+                    prompt=user_content,
+                    timeout_seconds=self.cfg.timeout_seconds,
+                    request_id=request_id,
+                    max_tool_calls=int(os.environ.get("MAX_TURNS", "8")),
+                )
+                await asyncio.sleep(0.5)   # let jiuwenclaw flush final records
+                history = _load_history(_history_path(stack_data_root, session_id))
+                # 训推一致 fix: snapshot workspace AFTER rollout, BEFORE releasing
+                # lock (otherwise next rollout clears jc_workspace). Pass snapshot
+                # path via extra_fields → reward.compute_score reads real files.
+                ws_snapshot = stack_data_root / "agent" / "sessions" / session_id / "ws_snapshot"
+                try:
+                    if ws_snapshot.exists():
+                        shutil.rmtree(ws_snapshot)
+                    ws_snapshot.parent.mkdir(parents=True, exist_ok=True)
+                    if jc_workspace.exists():
+                        shutil.copytree(jc_workspace, ws_snapshot)
+                    else:
+                        ws_snapshot.mkdir(parents=True, exist_ok=True)
+                except Exception as _e:
+                    logger.warning("workspace snapshot failed: %s", _e)
                     ws_snapshot.mkdir(parents=True, exist_ok=True)
-            except Exception as _e:
-                logger.warning("workspace snapshot failed: %s", _e)
-                ws_snapshot.mkdir(parents=True, exist_ok=True)
+            finally:
+                fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
+                lock_fh.close()
+                print(f"[JC-RUN] released locks sess={session_id} stack={stack_idx} status={status} timed_out={timed_out}", flush=True)
 
         # Path A: rail-v1 (preferred) — read PerTurnSamples from the gateway
         # output dir. Each sample is what vLLM actually saw + generated, so
@@ -781,6 +940,16 @@ class JiuwenClawAgentLoop(AgentLoopBase):
             response_ids, response_mask, num_turns = self._build_response_from_history(
                 history, prompt_token_ids,
             )
+
+        if self.cfg.mask_think_tokens:
+            masked_think_tokens = _mask_think_regions(
+                response_ids, response_mask, self.tokenizer,
+            )
+            if masked_think_tokens:
+                logger.info(
+                    "MASK_THINK_TOKENS: masked %d response tokens session=%s",
+                    masked_think_tokens, session_id,
+                )
 
         # Truncate to veRL's max_response_length — otherwise long multi-turn
         # jiuwenclaw sessions can accumulate >12k tokens, breaking veRL's
@@ -854,6 +1023,7 @@ class JiuwenClawAgentLoop(AgentLoopBase):
                 # rail-v1 metadata (None when use_rail_v1=False or no samples found)
                 "rail_v1_samples": len(rail_samples) if rail_samples else 0,
                 "rail_v1_used": bool(rail_samples),
+                "mask_think_tokens": self.cfg.mask_think_tokens,
                 # 训推一致 fix: pass real workspace path + transcript so reward
                 # function (meeting_reward.py) reads actual files instead of
                 # judging raw response_str dummy summary. veRL's reward_manager
