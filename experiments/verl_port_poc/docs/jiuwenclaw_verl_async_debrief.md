@@ -255,3 +255,70 @@ jiuwenclaw 黑盒 + hermes streaming parser 对 LoRA 偏移容错差。如果同
 
 如果调到能跑通，下游真正能解决的是 §5 P2 —— 让 jiuwenclaw 改 streaming tool
 parser 容错。否则训得再好，模型一动 jiuwenclaw 就 timeout。
+
+---
+
+## §9 v57 ckpt_2 bench 实测（2026-05-15 update）
+
+按 §5 P1 之前先把 v57 ckpt_2 实测一次，确认 critic 退化映射到 bench 退化。
+
+### 流程
+
+1. veRL model_merger 转 FSDP shard → HF LoRA adapter (132MB, rank 32)
+   - ⚠️ adapter_config.json `lora_alpha=0` bug，需手工 patch 回 64（训练值）
+2. vLLM serve with `--enable-lora --lora-modules v57_ckpt2=...`
+3. jiuwenclaw stack with `MODEL_NAME=v57_ckpt2`（路 LoRA） + `MEMORY_ENABLED=false` + `USE_RL_ONLINE_RAIL=0`
+4. `run_pinchbench_jiuwenclaw.py` 5 test tasks, DeepSeek judge
+
+### 结果
+
+| | 数值 |
+|---|---|
+| total_score / max_score | **0.0 / 5.0** |
+| overall_pct | **0.0%** |
+| 5/5 task status | success (no timeout) |
+| 5/5 task score | **None** (judge 无法打分) |
+
+### 失败形态
+
+bench transcript 显示模型**1 个 event 就投降**：
+
+```
+<think>
+用户提到 meeting-transcript.md 但系统提示文件未找到。可能文件路径
+不正确，或者文件确实不存在...
+</think>
+我无法找到名为 meeting-transcript.md
+```
+
+但 workspace 实际**有** `meeting-transcript.md`。模型**连 `read_file` 都不调用**，
+直接 `<think>` 推理"文件不存在"然后输出短文本结束。
+
+对比 base Qwen3-4B 在同样 task 上：调 5-15 个 tool（read_file 拿 transcript，写
+deliverable 文件），bench 平均 44.68%。
+
+### 跟其他实验对比
+
+| 配置 | 5-task bench | Δ vs base |
+|---|---|---|
+| Base Qwen3-4B | 44.68% | — |
+| OpenClaw + GRPO step 16 | 47.80% | +3.12pp ✅ |
+| **v57 jiuwenclaw + GRPO ckpt_2** | **0.00%** | **-44.68pp** 🔻 |
+
+**ckpt_2 比 base 烂 45 pp，比 OpenClaw 训通的 LoRA 烂 48 pp**。
+
+### 这印证了什么
+
+§3 根因诊断 完全成立：
+
+1. **GRPO single-step + LoRA rank=32 + 3 effective signal trajectory → tool-use 能力崩**
+2. critic/score 0.166 → 0.047 不只是数字下降，是**模型从"会调 tool 完成任务"退化到"放弃调 tool"**
+3. jiuwenclaw 自己没问题（base 模型 44.68%）—— **是 RL 训练把模型干坏的**
+
+### Bench 产出物保留
+
+- LoRA adapter: `/workspace/verl_port/bench_v57/ckpt_2_hf/lora_adapter/`
+- Bench results: `/workspace/verl_port/bench_v57/results/20260515_022344/`
+- Transcripts + workspaces：同上 `transcripts/` `workspaces/`
+
+下次重试时可以拿这些做反向对照（"什么样的 LoRA 不该出"），而不是从头跑。
