@@ -185,6 +185,8 @@ cd "$REPO_INTEGRATION"
 env PYTHONPATH="${REPO_INTEGRATION}:${REPO_DATA}:${PYTHONPATH:-}" VLLM_USE_V1=1 \
 nohup python3 -m verl.experimental.fully_async_policy.fully_async_main \
     --config-name fully_async_ppo_trainer \
+    hydra.run.dir="$LOG_DIR/hydra_$TS" \
+    hydra.output_subdir="." \
     algorithm.adv_estimator=grpo \
     algorithm.use_kl_in_reward=False \
     algorithm.norm_adv_by_std_in_grpo=False \
