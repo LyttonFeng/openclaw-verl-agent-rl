@@ -35,7 +35,7 @@ export PINCHBENCH_SKIP_TRAIN_INFER_PARITY=1
 REPO_INTEGRATION=/workspace/verl_port/openclaw_integration
 REPO_DATA=/workspace/openclaw-verl-agent-rl
 DATA_DIR=/workspace/verl_port/data_meeting
-OUTPUT_DIR=/workspace/verl_port/ckpt_openclaw_async
+OUTPUT_DIR="${OUTPUT_DIR:-/workspace/verl_port/ckpt_openclaw_async}"
 AGENT_LOOP_CONFIG="${REPO_INTEGRATION}/rl/agent_loop/config.yaml"
 REWARD_MANAGER_PATH="${REPO_INTEGRATION}/rl/train/reward_manager.py"
 LOG_DIR=/tmp/openclaw_async
@@ -239,7 +239,7 @@ nohup python3 -m verl.experimental.fully_async_policy.fully_async_main \
     actor_rollout_ref.rollout.multi_turn.max_assistant_turns="${MAX_TURNS}" \
     actor_rollout_ref.rollout.agent.default_agent_loop=openclaw_agent \
     actor_rollout_ref.rollout.agent.agent_loop_config_path="${AGENT_LOOP_CONFIG}" \
-    actor_rollout_ref.rollout.agent.num_workers=1 \
+    actor_rollout_ref.rollout.agent.num_workers="${AGENT_NUM_WORKERS:-1}" \
     actor_rollout_ref.rollout.checkpoint_engine.backend=nccl \
     rollout.nnodes=1 \
     rollout.n_gpus_per_node="${N_GPUS_ROLLOUT}" \
@@ -274,6 +274,7 @@ nohup python3 -m verl.experimental.fully_async_policy.fully_async_main \
     +ray_kwargs.ray_init.runtime_env.env_vars.VLLM_USE_V1="'1'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_RL_USE_VLLM_HTTP_TOOL_PARSER="'1'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_RL_VLLM_HTTP_TIMEOUT="'300'" \
+    +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_RL_VLLM_HTTP_MODEL="'${MODEL}'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_RL_VLLM_HTTP_DEBUG_DIR="'${LOG_DIR}/vllm_dumps_$TS'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_LORA_ONLY_CKPT="'1'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_BEST_CKPT="'1'" \
@@ -284,7 +285,7 @@ nohup python3 -m verl.experimental.fully_async_policy.fully_async_main \
     trainer.save_freq="${SAVE_FREQ}" trainer.test_freq="${TEST_FREQ}" \
     trainer.total_epochs="${TOTAL_EPOCHS}" \
     trainer.total_training_steps="${TOTAL_TRAINING_STEPS}" \
-    trainer.resume_mode=auto \
+    trainer.resume_mode="${RESUME_MODE:-auto}" \
     trainer.default_local_dir="${OUTPUT_DIR}" \
     >"$VERL_LOG" 2>&1 &
 VERL_PID=$!
