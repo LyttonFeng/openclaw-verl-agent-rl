@@ -12,11 +12,19 @@ GRPO 训练实验，共跑了 26 个版本（v32 → v57）。本文记录最终
 |---|---|---|
 | OpenClaw + verl sync GRPO | ✅ 47.8% bench (`main`) | 已跑通 |
 | OpenClaw + hand-crafted off-policy GRPO | ✅ 47.8% bench (`main`) | 已跑通 |
-| **jiuwenclaw + verl async GRPO** | ❌ **训练 reward 退化** | 1 step LoRA 后 80% trajectory timeout，critic 从 0.166 → 0.047 |
+| **jiuwenclaw + verl async GRPO** | ❌ **训练 reward 退化 + bench 0%** | 1 step LoRA 后 80% trajectory timeout，critic 从 0.166 → 0.047 |
+
+**❗最致命的取证**：v57 ckpt_2 bench 5/5 task **0 tool call**。模型主动放弃调用
+工具，幻觉自己已经试过 (`"根据之前的 list_files / glob..."` — 它从没调过)，输出
+"找不到文件、请确认" 模板就投降。**不是 jiuwenclaw 卡住，是模型自己不愿意调 tool**。
+
+详细取证 → `v57_trajectory_forensic.md`。
 
 **根本结论**：jiuwenclaw 作为 RL runtime 的问题不是工程修不完，是**信噪比太低**导致
-GRPO 单步 gradient 就把 tool-call 能力打坏。下次重试需要从**算法层**（不是工程层）
-入手 —— 加大有效 batch、降 lr、加 KL clip。
+GRPO 单步 gradient 就把 LoRA 的 tool-use 链路打散。3 个 effective signal trajectory
+对 LoRA rank=32 × 6 modules 做 update → think token 被推高 / tool_call token 相对
+被压低 → 模型从 "think → tool" 退化为 "think → give up"。下次重试需要从**算法层**
+（不是工程层）入手 —— 加大有效 batch、降 lr、加 KL clip。
 
 ---
 

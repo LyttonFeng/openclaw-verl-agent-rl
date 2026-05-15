@@ -13,11 +13,21 @@ OpenClaw 同 setting 的 47.80%。
 | critic/score/mean | 0.166 | **0.047 (-71%)** |
 | trajectory empty 率 | ~0% | **80%+** |
 
-**v57 ckpt_2 bench 实测：5/5 task 0.00%**，模型连 `read_file` 都不调，直接
-`<think>` 说"找不到文件"就投降（文件其实在）。
+**v57 ckpt_2 bench 实测：5/5 task 0.00%**。
 
-完整诊断在：`experiments/verl_port_poc/docs/jiuwenclaw_verl_async_debrief.md`（§3
-是根因）。先读那个，再读本文。
+**❗❗ 致命发现（必看 `v57_trajectory_forensic.md`）**：
+- bench 5/5 task 模型 **0 tool call**（base 模型 5-15 个）
+- 模型**幻觉**自己调过 `list_files` / `glob`（实际从没调过）
+- 输出模板化 "我找不到文件，请确认 1/2/3..." 给 user 让 user 自己解决
+
+**所以问题不是 trajectory timeout / hermes parser / 工具调用格式错** — 是
+**模型主动选择不调工具**。GRPO 单步 + 3 effective signal trajectory 把 LoRA
+打成"只 think 不 tool"的脑残模式。
+
+读这 3 份文档（顺序）：
+1. `docs/v57_trajectory_forensic.md` — 5/5 bench task 详细取证 + 失败 pattern
+2. `docs/jiuwenclaw_verl_async_debrief.md` — 完整诊断 §3 根因
+3. 本文 — 怎么接盘
 
 ---
 
