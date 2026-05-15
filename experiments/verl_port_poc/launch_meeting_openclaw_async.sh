@@ -272,6 +272,9 @@ nohup python3 -m verl.experimental.fully_async_policy.fully_async_main \
     +ray_kwargs.ray_init.runtime_env.env_vars.MAX_TURNS="'${MAX_TURNS}'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.AGENT_TIMEOUT="'${AGENT_TIMEOUT}'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.VLLM_USE_V1="'1'" \
+    +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_RL_USE_VLLM_HTTP_TOOL_PARSER="'1'" \
+    +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_RL_VLLM_HTTP_TIMEOUT="'300'" \
+    +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_RL_VLLM_HTTP_DEBUG_DIR="'${LOG_DIR}/vllm_dumps_$TS'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_LORA_ONLY_CKPT="'1'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_BEST_CKPT="'1'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_KEEP_LATEST_CKPT="'1'" \
