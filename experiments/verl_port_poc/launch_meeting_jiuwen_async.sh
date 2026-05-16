@@ -202,6 +202,26 @@ EXPERIMENT_NAME="${EXPERIMENT_NAME:-verl_jw_async_$TS}"
 REWARD_MANAGER_PATH="${REPO_DATA}/rewards/meeting_reward.py"
 TRAINER_RESUME_MODE="${TRAINER_RESUME_MODE:-disable}"
 
+# ─── Patch model config.json for yarn rope scaling (81920 ctx) ─────
+# Qwen3-4B native max_position_embeddings=40960 is too small for jiuwen's
+# heavy prompt + tool defs + transcript. Patch in-place; vLLM picks it up
+# at load time. (See memory/jiuwenclaw_qwen3_4b_baseline_chain.md.)
+ROPE_FACTOR="${ROPE_FACTOR:-2.0}"
+if [ -f "${MODEL}/config.json" ]; then
+  python3 - <<PY
+import json
+p = "${MODEL}/config.json"
+d = json.load(open(p))
+target = {"rope_type": "yarn", "factor": float(${ROPE_FACTOR}), "original_max_position_embeddings": 40960}
+if d.get("rope_scaling") != target:
+    d["rope_scaling"] = target
+    json.dump(d, open(p, "w"), indent=2)
+    print(f"[async] patched ${MODEL}/config.json rope_scaling={target}")
+else:
+    print(f"[async] rope_scaling already {target}")
+PY
+fi
+
 # ─── Launch veRL FullyAsyncTrainer ─────────────────────────
 if [ "$DRY_RUN" = "0" ]; then
   echo "[async] launching veRL FullyAsyncTrainer → $VERL_LOG"
@@ -254,6 +274,7 @@ if [ "$DRY_RUN" = "0" ]; then
       actor_rollout_ref.rollout.load_format=safetensors \
       +actor_rollout_ref.rollout.engine_kwargs.vllm.enable_auto_tool_choice=true \
       +actor_rollout_ref.rollout.engine_kwargs.vllm.tool_call_parser=hermes \
+      +actor_rollout_ref.rollout.engine_kwargs.vllm.reasoning_parser=deepseek_r1 \
       actor_rollout_ref.rollout.calculate_log_probs=True \
       actor_rollout_ref.rollout.layered_summon=True \
       actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=2 \
@@ -381,6 +402,8 @@ for i in $(seq 0 $((JW_N_STACKS - 1))); do
     TRAJECTORY_GATEWAY_URL="$TRAJECTORY_GATEWAY_URL" \
     MEMORY_ENABLED="$MEMORY_ENABLED" \
     MAX_ITERATIONS="$MAX_TURNS" \
+    JIUWENCLAW_PROGRESSIVE_TOOLS="${JIUWENCLAW_PROGRESSIVE_TOOLS:-1}" \
+    JIUWENCLAW_PROGRESSIVE_VISIBLE="${JIUWENCLAW_PROGRESSIVE_VISIBLE:-read_file,write_file,list_files,edit_file,grep,glob,todo_create,todo_list,bash,memory_search,code}" \
     bash "$(dirname "$0")/start_jw_headless.sh"
   if ! (echo > /dev/tcp/127.0.0.1/${WS_PORT}) 2>/dev/null; then
     echo "[async] FATAL: jiuwenclaw stack #$i WS not up on ${WS_PORT}"
