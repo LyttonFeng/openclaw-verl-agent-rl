@@ -276,6 +276,9 @@ class ModelProxy:
             if req.response_error:
                 await _send(_chunk({"content": req.response_error}, finish_reason="stop"))
             elif req.response_tool_calls:
+                content = req.response_text or ""
+                if content:
+                    await _send(_chunk({"content": content}))
                 for i, tc in enumerate(req.response_tool_calls):
                     func = tc.get("function", {})
                     await _send(_chunk({"tool_calls": [{

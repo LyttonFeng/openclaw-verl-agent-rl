@@ -1247,7 +1247,7 @@ class OpenClawAgentLoop(AgentLoopBase):
     ) -> asyncio.subprocess.Process:
         agent_id = f"rl-{task_id}-{session_id[:8]}"
         workspace = Path(self.oc_config.workspace_base) / (workspace_rel or self._episode_workspace_rel(task_id, session_id))
-        self._setup_agent_local(agent_id, proxy_url, workspace, task_id=task_id, task_prompt=prompt)
+        await self._setup_agent_local(agent_id, proxy_url, workspace, task_id=task_id, task_prompt=prompt)
         self._prepare_workspace(task_id, workspace, extra_info=extra_info)
 
         proc = await asyncio.create_subprocess_exec(
@@ -1463,7 +1463,7 @@ class OpenClawAgentLoop(AgentLoopBase):
                 return alias
         return None
 
-    def _setup_agent_local(
+    async def _setup_agent_local(
         self,
         agent_id: str,
         proxy_url: str,
@@ -1473,26 +1473,39 @@ class OpenClawAgentLoop(AgentLoopBase):
         task_prompt: str,
     ) -> None:
         workspace.mkdir(parents=True, exist_ok=True)
-        subprocess.run(
-            ["openclaw", "agents", "delete", agent_id, "--force"],
-            capture_output=True, text=True, check=False,
+        # async non-blocking delete (best-effort)
+        proc_del = await asyncio.create_subprocess_exec(
+            "openclaw", "agents", "delete", agent_id, "--force",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
-        subprocess.run(
-            ["openclaw", "agents", "add", agent_id,
-             "--model", "verl/verl-proxy", "--workspace", str(workspace), "--non-interactive"],
-            capture_output=True, text=True, check=False,
+        await proc_del.communicate()
+        # async non-blocking flock+add to avoid event-loop stall under concurrency
+        _lock_file = "/tmp/.openclaw_agents_add.lock"
+        proc_add = await asyncio.create_subprocess_exec(
+            "flock", _lock_file,
+            "openclaw", "agents", "add", agent_id,
+            "--model", "verl/verl-proxy", "--workspace", str(workspace), "--non-interactive",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
+        await proc_add.communicate()
         self._patch_agent_skills_local(
             agent_id,
             disable_skills=self._disable_default_skills_for_task(task_id, task_prompt),
         )
         agent_dir = Path.home() / ".openclaw" / "agents" / agent_id / "agent"
         agent_dir.mkdir(parents=True, exist_ok=True)
+        _oc_ctx = int(os.environ.get("PINCHBENCH_OPENCLAW_CONTEXT_WINDOW", "81920"))
+        _oc_max_tokens = int(os.environ.get("PINCHBENCH_OPENCLAW_MAX_TOKENS", "16000"))
         models = {
             "mode": "replace",
             "providers": {"verl": {
                 "baseUrl": proxy_url, "apiKey": "dummy", "api": "openai-completions",
-                "models": [{"id": "verl-proxy", "name": "verl-proxy", "reasoning": False}],
+                "models": [{
+                    "id": "verl-proxy", "name": "verl-proxy", "reasoning": False,
+                    "input": ["text"],
+                    "contextWindow": _oc_ctx,
+                    "maxTokens": _oc_max_tokens,
+                }],
             }},
             "defaultProvider": "verl", "defaultModel": "verl/verl-proxy",
         }
@@ -1548,11 +1561,18 @@ class OpenClawAgentLoop(AgentLoopBase):
         disable_skills: bool = False,
     ) -> str:
         import base64
+        _oc_ctx = int(os.environ.get("PINCHBENCH_OPENCLAW_CONTEXT_WINDOW", "81920"))
+        _oc_max_tokens = int(os.environ.get("PINCHBENCH_OPENCLAW_MAX_TOKENS", "16000"))
         models_json = json.dumps({
             "mode": "replace",
             "providers": {"verl": {
                 "baseUrl": proxy_url, "apiKey": "dummy", "api": "openai-completions",
-                "models": [{"id": "verl-proxy", "name": "verl-proxy", "reasoning": False}],
+                "models": [{
+                    "id": "verl-proxy", "name": "verl-proxy", "reasoning": False,
+                    "input": ["text"],
+                    "contextWindow": _oc_ctx,
+                    "maxTokens": _oc_max_tokens,
+                }],
             }},
             "defaultProvider": "verl", "defaultModel": "verl/verl-proxy",
         }, indent=2)
@@ -2385,8 +2405,9 @@ class OpenClawAgentLoop(AgentLoopBase):
             "max_tokens": max_tokens,
             "temperature": req.temperature,
             "stream": False,
-            "chat_template_kwargs": {"enable_thinking": False},
         }
+        _reasoning = os.environ.get("OPENCLAW_MODEL_REASONING", "0").strip().lower() in {"1","true","yes","on"}
+        payload["chat_template_kwargs"] = {"enable_thinking": _reasoning}
         if req.top_p is not None:
             payload["top_p"] = req.top_p
         if req.top_k is not None:
