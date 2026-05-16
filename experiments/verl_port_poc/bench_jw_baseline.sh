@@ -4,21 +4,38 @@
 # (run_pinchbench_jiuwenclaw.py) with the path / env setup that took
 # multiple iterations to get right.
 #
+# Verified result on pod 154.54.102.42:17755 (2026-05-15/16):
+#   3 runs × 5 tasks → mean 0.437 ± 0.119, max 0.543 on base Qwen3-4B
+#   DS-V4-flash on the same harness → 0.866 (sanity check, harness OK)
+#
 # Prereqs on the pod:
 #   - /root/jiuwen_work/jiuwenclaw/.venv (uv-managed) with openjiuwen + jiuwen
 #   - /root/jiuwen_work/pinchbench/scripts/run_pinchbench_jiuwenclaw.py
 #   - /workspace/openclaw-verl-agent-rl/pinchbench_tasks/meeting_analysis/*
-#   - A standalone vLLM at $API_BASE serving the model under $MODEL_NAME
-#   - DEEPSEEK_API_KEY exported (used by the LLM judge)
+#   - A standalone vLLM at $API_BASE serving the model under $MODEL_NAME, MUST be
+#     started by the sibling launch_vllm_qwen3_base.sh (yarn rope factor 2.0
+#     gives 81920 ctx + --reasoning-parser deepseek_r1 to strip <think>).
+#   - jiuwenclaw interface_deep.py patched (see patches/jiuwenclaw_*.patch) so
+#     JIUWENCLAW_PROGRESSIVE_TOOLS env is respected.
+#   - DEEPSEEK_API_KEY exported (used by the LLM judge).
 #
 # Critical correctness gotchas (see memory/bench_jiuwenclaw_path_mismatch.md):
 #   - bench MUST pass --jiuwen-data-dir matching the stack's JIUWENCLAW_DATA_DIR.
 #     If they diverge, workspace_files are copied to one dir but jiuwen reads
 #     the other → File not found → all tasks score 0.
+#   - vLLM MUST be started with yarn rope scaling; default Qwen3-4B
+#     max_position_embeddings=40960 is too small (jiuwen system prompt + tool
+#     defs + transcript can hit 81k for the council_votes task).
+#   - jiuwen MUST be started with progressive_tools whitelist that
+#     EXCLUDES write_memory (model confuses it with write_file, saves report
+#     to a memory subsystem instead of the workspace → grading sees no file →
+#     score 0) and wiki_ingest (eats the input transcript → File not found
+#     doom-loop on subsequent read_file calls).
 #
 # Usage:
+#   bash launch_vllm_qwen3_base.sh                         # start vLLM (once)
 #   API_BASE=http://127.0.0.1:8123/v1 MODEL_NAME=Qwen3-4B \
-#     bash bench_jw_baseline.sh ./out_dir [num_runs]
+#     bash bench_jw_baseline.sh ./out_dir [num_runs]       # bench
 
 set -euo pipefail
 
@@ -39,6 +56,13 @@ JIUWENCLAW_REPO="${JIUWENCLAW_REPO:-/root/jiuwen_work/jiuwenclaw}"
 SKILL_ROOT="${SKILL_ROOT:-/workspace/openclaw-verl-agent-rl}"
 SUITE="${SUITE:-task_meeting_advisory_stakeholders,task_meeting_council_votes,task_meeting_gov_speaker_summary,task_meeting_tech_action_items,task_meeting_sentiment_analysis}"
 JUDGE_MODEL="${JUDGE_MODEL:-deepseek-chat}"
+MAX_ITERATIONS="${MAX_ITERATIONS:-20}"
+
+# Progressive tools whitelist — verified to land base 4B at ~0.44 avg.
+# DO NOT add write_memory (substitutes for write_file → workspace empty → 0
+# automated checks) or wiki_ingest (eats transcript → File not found loop).
+JIUWENCLAW_PROGRESSIVE_TOOLS="${JIUWENCLAW_PROGRESSIVE_TOOLS:-1}"
+JIUWENCLAW_PROGRESSIVE_VISIBLE="${JIUWENCLAW_PROGRESSIVE_VISIBLE:-read_file,write_file,list_files,edit_file,grep,glob,todo_create,todo_list,bash,memory_search,code}"
 
 LOG_DIR="${LOG_DIR:-/tmp/jw_bench}"
 mkdir -p "$LOG_DIR" "$OUT_ROOT"
@@ -49,8 +73,10 @@ if ! ss -tln 2>/dev/null | awk 'NR>1 {print $4}' | grep -qE ":${WS_PORT}\$"; the
   API_BASE="$API_BASE" API_KEY="$API_KEY" MODEL_NAME="$MODEL_NAME" MODEL_PROVIDER="$MODEL_PROVIDER" \
     WS_PORT="$WS_PORT" AGENT_SERVER_PORT="$AGENT_SERVER_PORT" GATEWAY_PORT="$GATEWAY_PORT" \
     JIUWENCLAW_DATA_DIR="$JIUWENCLAW_DATA_DIR" LOG_DIR="${LOG_DIR}/stack" \
-    USE_RL_ONLINE_RAIL=0 MEMORY_ENABLED=false MAX_ITERATIONS=12 \
+    USE_RL_ONLINE_RAIL=0 MEMORY_ENABLED=false MAX_ITERATIONS="$MAX_ITERATIONS" \
     JIUWENCLAW_REPO="$JIUWENCLAW_REPO" \
+    JIUWENCLAW_PROGRESSIVE_TOOLS="$JIUWENCLAW_PROGRESSIVE_TOOLS" \
+    JIUWENCLAW_PROGRESSIVE_VISIBLE="$JIUWENCLAW_PROGRESSIVE_VISIBLE" \
     setsid nohup bash "$(dirname "${BASH_SOURCE[0]}")/start_jw_headless.sh" \
     < /dev/null > "${LOG_DIR}/stack.out" 2>&1 &
   for _ in $(seq 1 30); do
