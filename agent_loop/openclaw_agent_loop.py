@@ -77,9 +77,16 @@ def _normalize_turn_rewards(task_id: str, per_turn_rewards: list[float]) -> list
     - Always-failing task (raw_mean → 0, baseline → 0): advantage → 0, no gradient.
     - Improving task (raw_mean > baseline): positive advantages, learning signal.
     - Consistently high task (raw_mean ≈ baseline): advantages → 0, converged.
+
+    Env override: set PINCHBENCH_TASK_EMA_DISABLE=1 to skip EMA normalization
+    entirely. Raw rewards pass through, letting verl's GRPO normalization
+    handle advantage scaling AND letting the race-to-bottom quality filter
+    (which expects raw 0-1 rewards on its < 0.05 threshold) actually fire.
     """
     if not per_turn_rewards:
         return per_turn_rewards
+    if os.environ.get("PINCHBENCH_TASK_EMA_DISABLE", "0").strip().lower() in {"1", "true", "yes", "on"}:
+        return list(per_turn_rewards)
     raw_mean = sum(per_turn_rewards) / len(per_turn_rewards)
     if task_id not in _turn_task_ema:
         _turn_task_ema[task_id] = _TURN_EMA_INIT
@@ -2479,7 +2486,16 @@ class OpenClawAgentLoop(AgentLoopBase):
         if not isinstance(tool_calls, list):
             tool_calls = []
         content = str(msg.get("content") or "")
-        response_text = self._tool_calls_to_xml_text(tool_calls) if tool_calls else content
+        # Include FULL generated tokens (think + narrative + tool_call XML) in response_ids
+        # so RL loss can update all generated tokens, not just the structured XML.
+        # vLLM hermes parser puts think/<think>...</think> + narrative + reply markers in `content`,
+        # and extracts <tool_call>...</tool_call> blocks into `tool_calls`. Concatenating them
+        # back recovers the full assistant response that the model actually generated.
+        if tool_calls:
+            tool_call_xml = self._tool_calls_to_xml_text(tool_calls)
+            response_text = (content + "\n" + tool_call_xml) if content else tool_call_xml
+        else:
+            response_text = content
         response_ids = list(self.tokenizer.encode(response_text, add_special_tokens=False))
         return {
             "response_ids": response_ids,

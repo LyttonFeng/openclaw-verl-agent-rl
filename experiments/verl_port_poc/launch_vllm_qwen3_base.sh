@@ -8,10 +8,16 @@
 #     Qwen3-4B's native max_position_embeddings is 40960, but jiuwen's system
 #     prompt + tool defs + long transcripts (e.g. council_votes) hit ~80k. We
 #     patch the model's config.json to advertise yarn at load time.
-#   - --reasoning-parser deepseek_r1  → strip <think>...</think> from the
+#   - --reasoning-parser qwen3  → strip <think>...</think> from the
 #     conversation history sent back on the next turn. Without this, the
 #     thinking text accumulates and (a) blows up context, (b) pollutes
-#     subsequent reasoning. deepseek_r1 parser handles Qwen3's <think> tag too.
+#     subsequent reasoning. MUST use qwen3 parser on vllm 0.10.2 — the
+#     deepseek_r1 parser is greedy on this version and dumps the entire
+#     response (including the actual answer) into reasoning_content, leaving
+#     content=None. Jiuwen's openai_model_client reads message.content, so
+#     deepseek_r1 makes every assistant turn look empty and the agent
+#     doom-loops on broken tool calls. vllm 0.10.2 already ships the qwen3
+#     reasoning parser; check `ReasoningParserManager.reasoning_parsers`.
 #   - --tool-call-parser hermes      → required by jiuwen's tool prompt format.
 #   - --enable-auto-tool-choice      → required for tool-using chat completions.
 #
@@ -67,7 +73,7 @@ CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES" \
     --max-num-seqs "$MAX_NUM_SEQS" \
     --gpu-memory-utilization "$GPU_MEM_UTIL" \
     --enable-auto-tool-choice --tool-call-parser hermes \
-    --reasoning-parser deepseek_r1 \
+    --reasoning-parser qwen3 \
     < /dev/null > "$LOG_FILE" 2>&1 &
 
 PID=$!
