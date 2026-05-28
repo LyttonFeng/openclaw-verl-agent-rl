@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -313,58 +314,72 @@ def _grade_llm_judge(
     rubric = task.llm_judge_rubric or _format_grading_criteria(task)
     prompt = _build_judge_prompt(task, transcript_summary, rubric, workspace_content)
 
-    if judge_backend == "api":
-        # Direct API call — bypasses OpenClaw personality injection
-        judge_result = call_judge_api(
-            prompt=prompt,
-            model=judge_model,
-            timeout_seconds=judge_timeout_seconds,
-            base_url=judge_base_url,
-            api_key=judge_api_key,
-            response_json=True,
-        )
+    max_retries = int(os.environ.get("PINCHBENCH_JUDGE_MAX_RETRIES", "3"))
+    backoff_base = float(os.environ.get("PINCHBENCH_JUDGE_RETRY_BACKOFF", "1.5"))
+    judge_result: Dict[str, Any] = {}
+    raw_parsed: Dict[str, Any] = {}
+    last_failure_reason = ""
+    for attempt in range(max_retries):
+        if judge_backend == "api":
+            judge_result = call_judge_api(
+                prompt=prompt,
+                model=judge_model,
+                timeout_seconds=judge_timeout_seconds,
+                base_url=judge_base_url,
+                api_key=judge_api_key,
+                response_json=True,
+            )
+            if verbose:
+                logger.info("   [VERBOSE] Judge attempt %d/%d status: %s",
+                            attempt + 1, max_retries, judge_result.get("status"))
+                if judge_result.get("error"):
+                    logger.info("   [VERBOSE] Judge error: %s", judge_result["error"])
+            api_ok = judge_result.get("status") == "success"
+            raw_parsed = _parse_judge_text(judge_result.get("text", "")) if api_ok else {}
+        else:
+            agent_id = _ensure_judge_agent(judge_agent_prefix, judge_model, skill_dir)
+            judge_workspace = Path(f"/tmp/pinchbench/judge/{task.task_id}")
+            judge_result = run_openclaw_prompt(
+                agent_id=agent_id,
+                prompt=prompt,
+                workspace=judge_workspace,
+                timeout_seconds=judge_timeout_seconds,
+            )
+            if verbose:
+                logger.info("   [VERBOSE] Judge attempt %d/%d status: %s exit_code: %s",
+                            attempt + 1, max_retries,
+                            judge_result.get("status"), judge_result.get("exit_code"))
+                logger.info("   [VERBOSE] Judge stderr: %s", judge_result.get("stderr", "")[:500])
+            api_ok = judge_result.get("status") == "success"
+            raw_parsed = _parse_judge_response(judge_result.get("transcript", [])) if api_ok else {}
 
-        if verbose:
-            logger.info("   [VERBOSE] Judge execution status: %s", judge_result.get("status"))
-            if judge_result.get("error"):
-                logger.info("   [VERBOSE] Judge error: %s", judge_result["error"])
+        if api_ok and raw_parsed:
+            break
 
-        if judge_result.get("status") != "success":
-            logger.warning("Judge API call failed: %s", judge_result.get("error", judge_result.get("status")))
+        if not api_ok:
+            last_failure_reason = f"api_status={judge_result.get('status')} error={judge_result.get('error', '')}"
+        else:
+            preview = (judge_result.get("text", "") or "")[:200].replace("\n", " ")
+            last_failure_reason = f"parse_empty (api ok, raw text head='{preview}')"
+        logger.warning("Judge attempt %d/%d failed for %s: %s",
+                       attempt + 1, max_retries, task.task_id, last_failure_reason)
 
-        raw_parsed = _parse_judge_text(judge_result.get("text", ""))
-    else:
-        # Default: OpenClaw agent session
-        agent_id = _ensure_judge_agent(judge_agent_prefix, judge_model, skill_dir)
-        judge_workspace = Path(f"/tmp/pinchbench/judge/{task.task_id}")
-        judge_result = run_openclaw_prompt(
-            agent_id=agent_id,
-            prompt=prompt,
-            workspace=judge_workspace,
-            timeout_seconds=judge_timeout_seconds,
-        )
-
-        if verbose:
-            logger.info("   [VERBOSE] Judge execution status: %s", judge_result.get("status"))
-            logger.info("   [VERBOSE] Judge exit code: %s", judge_result.get("exit_code"))
-            logger.info("   [VERBOSE] Judge stderr: %s", judge_result.get("stderr", "")[:500])
-
-        if judge_result.get("status") != "success":
-            logger.warning("Judge execution failed: %s", judge_result.get("status"))
-
-        raw_parsed = _parse_judge_response(judge_result.get("transcript", []))
+        if attempt < max_retries - 1:
+            time.sleep(backoff_base ** attempt)
 
     if verbose:
         logger.info("   [VERBOSE] Judge raw response parsed: %s", raw_parsed)
-    
-    # Normalize the response to handle various formats (criteria_scores, score, justification, etc.)
+
     parsed = _normalize_judge_response(raw_parsed)
     if verbose:
         logger.info("   [VERBOSE] Normalized judge response: %s", parsed)
-    
+
     breakdown = parsed.get("scores", {})
     total = parsed.get("total")
     notes = parsed.get("notes", "")
+    if not raw_parsed:
+        notes = (notes or "") + f" [judge_failed_after_{max_retries}_retries: {last_failure_reason}]"
+        logger.error("Judge exhausted retries for %s: %s", task.task_id, last_failure_reason)
     return GradeResult(
         task_id=task.task_id,
         score=float(total) if total is not None else 0.0,
