@@ -4,10 +4,10 @@
 Two RL training trajectories on the val5 meeting-analysis suite, on a shared
 "Evaluation step" axis.
 
-  single agent policy : measured per-round val5 mean (MR rounds)
-  swarm policy        : measured per-round val5 mean (14B-swarm rounds)
+  single agent policy : measured per-step val5 mean
+  swarm policy        : measured per-step val5 mean
 
-Light reference line = 4B baseline (47.8%).
+Light reference line = base model (47.8%).
 """
 import matplotlib
 matplotlib.use("Agg")
@@ -52,7 +52,7 @@ for spine in ["left", "bottom"]:
 
 # baseline reference (light solid line, not dashed)
 ax.axhline(BASELINE, color="#cbd5e1", linewidth=1.6, zorder=1)
-ax.annotate("4B baseline 47.8%", (8.45, BASELINE), textcoords="offset points",
+ax.annotate("base model 47.8%", (8.45, BASELINE), textcoords="offset points",
             xytext=(0, 5), ha="right", fontsize=9.5, color=GRAY)
 
 # single agent policy (measured) — slate, solid line + markers
@@ -88,7 +88,7 @@ leg = ax.legend(loc="lower right", fontsize=11, frameon=True, framealpha=0.95,
                 edgecolor="#e5e7eb")
 
 fig.text(0.013, 0.015,
-         "val5 mean per evaluation step. single agent = MR rounds; swarm = 14B-swarm rounds. Reference line = 4B baseline.",
+         "Each point = val5 mean accuracy at that RL training step. Reference line = base model (47.8%).",
          fontsize=8.5, color="#9ca3af")
 
 fig.tight_layout(rect=[0, 0.03, 1, 1])
