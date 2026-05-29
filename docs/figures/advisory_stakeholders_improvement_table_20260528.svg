@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#ffffff"/>
+
+  <text x="64" y="64" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#111827">Advisory Stakeholders: Base 4B vs RL Policy</text>
+  <text x="64" y="94" font-family="Arial, sans-serif" font-size="15" fill="#4b5563">Per-criterion grader breakdown. Base = 1-run, RL (MR8) = 3-run mean. Real measured scores.</text>
+
+  <rect x="64" y="124" width="1152" height="74" rx="8" fill="#f8fafc" stroke="#e5e7eb"/>
+  <text x="96" y="168" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#111827">Overall score</text>
+  <text x="520" y="168" font-family="Arial, sans-serif" font-size="24" font-weight="700" text-anchor="middle" fill="#6b7280">40.8%</text>
+  <text x="724" y="168" font-family="Arial, sans-serif" font-size="24" font-weight="700" text-anchor="middle" fill="#2563eb">53.3%</text>
+  <rect x="880" y="142" width="246" height="38" rx="19" fill="#dcfce7"/>
+  <text x="1003" y="168" font-family="Arial, sans-serif" font-size="21" font-weight="700" text-anchor="middle" fill="#166534">+12.5 pp</text>
+
+  <g font-family="Arial, sans-serif">
+    <text x="96" y="246" font-size="14" font-weight="700" fill="#6b7280">CRITERION</text>
+    <text x="520" y="246" font-size="14" font-weight="700" text-anchor="middle" fill="#6b7280">BASE 4B</text>
+    <text x="724" y="246" font-size="14" font-weight="700" text-anchor="middle" fill="#6b7280">RL POLICY</text>
+    <text x="1003" y="246" font-size="14" font-weight="700" text-anchor="middle" fill="#6b7280">GAIN</text>
+  </g>
+
+  <!-- bar geometry: base bar x=410 w=150; rl bar x=620 w=150; value*150 = filled width -->
+  <g font-family="Arial, sans-serif" font-size="16" fill="#111827">
+    <!-- Relocation cost captured: 0 -> .67 -->
+    <rect x="64" y="268" width="1152" height="50" fill="#ffffff" stroke="#eef2f7"/>
+    <text x="96" y="299">Relocation cost captured</text>
+    <rect x="410" y="282" width="150" height="18" rx="9" fill="#e5e7eb"/>
+    <rect x="410" y="282" width="0" height="18" rx="9" fill="#94a3b8"/>
+    <text x="580" y="297" fill="#6b7280">0%</text>
+    <rect x="620" y="282" width="150" height="18" rx="9" fill="#dbeafe"/>
+    <rect x="620" y="282" width="101" height="18" rx="9" fill="#2563eb"/>
+    <text x="790" y="297" fill="#2563eb">67%</text>
+    <text x="1003" y="299" text-anchor="middle" font-weight="700" fill="#166534">+67 pp</text>
+
+    <!-- Sharing preference stated: 0 -> .67 -->
+    <rect x="64" y="318" width="1152" height="50" fill="#f8fafc" stroke="#eef2f7"/>
+    <text x="96" y="349">Sharing preference stated</text>
+    <rect x="410" y="332" width="150" height="18" rx="9" fill="#e5e7eb"/>
+    <rect x="410" y="332" width="0" height="18" rx="9" fill="#94a3b8"/>
+    <text x="580" y="347" fill="#6b7280">0%</text>
+    <rect x="620" y="332" width="150" height="18" rx="9" fill="#dbeafe"/>
+    <rect x="620" y="332" width="101" height="18" rx="9" fill="#2563eb"/>
+    <text x="790" y="347" fill="#2563eb">67%</text>
+    <text x="1003" y="349" text-anchor="middle" font-weight="700" fill="#166534">+67 pp</text>
+
+    <!-- Stakeholder ID completeness (judge): .25 -> .42 -->
+    <rect x="64" y="368" width="1152" height="50" fill="#ffffff" stroke="#eef2f7"/>
+    <text x="96" y="399">Stakeholder identification completeness</text>
+    <rect x="410" y="382" width="150" height="18" rx="9" fill="#e5e7eb"/>
+    <rect x="410" y="382" width="38" height="18" rx="9" fill="#94a3b8"/>
+    <text x="580" y="397" fill="#6b7280">25%</text>
+    <rect x="620" y="382" width="150" height="18" rx="9" fill="#dbeafe"/>
+    <rect x="620" y="382" width="63" height="18" rx="9" fill="#2563eb"/>
+    <text x="790" y="397" fill="#2563eb">42%</text>
+    <text x="1003" y="399" text-anchor="middle" font-weight="700" fill="#166534">+17 pp</text>
+
+    <!-- Conflict/agreement mapping (judge): .25 -> .42 -->
+    <rect x="64" y="418" width="1152" height="50" fill="#f8fafc" stroke="#eef2f7"/>
+    <text x="96" y="449">Conflict and agreement mapping</text>
+    <rect x="410" y="432" width="150" height="18" rx="9" fill="#e5e7eb"/>
+    <rect x="410" y="432" width="38" height="18" rx="9" fill="#94a3b8"/>
+    <text x="580" y="447" fill="#6b7280">25%</text>
+    <rect x="620" y="432" width="150" height="18" rx="9" fill="#dbeafe"/>
+    <rect x="620" y="432" width="63" height="18" rx="9" fill="#2563eb"/>
+    <text x="790" y="447" fill="#2563eb">42%</text>
+    <text x="1003" y="449" text-anchor="middle" font-weight="700" fill="#166534">+17 pp</text>
+
+    <!-- Interest and position analysis (judge): .25 -> .38 -->
+    <rect x="64" y="468" width="1152" height="50" fill="#ffffff" stroke="#eef2f7"/>
+    <text x="96" y="499">Interest and position analysis</text>
+    <rect x="410" y="482" width="150" height="18" rx="9" fill="#e5e7eb"/>
+    <rect x="410" y="482" width="38" height="18" rx="9" fill="#94a3b8"/>
+    <text x="580" y="497" fill="#6b7280">25%</text>
+    <rect x="620" y="482" width="150" height="18" rx="9" fill="#dbeafe"/>
+    <rect x="620" y="482" width="57" height="18" rx="9" fill="#2563eb"/>
+    <text x="790" y="497" fill="#2563eb">38%</text>
+    <text x="1003" y="499" text-anchor="middle" font-weight="700" fill="#166534">+13 pp</text>
+
+    <!-- Evidence-based analysis: 0 -> 0 (still failing, honest) -->
+    <rect x="64" y="518" width="1152" height="50" fill="#f8fafc" stroke="#eef2f7"/>
+    <text x="96" y="549" fill="#6b7280">Evidence-based analysis</text>
+    <rect x="410" y="532" width="150" height="18" rx="9" fill="#e5e7eb"/>
+    <text x="580" y="547" fill="#9ca3af">0%</text>
+    <rect x="620" y="532" width="150" height="18" rx="9" fill="#e5e7eb"/>
+    <text x="790" y="547" fill="#9ca3af">0%</text>
+    <text x="1003" y="549" text-anchor="middle" font-weight="700" fill="#9ca3af">—</text>
+
+    <!-- Specific member positions: 0 -> 0 -->
+    <rect x="64" y="568" width="1152" height="50" fill="#ffffff" stroke="#eef2f7"/>
+    <text x="96" y="599" fill="#6b7280">Specific member positions</text>
+    <rect x="410" y="582" width="150" height="18" rx="9" fill="#e5e7eb"/>
+    <text x="580" y="597" fill="#9ca3af">0%</text>
+    <rect x="620" y="582" width="150" height="18" rx="9" fill="#e5e7eb"/>
+    <text x="790" y="597" fill="#9ca3af">0%</text>
+    <text x="1003" y="599" text-anchor="middle" font-weight="700" fill="#9ca3af">—</text>
+  </g>
+
+  <text x="64" y="652" font-family="Arial, sans-serif" font-size="13" fill="#6b7280">Source: Val5 advisory_stakeholders. Base = run_20260529_qwen3_base_single_bench_test. RL = MR8 (round_08_temp07), 3-run mean.</text>
+  <text x="64" y="672" font-family="Arial, sans-serif" font-size="13" fill="#9ca3af">RL gains concentrate on relocation cost &amp; sharing-preference extraction; evidence-grounding and per-member positions remain unsolved by both.</text>
+</svg>
