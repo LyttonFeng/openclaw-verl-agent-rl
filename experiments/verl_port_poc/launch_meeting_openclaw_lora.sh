@@ -53,10 +53,13 @@ export PINCHBENCH_REWARD_RETURN_MODE="scalar"   # scalar reward → custom_rewar
 unset PRM_VLLM_BASE_URL PRM_API_KEY PRM_MODEL PRM_USE_CHAT_COMPLETIONS PRM_RESOLVE_MODEL PINCHBENCH_TERMINAL_REWARD_WEIGHT
 
 # ─── Paths ────────────────────────────────────────────────
-REPO_INTEGRATION=/workspace/verl_port/openclaw_integration
-REPO_DATA=/workspace/openclaw-verl-agent-rl
-DATA_DIR=/workspace/verl_port/data_meeting
-OUTPUT_DIR=/workspace/verl_port/ckpt_openclaw
+PYTHON_BIN="${PYTHON_BIN:-/root/openclaw-venv/bin/python}"
+REPO_INTEGRATION="${REPO_INTEGRATION:-/workspace/verl_port/openclaw_integration}"
+REPO_DATA="${REPO_DATA:-/root/openclaw-verl-agent-rl}"
+DATA_DIR="${DATA_DIR:-/workspace/verl_port/data_meeting}"
+TRAIN_FILE="${TRAIN_FILE:-${DATA_DIR}/train_full23.parquet}"
+VAL_FILE="${VAL_FILE:-${DATA_DIR}/val_5test.parquet}"
+OUTPUT_DIR="${OUTPUT_DIR:-/workspace/verl_port/ckpt_openclaw}"
 AGENT_LOOP_CONFIG="${REPO_INTEGRATION}/rl/agent_loop/config.yaml"
 REWARD_MANAGER_PATH="${REPO_INTEGRATION}/rl/train/reward_manager.py"
 
@@ -64,7 +67,7 @@ export PINCHBENCH_DIR="${REPO_DATA}"
 export PYTHONPATH="${REPO_INTEGRATION}:${REPO_DATA}:${PYTHONPATH:-}"
 
 # HF cache
-export HF_HOME="${HF_HOME:-/root/hf_cache}"
+export HF_HOME="${HF_HOME:-/workspace/hf_cache}"
 export HF_HUB_CACHE="${HF_HUB_CACHE:-${HF_HOME}/hub}"
 export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-${HF_HUB_CACHE}}"
 
@@ -78,7 +81,7 @@ export PINCHBENCH_BEST_CKPT=1
 export PINCHBENCH_KEEP_LATEST_CKPT=1
 
 # ─── Hyperparams ──────────────────────────────────────────
-MODEL="${VERL_MODEL:-Qwen/Qwen3-4B}"
+MODEL="${VERL_MODEL:-/workspace/hf_cache/qwen3-8b-rope2}"
 N_GPUS=2
 BATCH_SIZE=2
 MICRO_BATCH=1
@@ -137,7 +140,7 @@ echo "  Output:       ${OUTPUT_DIR}"
 echo "═══════════════════════════════════════════════════════════════════"
 
 # OpenClaw preflight (SSH to localhost)
-python3 -c "
+"$PYTHON_BIN" -c "
 import subprocess
 r = subprocess.run(['ssh','-o','StrictHostKeyChecking=no','-o','ConnectTimeout=10','-i','${OPENCLAW_SSH_KEY}','-p','${OPENCLAW_PORT}','${OPENCLAW_USER}@${OPENCLAW_HOST}','command -v openclaw && openclaw --version'], capture_output=True, text=True)
 assert r.returncode == 0, f'OpenClaw preflight FAILED: {r.stderr}'
@@ -145,11 +148,17 @@ print('OpenClaw preflight OK:', r.stdout.strip())
 "
 
 # DeepSeek judge preflight
-python3 -c "
+"$PYTHON_BIN" -c "
 import sys
 sys.path.insert(0, '${REPO_DATA}/scripts')
 from lib_grading import preflight_judge_connection
-preflight_judge_connection(judge_model='deepseek-chat', judge_backend='api', judge_base_url='https://api.deepseek.com/v1', judge_api_key='${DEEPSEEK_API_KEY}')
+import os
+preflight_judge_connection(
+    judge_model='deepseek-chat',
+    judge_backend='api',
+    judge_base_url='https://api.deepseek.com/v1',
+    judge_api_key=os.environ['DEEPSEEK_API_KEY'],
+)
 "
 
 cd "${REPO_INTEGRATION}"
@@ -157,12 +166,12 @@ echo "[debug] cwd=$(pwd)"
 echo "[debug] PYTHONPATH=${PYTHONPATH}"
 echo "[debug] which python3: $(which python3)"
 
-env PYTHONPATH="${REPO_INTEGRATION}:${REPO_DATA}:${PYTHONPATH:-}" python3 -m rl.train.launch_main_ppo \
+env PYTHONPATH="${REPO_INTEGRATION}:${REPO_DATA}:${PYTHONPATH:-}" "$PYTHON_BIN" -m rl.train.launch_main_ppo \
     algorithm.adv_estimator=grpo \
     algorithm.use_kl_in_reward=False \
     algorithm.norm_adv_by_std_in_grpo=False \
-    data.train_files="${DATA_DIR}/train_full23.parquet" \
-    data.val_files="${DATA_DIR}/val_5test.parquet" \
+    data.train_files="${TRAIN_FILE}" \
+    data.val_files="${VAL_FILE}" \
     data.train_batch_size="${BATCH_SIZE}" \
     data.max_prompt_length="${MAX_PROMPT_LENGTH}" \
     data.max_response_length="${MAX_RESPONSE_LENGTH}" \
@@ -212,19 +221,17 @@ env PYTHONPATH="${REPO_INTEGRATION}:${REPO_DATA}:${PYTHONPATH:-}" python3 -m rl.
     trainer.val_before_train=False \
     trainer.logger='["console"]' \
     +ray_kwargs.ray_init.include_dashboard=False \
-    +ray_kwargs.ray_init.runtime_env.env_vars.HF_HOME=/root/hf_cache \
-    +ray_kwargs.ray_init.runtime_env.env_vars.HF_HUB_CACHE=/root/hf_cache/hub \
-    +ray_kwargs.ray_init.runtime_env.env_vars.TRANSFORMERS_CACHE=/root/hf_cache/hub \
+    +ray_kwargs.ray_init.runtime_env.env_vars.HF_HOME="${HF_HOME}" \
+    +ray_kwargs.ray_init.runtime_env.env_vars.HF_HUB_CACHE="${HF_HUB_CACHE}" \
+    +ray_kwargs.ray_init.runtime_env.env_vars.TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE}" \
     +ray_kwargs.ray_init.runtime_env.env_vars.OPENCLAW_HOST="'${OPENCLAW_HOST}'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.OPENCLAW_USER="'${OPENCLAW_USER}'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.OPENCLAW_PORT="'${OPENCLAW_PORT}'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.OPENCLAW_SSH_KEY="'${OPENCLAW_SSH_KEY}'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.OPENCLAW_MODEL_REASONING="'${OPENCLAW_MODEL_REASONING}'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_DIR="'${PINCHBENCH_DIR}'" \
-    +ray_kwargs.ray_init.runtime_env.env_vars.DEEPSEEK_API_KEY="'${DEEPSEEK_API_KEY}'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_GRADE_JUDGE_MODEL="'${PINCHBENCH_GRADE_JUDGE_MODEL}'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_GRADE_JUDGE_BASE_URL="'${PINCHBENCH_GRADE_JUDGE_BASE_URL}'" \
-    +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_GRADE_JUDGE_API_KEY="'${PINCHBENCH_GRADE_JUDGE_API_KEY}'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.REWARD_MODE=baseline \
     +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_REWARD_RETURN_MODE=scalar \
     +ray_kwargs.ray_init.runtime_env.env_vars.MAX_TURNS="'${MAX_TURNS}'" \

@@ -36,7 +36,17 @@ from lib_agent import (
     slugify_model,
     validate_openrouter_model,
 )
-from lib_axiom import init_axiom
+try:
+    from lib_axiom import init_axiom
+except ModuleNotFoundError:
+    class _NoopAxiom:
+        def __getattr__(self, _name):
+            def _noop(*_args, **_kwargs):
+                return None
+            return _noop
+
+    def init_axiom(*_args, **_kwargs):
+        return _NoopAxiom()
 from lib_grading import (
     DEFAULT_JUDGE_TIMEOUT_SECONDS,
     GradeResult,
@@ -436,6 +446,66 @@ def _get_benchmark_version(script_dir: Path) -> str:
     return result.stdout.strip()
 
 
+def _list_openclaw_bench_agents() -> List[str]:
+    """Return agent ids currently registered under OpenClaw's bench namespace."""
+    try:
+        result = subprocess.run(
+            ["openclaw", "agents", "list"],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if result.returncode != 0:
+        return []
+    agents: List[str] = []
+    for line in result.stdout.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("- bench-"):
+            continue
+        agent_id = stripped[2:].split()[0]
+        if agent_id:
+            agents.append(agent_id)
+    return agents
+
+
+def _enforce_bench_agent_namespace(current_agent_id: str, namespace: str) -> None:
+    """Fail fast if stale bench agents from another namespace are present.
+
+    Isolated benchmark wrappers should set a unique ``PINCHBENCH_AGENT_SUFFIX``.
+    If any other ``bench-*`` agent exists in the same OpenClaw home, the run can
+    silently reuse stale sessions, workspace paths, or model config. Stop before
+    producing misleading scores.
+    """
+    if os.environ.get("PINCHBENCH_ALLOW_FOREIGN_BENCH_AGENTS", "").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return
+    if not namespace:
+        logger.warning(
+            "PINCHBENCH_AGENT_SUFFIX is empty; namespace isolation check is disabled."
+        )
+        return
+    allowed_suffix = f"-{namespace}"
+    foreign = [
+        agent
+        for agent in _list_openclaw_bench_agents()
+        if agent != current_agent_id and not agent.endswith(allowed_suffix)
+    ]
+    if foreign:
+        logger.error(
+            "Foreign bench agents found in this OpenClaw home: %s. "
+            "Use an isolated OPENCLAW_HOME/PINCHBENCH_AGENT_SUFFIX or clean stale agents.",
+            ", ".join(sorted(foreign)),
+        )
+        sys.exit(4)
+
+
 def _colorize_gradient(ascii_art: str) -> str:
     if not _supports_truecolor():
         return ascii_art
@@ -710,7 +780,7 @@ def main():
     # Determine tasks directory
     script_dir = Path(__file__).parent
     skill_root = script_dir.parent  # Parent of scripts/ is the skill root
-    tasks_dir = skill_root / "tasks"
+    tasks_dir = Path(os.environ.get("PINCHBENCH_TASKS_DIR", skill_root / "tasks"))
 
     logger.info("🦞🦀🦐 PinchBench - OpenClaw Benchmarking")
     ascii_crab = _load_ascii_art(skill_root, "crab.txt")
@@ -781,13 +851,14 @@ def main():
     runner.load_tasks()
 
     model_slug = slugify_model(args.model)
-    run_root = Path("/tmp/pinchbench")
+    run_root = Path(os.environ.get("PINCHBENCH_RUN_ROOT", "/tmp/pinchbench"))
     run_id = _next_run_id(run_root)
     skill_dir = skill_root
     agent_suffix = os.environ.get("PINCHBENCH_AGENT_SUFFIX", "")
     agent_id = f"bench-{model_slug}{'-' + agent_suffix if agent_suffix else ''}"
     # Use a shared workspace for the agent - we'll copy fixtures per task
-    agent_workspace = Path(f"/tmp/pinchbench/{run_id}/agent_workspace")
+    agent_workspace = run_root / run_id / "agent_workspace"
+    _enforce_bench_agent_namespace(agent_id, agent_suffix)
 
     # Validate model exists before wasting time on tasks
     if args.base_url:
@@ -804,7 +875,11 @@ def main():
         args.model,
         agent_workspace,
         base_url=args.base_url,
-        api_key=args.api_key,
+        api_key=(
+            args.api_key
+            or os.environ.get("PINCHBENCH_MODEL_API_KEY")
+            or os.environ.get("DEEPSEEK_API_KEY")
+        ),
     )
     cleanup_agent_sessions(agent_id)
 

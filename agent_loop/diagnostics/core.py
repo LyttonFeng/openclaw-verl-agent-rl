@@ -150,6 +150,13 @@ def diagnose(
 
     read_paths, write_paths, read_sizes, write_records = _walk_trajectory(trajectory, diag)
 
+    # Swarm/relay mode: the Lead dispatches a sub-agent (exec subagent.sh /
+    # run_subagent.py) which reads the transcript and does the analysis. The
+    # Lead's own reads=0 is correct-by-design, so transcript_not_read must NOT
+    # be treated as fatal here. Non-swarm flows never match this, so behavior
+    # is unchanged for them.
+    delegated_to_subagent = _used_subagent(trajectory)
+
     # Layer 1: transcript_read
     for path in read_paths:
         leaf = _path_leaf(path)
@@ -231,7 +238,7 @@ def diagnose(
     tags: list[str] = []
     if diag.timed_out:
         tags.append("timeout")
-    if expected_input_files and not diag.transcript_read:
+    if expected_input_files and not diag.transcript_read and not delegated_to_subagent:
         tags.append("transcript_not_read")
     if expected_output_file and not (diag.output_file_written or diag.output_file_exists):
         tags.append("output_not_written")
@@ -265,6 +272,31 @@ def diagnose(
     diag.fatal = bool(set(tags) & FATAL_TAGS)
     diag.notes = _make_notes(diag)
     return diag
+
+
+def _used_subagent(trajectory: list[dict[str, Any]]) -> bool:
+    """True if the Lead dispatched a sub-agent (exec subagent.sh/run_subagent.py).
+
+    In swarm/relay mode the sub-agent reads the transcript on the Lead's behalf,
+    so the Lead reading nothing is expected rather than a fatal failure.
+    """
+    for event in trajectory:
+        if event.get("type") != "message":
+            continue
+        msg = event.get("message", {})
+        if msg.get("role") != "assistant":
+            continue
+        for item in msg.get("content", []):
+            if not isinstance(item, dict) or item.get("type") != "toolCall":
+                continue
+            if str(item.get("name", "")).lower() != "exec":
+                continue
+            args = item.get("arguments", {}) or {}
+            cmd = str(args.get("command", ""))
+            joined = cmd + " " + " ".join(str(a) for a in (args.get("args") or []))
+            if "subagent.sh" in joined or "run_subagent.py" in joined:
+                return True
+    return False
 
 
 def _walk_trajectory(

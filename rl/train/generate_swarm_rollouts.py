@@ -43,6 +43,40 @@ from judge import judge_swarm_policy, composite_reward  # noqa: E402
 import generate_meeting_rollouts as gmr  # noqa: E402
 
 
+# Monkey-patch gmr._ensure_agent to honor a real API key from LEAD_API_KEY env.
+# The original hardcodes api_key="dummy" (fine for local vLLM, fails for
+# DeepSeek API where the Lead model is hosted).
+def _ensure_agent_with_real_key(model: str, vllm_base_url: str, worker_idx: int) -> str:
+    with gmr._worker_lock:
+        if worker_idx in gmr._worker_agents:
+            return gmr._worker_agents[worker_idx]
+        from lib_agent import ensure_agent_exists
+        base = f"bench-custom-{model.lower().replace('/', '-')}"
+        agent_id = f"{base}-w{worker_idx}"
+        workspace_dir = Path(
+            f"/tmp/pinchbench/{gmr._ROLLOUT_RUN_ID}/worker_{worker_idx}/agent_workspace"
+        )
+        workspace_dir.mkdir(parents=True, exist_ok=True)
+        api_key = (
+            os.environ.get("LEAD_API_KEY")
+            or os.environ.get("DEEPSEEK_API_KEY")
+            or os.environ.get("OPENAI_API_KEY")
+            or "dummy"
+        )
+        ensure_agent_exists(
+            agent_id=agent_id,
+            model_id=f"custom/{model}",
+            workspace_dir=workspace_dir,
+            base_url=vllm_base_url,
+            api_key=api_key,
+        )
+        gmr._worker_agents[worker_idx] = agent_id
+        return agent_id
+
+
+gmr._ensure_agent = _ensure_agent_with_real_key
+
+
 def _save_jsonl_line(path: Path, record: dict, lock: threading.Lock):
     with lock:
         with path.open("a") as f:
@@ -57,6 +91,8 @@ def _extract_exec_stats(transcript: list[dict]) -> dict:
     """
     n_tool = 0
     n_read = 0
+    n_subagent = 0
+    subagent_tasks: list[str] = []
     read_paths_offsets: list[tuple[str, int]] = []
     files_written: set[str] = set()
     for event in transcript:
@@ -86,6 +122,25 @@ def _extract_exec_stats(transcript: list[dict]) -> dict:
                 path = str(args.get("path") or args.get("file") or "")
                 if path:
                     files_written.add(path)
+            elif name in ("exec",):
+                cmd = str(args.get("command", ""))
+                exec_args = args.get("args") or []
+                if "subagent.sh" in cmd or "run_subagent.py" in cmd:
+                    n_subagent += 1
+                    # OpenClaw separates command and args. First exec_arg is the
+                    # task description, second is the source file path, etc.
+                    if isinstance(exec_args, list) and len(exec_args) >= 1:
+                        sub_desc = str(exec_args[0])
+                        subagent_tasks.append(sub_desc[:200])
+                    else:
+                        # fallback: maybe args were inlined in command string
+                        import shlex
+                        try:
+                            toks = shlex.split(cmd)
+                            sub_desc = toks[1] if len(toks) > 1 else ""
+                            subagent_tasks.append(sub_desc[:200])
+                        except ValueError:
+                            subagent_tasks.append("(parse failed)")
 
     offsets = [o for _, o in read_paths_offsets]
     coverage = f"L{min(offsets)}-{max(offsets)}" if offsets else ""
@@ -107,6 +162,8 @@ def _extract_exec_stats(transcript: list[dict]) -> dict:
     return {
         "n_tool_calls": n_tool,
         "n_reads": n_read,
+        "n_subagent_calls": n_subagent,
+        "subagent_tasks": subagent_tasks,
         "coverage_hint": coverage,
         "n_files_written": len(files_written),
         "has_reread": has_reread,
@@ -180,6 +237,8 @@ def _process_one(
         n_files_written=stats["n_files_written"],
         has_reread=stats["has_reread"],
         has_intermediate_files=stats["has_intermediate_files"],
+        n_subagent_calls=stats.get("n_subagent_calls", 0),
+        subagent_tasks=stats.get("subagent_tasks", []),
         **judge_kwargs,
     )
     swarm_score = judge_result.score
@@ -204,6 +263,8 @@ def _process_one(
         "judge_score": grading.get("judge_score", 0.0),
         "n_tool_calls": stats["n_tool_calls"],
         "n_reads": stats["n_reads"],
+        "n_subagent_calls": stats.get("n_subagent_calls", 0),
+        "subagent_tasks": stats.get("subagent_tasks", []),
         "coverage_hint": stats["coverage_hint"],
         "n_files_written": stats["n_files_written"],
         "files_written": stats["files_written"],

@@ -1,0 +1,14 @@
+point,checkpoint,mini_rounds,validation_runs,score_pct,score_raw,max_score,notes
+baseline_report,Qwen3-4B rope2,0,report,44.7,,,Official experiment_report apples-to-apples baseline
+baseline_observed_low,Qwen3-4B rope2,0,1,47.8,,,Same-wrapper observed baseline run
+baseline_observed_high,Qwen3-4B rope2,0,1,49.8,,,Same-wrapper observed baseline run
+mr2,policy_mr2,2,1,54.0,2.698889,5.0,First policy RL validation point
+mr4,policy_mr4,4,1,52.9,2.647239,5.0,Small single-run dip
+mr6,policy_mr6,6,1,53.7,2.683211,5.0,Recovered from MR4
+mr8,policy_mr8,8,1,55.1,2.754306,5.0,Best single-run point
+mr8_formal,policy_mr8,8,3,54.2,8.130189,15.0,Formal 3-run confirmation
+mr9,policy_mr9,9,1,47.4,2.3715,5.0,Regression; council_votes 10% and tech_action_items hallucinated
+mr10,policy_mr10,10,1,50.8,2.5395,5.0,Regression after MR9/MR10; council_votes reverted to shallow transcript coverage
+mr11b_bad_judge,policy_mr11b,11,1,33.5,1.673667,5.0,Invalid point: judge transport failure on gov_speaker_summary
+mr11b,policy_mr11b,11,1,56.3,2.812639,5.0,Best single-run point after MR8 rollback group4 targeted round; judge breakdown checked per task
+mr11b_formal,policy_mr11b,11,3,47.2,7.073194,15.0,Formal 3-run did not confirm single-run gain; judge breakdown checked and valid

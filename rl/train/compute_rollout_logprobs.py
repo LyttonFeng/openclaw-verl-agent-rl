@@ -79,12 +79,20 @@ def main():
 
     print(f'Loading base model {args.model_path} ({args.dtype}, {n_gpus} GPU)...')
     model = AutoModelForCausalLM.from_pretrained(args.model_path, **fp_kwargs)
-    print(f'Loading LoRA from {args.lora_path}...')
-    model = PeftModel.from_pretrained(model, args.lora_path, is_trainable=False)
+    if args.lora_path:
+        print(f'Loading LoRA from {args.lora_path}...')
+        model = PeftModel.from_pretrained(model, args.lora_path, is_trainable=False)
+    else:
+        print('No LoRA path provided; computing P_old with base model.')
     model.eval()
 
-    # 通过 PEFT 拿到底层 transformer body 和 lm_head
-    causal_lm = model.base_model.model
+    # PEFT wraps the causal LM at model.base_model.model. Plain HF causal LMs
+    # also expose .base_model, but that is the bare transformer body, not a
+    # CausalLM with .model/.lm_head.
+    if args.lora_path and hasattr(model, "base_model") and hasattr(model.base_model, "model"):
+        causal_lm = model.base_model.model
+    else:
+        causal_lm = model
     body = causal_lm.model
     lm_head = causal_lm.lm_head
 

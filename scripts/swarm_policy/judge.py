@@ -65,12 +65,19 @@ template_id: {template_id}
 
 # Observed execution (this is the primary signal — judge based on what the agent actually did)
 - terminal score: {terminal_score:.3f}
-- total tool calls: {n_tool_calls}
-- read calls: {n_reads}
+- total tool calls by Lead: {n_tool_calls}
+- direct read calls by Lead: {n_reads}
 - read offset range: {coverage_hint}
 - distinct files written: {n_files_written}
 - evidence of re-read after draft (any read with offset overlapping earlier reads): {has_reread}
 - evidence of intermediate notes / drafts (writes to non-final files): {has_intermediate_files}
+- **sub-agent dispatches** (delegations to a frozen Qwen3-4B helper): {n_subagent_calls}
+- sub-agent task descriptions: {subagent_tasks}
+
+DECOMPOSITION SIGNAL: A Lead that dispatches sub-agents IS decomposing the work — the
+sub-agents do the reading and return compact summaries. So "0 reads by Lead but
+N sub-agent dispatches" = STRONG decomposition (Lead delegated everything).
+"0 reads by Lead AND 0 sub-agent dispatches" = no work attempted.
 
 # Rate the OBSERVED policy on four dimensions, each 0.0 to 1.0:
 
@@ -80,7 +87,7 @@ template_id: {template_id}
 
 3. **adherence** — Did the observed behavior match the intended swarm style (template_id)? Score high if execution aligns with the template's expected pattern. Score low if agent ignored the template style.
 
-4. **efficiency** — Was the decomposition right-sized? Score low for over-decomposition (way more reads/writes than needed) or under-decomposition (single pass on multi-aspect task). Score high if right-sized.
+4. **efficiency** — Was effort spent on the task (not wasted)? Score low ONLY if there's clear duplicate / redundant work (e.g., reading the same section twice for no reason, dispatching identical sub-tasks). Do NOT penalize thorough work or multiple sub-agents that each cover distinct aspects — that's good decomposition, not waste.
 
 Return ONLY this JSON object (no markdown, no prose):
 
@@ -137,7 +144,7 @@ def _call_api(prompt: str, *, model: str, base_url: str, api_key: str, timeout: 
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.0,
-            "max_tokens": 1024,
+            "max_tokens": 4096,  # DSv4-Pro's reasoning can eat 2-3k tokens; need headroom
             "response_format": {"type": "json_object"},
         }
     ).encode("utf-8")
@@ -150,7 +157,11 @@ def _call_api(prompt: str, *, model: str, base_url: str, api_key: str, timeout: 
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-        text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        msg = data.get("choices", [{}])[0].get("message", {})
+        # DSv4-Pro frequently returns its analysis in `reasoning_content` and
+        # leaves `content` empty when max_tokens is hit. Fall back to
+        # reasoning_content so the judge still produces output.
+        text = msg.get("content") or msg.get("reasoning_content") or ""
         return text, None
     except Exception as e:
         return "", f"{type(e).__name__}: {e}"
@@ -169,6 +180,8 @@ def judge_swarm_policy(
     n_files_written: int = 0,
     has_reread: bool = False,
     has_intermediate_files: bool = False,
+    n_subagent_calls: int = 0,
+    subagent_tasks: list[str] | None = None,
     model: str = DEFAULT_MODEL,
     base_url: str = DEFAULT_BASE_URL,
     api_key: Optional[str] = None,
@@ -190,6 +203,7 @@ def judge_swarm_policy(
             error="no DEEPSEEK_API_KEY",
         )
 
+    sub_tasks_str = "; ".join(subagent_tasks or []) if subagent_tasks else "(none)"
     prompt = _USER_TMPL.format(
         task_brief=task_brief[:800],
         template_id=template_id,
@@ -202,6 +216,8 @@ def judge_swarm_policy(
         n_files_written=n_files_written,
         has_reread="yes" if has_reread else "no",
         has_intermediate_files="yes" if has_intermediate_files else "no",
+        n_subagent_calls=n_subagent_calls,
+        subagent_tasks=sub_tasks_str,
     )
 
     last_err = ""

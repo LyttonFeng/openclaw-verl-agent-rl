@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="520" viewBox="0 0 920 520">
+  <rect width="920" height="520" fill="#ffffff"/>
+  <text x="60" y="45" font-family="Arial, sans-serif" font-size="24" font-weight="700" fill="#111827">Meeting Policy RL Validation Curve</text>
+  <text x="60" y="72" font-family="Arial, sans-serif" font-size="13" fill="#4b5563">Real Val5 results, temperature 0.2. Single-run points plus MR8 formal 3-run confirmation.</text>
+  <line x1="90" y1="430" x2="850" y2="430" stroke="#111827" stroke-width="1"/>
+  <line x1="90" y1="100" x2="90" y2="430" stroke="#111827" stroke-width="1"/>
+  <g font-family="Arial, sans-serif" font-size="12" fill="#374151">
+    <text x="50" y="434">44%</text>
+    <text x="50" y="355">48%</text>
+    <text x="50" y="276">52%</text>
+    <text x="50" y="197">56%</text>
+    <text x="50" y="118">60%</text>
+  </g>
+  <g stroke="#e5e7eb" stroke-width="1">
+    <line x1="90" y1="430" x2="850" y2="430"/>
+    <line x1="90" y1="351" x2="850" y2="351"/>
+    <line x1="90" y1="272" x2="850" y2="272"/>
+    <line x1="90" y1="193" x2="850" y2="193"/>
+    <line x1="90" y1="114" x2="850" y2="114"/>
+  </g>
+  <line x1="100" y1="416" x2="840" y2="416" stroke="#9ca3af" stroke-width="2" stroke-dasharray="5 5"/>
+  <text x="690" y="408" font-family="Arial, sans-serif" font-size="12" fill="#6b7280">official baseline 44.7%</text>
+  <polyline fill="none" stroke="#2563eb" stroke-width="4" points="160,246 270,268 380,252 490,224 600,363 695,309 790,200"/>
+  <g fill="#2563eb">
+    <circle cx="160" cy="246" r="6"/>
+    <circle cx="270" cy="268" r="6"/>
+    <circle cx="380" cy="252" r="6"/>
+    <circle cx="490" cy="224" r="6"/>
+    <circle cx="600" cy="363" r="6"/>
+    <circle cx="695" cy="309" r="6"/>
+    <circle cx="790" cy="200" r="6"/>
+  </g>
+  <circle cx="835" cy="242" r="6" fill="#dc2626"/>
+  <line x1="490" y1="224" x2="835" y2="242" stroke="#dc2626" stroke-width="3" stroke-dasharray="6 5"/>
+  <g font-family="Arial, sans-serif" font-size="13" fill="#111827" text-anchor="middle">
+    <text x="160" y="462">MR2</text>
+    <text x="270" y="462">MR4</text>
+    <text x="380" y="462">MR6</text>
+    <text x="490" y="462">MR8</text>
+    <text x="600" y="462">MR9</text>
+    <text x="695" y="462">MR10</text>
+    <text x="790" y="462">MR11b</text>
+    <text x="835" y="462">MR8 3-run</text>
+  </g>
+  <g font-family="Arial, sans-serif" font-size="13" fill="#111827" text-anchor="middle">
+    <text x="160" y="232">54.0%</text>
+    <text x="270" y="254">52.9%</text>
+    <text x="380" y="238">53.7%</text>
+    <text x="490" y="210">55.1%</text>
+    <text x="600" y="349">47.4%</text>
+    <text x="695" y="295">50.8%</text>
+    <text x="790" y="186">56.3%</text>
+    <text x="835" y="228">54.2%</text>
+  </g>
+  <g font-family="Arial, sans-serif" font-size="12" fill="#4b5563">
+    <rect x="600" y="92" width="230" height="58" fill="#f9fafb" stroke="#e5e7eb"/>
+    <circle cx="620" cy="113" r="5" fill="#2563eb"/>
+    <text x="635" y="117">Val5 1-run mini-round checkpoints</text>
+    <circle cx="620" cy="135" r="5" fill="#dc2626"/>
+    <text x="635" y="139">MR8 formal 3-run mean</text>
+  </g>
+</svg>

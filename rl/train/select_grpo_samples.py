@@ -195,17 +195,44 @@ def terminal_vs_prm_alignment(records: list[dict]) -> dict:
 # ─── GRPO group filter ──────────────────────────────────────────────────────
 
 
+def _is_bad_trajectory(record: dict) -> bool:
+    """Conservative trajectory-level filter for obviously unusable rollouts."""
+    if record.get("timed_out"):
+        return True
+    if record.get("status") not in (None, "success", "ok"):
+        return True
+
+    diagnostics = record.get("diagnostics") or {}
+    if diagnostics.get("fatal"):
+        return True
+
+    features = record.get("policy_features") or {}
+    if float(features.get("writes_output", 1.0) or 0.0) <= 0.0:
+        return True
+    if float(features.get("multi_read", 1.0) or 0.0) <= 0.0:
+        return True
+    if float(features.get("output_quality", 1.0) or 0.0) <= 0.0:
+        return True
+
+    return False
+
+
 def filter_valid_groups(
     records: list[dict],
     variance_threshold: float,
+    drop_perfect_tie_groups: bool = False,
+    drop_bad_trajectories: bool = False,
 ) -> tuple[list[dict], dict]:
     """
     Keep only records whose task_id group has score variance > threshold.
 
     Returns (kept_records, group_summary_dict).
     """
+    dropped_bad = [r for r in records if drop_bad_trajectories and _is_bad_trajectory(r)]
+    candidate_records = [r for r in records if r not in dropped_bad]
+
     by_task: dict[str, list[dict]] = defaultdict(list)
-    for r in records:
+    for r in candidate_records:
         by_task[r.get("task_id", "?")].append(r)
 
     valid_tasks: list[str] = []
@@ -225,7 +252,10 @@ def filter_valid_groups(
                 prm_means_in_group.append(mean(ts))
         prm_mean_in_task = mean(prm_means_in_group) if prm_means_in_group else None
 
+        is_perfect_tie = len(scores) > 1 and all(abs(s - 1.0) < 1e-9 for s in scores)
         is_valid = var > variance_threshold
+        if drop_perfect_tie_groups and is_perfect_tie:
+            is_valid = False
         per_task_rows.append({
             "task_id": tid,
             "n": len(group),
@@ -243,14 +273,18 @@ def filter_valid_groups(
             invalid_tasks.append((tid, var, m))
 
     valid_set = set(valid_tasks)
-    kept = [r for r in records if r.get("task_id") in valid_set]
+    kept = [r for r in candidate_records if r.get("task_id") in valid_set]
 
     summary = {
         "n_tasks_total": len(by_task),
         "n_tasks_valid": len(valid_tasks),
         "n_tasks_invalid": len(invalid_tasks),
         "n_records_total": len(records),
+        "n_records_candidate": len(candidate_records),
         "n_records_kept": len(kept),
+        "n_records_dropped_bad": len(dropped_bad),
+        "drop_perfect_tie_groups": drop_perfect_tie_groups,
+        "drop_bad_trajectories": drop_bad_trajectories,
         "variance_threshold": variance_threshold,
         "invalid_tasks": [
             {"task_id": t, "score_var": v, "score_mean": m} for t, v, m in invalid_tasks
@@ -548,6 +582,10 @@ def main() -> int:
                     help="Group score variance must exceed this to be 'valid GRPO'")
     ap.add_argument("--alpha", type=float, default=1.0,
                     help="Terminal advantage coefficient (only used to scale β recommendation)")
+    ap.add_argument("--drop-perfect-tie-groups", action="store_true",
+                    help="Drop groups where every rollout scored exactly 1.0")
+    ap.add_argument("--drop-bad-trajectories", action="store_true",
+                    help="Drop fatal/timed-out/no-output/no-tool-trace trajectories before group filtering")
     args = ap.parse_args()
 
     in_path = Path(args.graded_file)
@@ -561,7 +599,12 @@ def main() -> int:
     basic = basic_diagnostics(records)
     prm = prm_diagnostics(records)
     align = terminal_vs_prm_alignment(records)
-    kept, selection = filter_valid_groups(records, args.variance_threshold)
+    kept, selection = filter_valid_groups(
+        records,
+        args.variance_threshold,
+        drop_perfect_tie_groups=args.drop_perfect_tie_groups,
+        drop_bad_trajectories=args.drop_bad_trajectories,
+    )
     beta_rec = recommend_beta(prm, align, alpha=args.alpha)
 
     # Write filtered jsonl

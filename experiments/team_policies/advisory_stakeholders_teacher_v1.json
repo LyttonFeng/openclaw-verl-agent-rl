@@ -1,0 +1,54 @@
+{
+  "tasks": {
+    "task_meeting_advisory_stakeholders": {
+      "strategy": "Qwen3-compatible evidence protocol for stakeholder analysis. Do not infer stakeholder positions from affiliation alone. Each worker must read the assigned section, extract compact evidence rows, and mark unknowns explicitly. The final agent should synthesize only from evidence rows, then run a checklist for government stakeholders, commercial stakeholders, sharing-vs-relocation, cost/process disputes, common-parameter/technical disputes, member positions, conflicts, agreements, and unresolved questions.",
+      "transcript_files": [
+        "meeting-transcript.md"
+      ],
+      "expected_output_files": [
+        "stakeholder_analysis.md"
+      ],
+      "workers": [
+        {
+          "id": "worker_1",
+          "focus": "Stakeholder registry and opening framing. Read the member/also-present lists and opening/report-overview sections. Create a compact stakeholder table with name, affiliation, category, influence signal, and any explicit opening stance. Do not invent concerns from affiliation; write 'not yet evidenced' when no position appears. Include named committee members and officials so the final answer does not miss individuals with later positions.",
+          "transcript_files": [
+            "meeting-transcript.md"
+          ],
+          "read_offsets": "Read from the top through the report overview/opening discussion, approximately lines 1-276. If line numbers are unavailable, read the beginning through the start of Government/Industry Interaction.",
+          "note_path": "team_notes/worker_1.md"
+        },
+        {
+          "id": "worker_2",
+          "focus": "Government/NTIA/process evidence. Extract evidence rows for NTIA, Commerce, federal agencies, DoD/defense-related stakeholders, White House/OSTP if present, and committee members questioning the process. Required fields: stakeholder, transcript evidence, primary interest, concern, sharing-vs-relocation position, influence, and unresolved issue. Specifically watch for working-group structure, CSEA/cost process, analysis responsibility, classified or characterization data limits, and any common-parameter debate.",
+          "transcript_files": [
+            "meeting-transcript.md"
+          ],
+          "read_offsets": "Read the first half of Government/Industry Interaction, approximately lines 277-500.",
+          "note_path": "team_notes/worker_2.md"
+        },
+        {
+          "id": "worker_3",
+          "focus": "Commercial/industry/technical evidence. Extract evidence rows for commercial wireless carriers, equipment/standards participants, public-interest or academic stakeholders, and technical experts. Required fields: stakeholder, transcript evidence, primary interest, concern, sharing-vs-relocation position, influence, and unresolved issue. Specifically watch for carrier certainty, technical feasibility, airborne systems, measurement needs, guard bands, bandwidth mismatch, standards/common parameters, interference tolerance, and public participation comments.",
+          "transcript_files": [
+            "meeting-transcript.md"
+          ],
+          "read_offsets": "Read the second half of Government/Industry Interaction through closing/schedule, approximately lines 500-713.",
+          "note_path": "team_notes/worker_3.md"
+        },
+        {
+          "id": "worker_4",
+          "focus": "Coverage and conflict checker. Read all worker notes plus targeted transcript snippets as needed. Produce a short checklist, not a narrative: missing or weak stakeholders, explicit areas of agreement, key tensions/conflicts, unresolved questions, and exact evidence for sharing-vs-relocation, relocation cost/process, common parameters, and member positions. Flag any stakeholder whose position is inferred rather than evidenced.",
+          "transcript_files": [
+            "meeting-transcript.md",
+            "team_notes/worker_1.md",
+            "team_notes/worker_2.md",
+            "team_notes/worker_3.md"
+          ],
+          "read_offsets": "Read all team_notes first. Then selectively read meeting-transcript.md around any gaps needed for the checklist.",
+          "note_path": "team_notes/worker_4.md"
+        }
+      ]
+    }
+  }
+}

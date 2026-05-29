@@ -32,9 +32,10 @@ export PINCHBENCH_SKIP_OPENCLAW_WEB_PREFLIGHT=1
 export PINCHBENCH_SKIP_TRAIN_INFER_PARITY=1
 
 # ─── Paths ────────────────────────────────────────────────
-REPO_INTEGRATION=/workspace/verl_port/openclaw_integration
-REPO_DATA=/workspace/openclaw-verl-agent-rl
-DATA_DIR=/workspace/verl_port/data_meeting
+PYTHON_BIN="${PYTHON_BIN:-/root/openclaw-venv/bin/python}"
+REPO_INTEGRATION="${REPO_INTEGRATION:-/workspace/verl_port/openclaw_integration}"
+REPO_DATA="${REPO_DATA:-/root/openclaw-verl-agent-rl}"
+DATA_DIR="${DATA_DIR:-/workspace/verl_port/data_meeting}"
 OUTPUT_DIR="${OUTPUT_DIR:-/workspace/verl_port/ckpt_openclaw_async}"
 AGENT_LOOP_CONFIG="${REPO_INTEGRATION}/rl/agent_loop/config.yaml"
 REWARD_MANAGER_PATH="${REPO_INTEGRATION}/rl/train/reward_manager.py"
@@ -45,7 +46,7 @@ VERL_LOG="$LOG_DIR/verl_$TS.log"
 
 export PINCHBENCH_DIR="${REPO_DATA}"
 export PYTHONPATH="${REPO_INTEGRATION}:${REPO_DATA}:${PYTHONPATH:-}"
-export HF_HOME="${HF_HOME:-/root/hf_cache}"
+export HF_HOME="${HF_HOME:-/workspace/hf_cache}"
 export HF_HUB_CACHE="${HF_HUB_CACHE:-${HF_HOME}/hub}"
 export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-${HF_HUB_CACHE}}"
 export ATTN_IMPLEMENTATION=sdpa
@@ -109,7 +110,7 @@ if [ "$GPU_USED" -gt 5000 ]; then
 fi
 
 # ─── Hyperparams ──────────────────────────────────────────
-MODEL=/root/hf_cache/hub/models--Qwen--Qwen3-4B/snapshots/1cfa9a7208912126459214e8b04321603b3df60c
+MODEL="${VERL_MODEL:-/workspace/hf_cache/qwen3-8b-rope2}"
 N_GPUS_TRAINER="${N_GPUS_TRAINER:-1}"   # FSDP actor + ref on GPU 0
 N_GPUS_ROLLOUT="${N_GPUS_ROLLOUT:-1}"   # vLLM on GPU 1
 BATCH_SIZE="${BATCH_SIZE:-2}"            # match openclaw sync baseline group=2
@@ -149,7 +150,7 @@ EXPERIMENT_NAME="${EXPERIMENT_NAME:-openclaw_async_$TS}"
 
 # ─── Preflights ──────────────────────────────────────────
 # OpenClaw preflight (SSH loopback to local openclaw binary)
-python3 -c "
+"$PYTHON_BIN" -c "
 import subprocess
 r = subprocess.run(['ssh','-o','StrictHostKeyChecking=no','-o','ConnectTimeout=10','-i','${OPENCLAW_SSH_KEY}','-p','${OPENCLAW_PORT}','${OPENCLAW_USER}@${OPENCLAW_HOST}','command -v openclaw && openclaw --version'], capture_output=True, text=True)
 assert r.returncode == 0, f'OpenClaw preflight FAILED: {r.stderr}'
@@ -157,11 +158,17 @@ print('[preflight] OpenClaw OK:', r.stdout.strip())
 "
 
 # DeepSeek judge preflight
-python3 -c "
+"$PYTHON_BIN" -c "
 import sys
 sys.path.insert(0, '${REPO_DATA}/scripts')
 from lib_grading import preflight_judge_connection
-preflight_judge_connection(judge_model='deepseek-chat', judge_backend='api', judge_base_url='https://api.deepseek.com/v1', judge_api_key='${DEEPSEEK_API_KEY}')
+import os
+preflight_judge_connection(
+    judge_model='deepseek-chat',
+    judge_backend='api',
+    judge_base_url='https://api.deepseek.com/v1',
+    judge_api_key=os.environ['DEEPSEEK_API_KEY'],
+)
 print('[preflight] DeepSeek judge OK')
 "
 
@@ -183,7 +190,7 @@ if [ "$DRY_RUN" = "1" ]; then exit 0; fi
 echo "[async] launching veRL FullyAsyncTrainer → $VERL_LOG"
 cd "$REPO_INTEGRATION"
 env PYTHONPATH="${REPO_INTEGRATION}:${REPO_DATA}:${PYTHONPATH:-}" VLLM_USE_V1=1 \
-nohup python3 -m verl.experimental.fully_async_policy.fully_async_main \
+nohup "$PYTHON_BIN" -m verl.experimental.fully_async_policy.fully_async_main \
     --config-name fully_async_ppo_trainer \
     hydra.run.dir="$LOG_DIR/hydra_$TS" \
     hydra.output_subdir="." \
@@ -252,9 +259,9 @@ nohup python3 -m verl.experimental.fully_async_policy.fully_async_main \
     trainer.logger='["console"]' \
     +ray_kwargs.ray_init.include_dashboard=False \
     +ray_kwargs.ray_init.num_gpus=2 \
-    +ray_kwargs.ray_init.runtime_env.env_vars.HF_HOME=/root/hf_cache \
-    +ray_kwargs.ray_init.runtime_env.env_vars.HF_HUB_CACHE=/root/hf_cache/hub \
-    +ray_kwargs.ray_init.runtime_env.env_vars.TRANSFORMERS_CACHE=/root/hf_cache/hub \
+    +ray_kwargs.ray_init.runtime_env.env_vars.HF_HOME="${HF_HOME}" \
+    +ray_kwargs.ray_init.runtime_env.env_vars.HF_HUB_CACHE="${HF_HUB_CACHE}" \
+    +ray_kwargs.ray_init.runtime_env.env_vars.TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE}" \
     +ray_kwargs.ray_init.runtime_env.env_vars.OPENCLAW_HOST="'${OPENCLAW_HOST}'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.OPENCLAW_USER="'${OPENCLAW_USER}'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.OPENCLAW_PORT="'${OPENCLAW_PORT}'" \
@@ -263,10 +270,8 @@ nohup python3 -m verl.experimental.fully_async_policy.fully_async_main \
     +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_SKIP_OPENCLAW_WEB_PREFLIGHT="'1'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_SKIP_TRAIN_INFER_PARITY="'1'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_DIR="'${REPO_DATA}'" \
-    +ray_kwargs.ray_init.runtime_env.env_vars.DEEPSEEK_API_KEY="'${DEEPSEEK_API_KEY}'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_GRADE_JUDGE_MODEL="'${PINCHBENCH_GRADE_JUDGE_MODEL}'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_GRADE_JUDGE_BASE_URL="'${PINCHBENCH_GRADE_JUDGE_BASE_URL}'" \
-    +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_GRADE_JUDGE_API_KEY="'${PINCHBENCH_GRADE_JUDGE_API_KEY}'" \
     +ray_kwargs.ray_init.runtime_env.env_vars.REWARD_MODE=baseline \
     +ray_kwargs.ray_init.runtime_env.env_vars.PINCHBENCH_REWARD_RETURN_MODE=scalar \
     +ray_kwargs.ray_init.runtime_env.env_vars.MAX_TURNS="'${MAX_TURNS}'" \
