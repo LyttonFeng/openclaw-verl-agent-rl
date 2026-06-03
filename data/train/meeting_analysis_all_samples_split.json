@@ -1,0 +1,58 @@
+{
+  "description": "meeting_analysis all-samples split for naive policy training. This intentionally includes the historical held-out Val5 tasks in the training set to test overfitting/convergence, not held-out generalization.",
+  "train": [
+    "task_meeting_advisory_acronyms",
+    "task_meeting_advisory_attendees",
+    "task_meeting_advisory_stakeholders",
+    "task_meeting_advisory_technical",
+    "task_meeting_advisory_timeline",
+    "task_meeting_blog_post",
+    "task_meeting_council_budget",
+    "task_meeting_council_contact_info",
+    "task_meeting_council_neighborhood",
+    "task_meeting_council_public_comment",
+    "task_meeting_council_upcoming",
+    "task_meeting_council_votes",
+    "task_meeting_executive_summary",
+    "task_meeting_follow_up_email",
+    "task_meeting_gov_controversy",
+    "task_meeting_gov_data_sources",
+    "task_meeting_gov_next_steps",
+    "task_meeting_gov_qa_extract",
+    "task_meeting_gov_recommendations",
+    "task_meeting_gov_speaker_summary",
+    "task_meeting_searchable_index",
+    "task_meeting_sentiment_analysis",
+    "task_meeting_tech_action_items",
+    "task_meeting_tech_competitors",
+    "task_meeting_tech_decisions",
+    "task_meeting_tech_messaging",
+    "task_meeting_tech_product_features",
+    "task_meeting_tldr"
+  ],
+  "former_val5": [
+    "task_meeting_advisory_stakeholders",
+    "task_meeting_council_votes",
+    "task_meeting_gov_speaker_summary",
+    "task_meeting_tech_action_items",
+    "task_meeting_sentiment_analysis"
+  ],
+  "transcripts": {
+    "ntia_advisory": {
+      "file": "meetings/2012-05-30-meeting-transcript-ntia-csmac.md",
+      "task_count": 5
+    },
+    "tampa_council": {
+      "file": "meetings/2026-04-02-tampa-city-council-transcript.md",
+      "task_count": 6
+    },
+    "nasa_uap": {
+      "file": "meetings/2025-07-30-nasa-holds-first-public-meeting-on-ufos-transcript.md",
+      "task_count": 6
+    },
+    "gitlab_tech": {
+      "file": "meetings/2021-06-28-gitlab-product-marketing-meeting.md",
+      "task_count": 11
+    }
+  }
+}
