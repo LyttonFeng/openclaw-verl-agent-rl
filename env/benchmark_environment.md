@@ -82,16 +82,11 @@ bash scripts/run_val5_bench_isolated.sh
 Canonical Qwen3-4B vLLM process for this branch:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 \
-/root/openclaw-venv/bin/python -m vllm.entrypoints.openai.api_server \
-  --model Qwen/Qwen3-4B \
-  --served-model-name Qwen3-4B \
-  --host 127.0.0.1 \
-  --port 8021 \
-  --max-model-len 65536 \
-  --enable-auto-tool-choice \
-  --tool-call-parser hermes
+source /root/openclaw-venv/bin/activate
+CUDA_VISIBLE_DEVICES=0 bash scripts/start_qwen3_vllm.sh
 ```
+
+The wrapper uses vLLM hermes tool parsing and applies the OpenClaw hermes fallback patch required for Qwen3 multi-turn tool calls.
 
 During environment capture, the pod also had a running Qwen3-4B-family service on port `8767` with served name `qwen3-4b-instruct-2507`. Use that only if intentionally reproducing that exact pod process.
 

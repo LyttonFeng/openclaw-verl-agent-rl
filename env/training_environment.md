@@ -56,16 +56,11 @@ Training rollouts use OpenClaw as the agent runtime, and OpenClaw calls a vLLM O
 Canonical Qwen3-4B server for this branch:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 VLLM_ALLOW_RUNTIME_LORA_UPDATING=True \
-/root/openclaw-venv/bin/python -m vllm.entrypoints.openai.api_server \
-  --model Qwen/Qwen3-4B \
-  --served-model-name Qwen3-4B \
-  --host 127.0.0.1 \
-  --port 8021 \
-  --max-model-len 65536 \
-  --enable-auto-tool-choice \
-  --tool-call-parser hermes
+source /root/openclaw-venv/bin/activate
+CUDA_VISIBLE_DEVICES=0 bash scripts/start_qwen3_vllm.sh
 ```
+
+`scripts/start_qwen3_vllm.sh` starts vLLM with `--enable-auto-tool-choice`, `--tool-call-parser hermes`, and `--reasoning-parser qwen3`. It also applies `scripts/apply_oc_hermes_patch.sh` by default so OpenClaw can execute Qwen3 `<tool_call>...</tool_call>` text fallback in multi-turn sessions.
 
 The reference pod may have other vLLM processes running. During environment capture, one active process served `/workspace/qwen_models/qwen3-4b-instruct-2507` as `qwen3-4b-instruct-2507` on port `8767`; that is useful for debugging the pod, but it is not the canonical default for this branch.
 
