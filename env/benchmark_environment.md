@@ -111,4 +111,4 @@ bash scripts/run_val5_bench_isolated.sh
 
 Baseline table is tracked in:
 
-- `docs/isolated_val5_temp0_baseline_results.md`
+- `results/isolated_val5_temp0_baseline_results.md`
