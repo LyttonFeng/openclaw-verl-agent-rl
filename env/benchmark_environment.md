@@ -79,26 +79,28 @@ bash scripts/run_val5_bench_isolated.sh
 
 ## Local vLLM Baseline
 
-Reference Qwen3-4B vLLM process on the pod:
+Canonical Qwen3-4B vLLM process for this branch:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 \
 /root/openclaw-venv/bin/python -m vllm.entrypoints.openai.api_server \
-  --model /workspace/qwen_models/qwen3-4b-instruct-2507 \
-  --served-model-name qwen3-4b-instruct-2507 \
+  --model Qwen/Qwen3-4B \
+  --served-model-name Qwen3-4B \
   --host 127.0.0.1 \
-  --port 8767 \
-  --max-model-len 40960 \
+  --port 8021 \
+  --max-model-len 65536 \
   --enable-auto-tool-choice \
   --tool-call-parser hermes
 ```
+
+During environment capture, the pod also had a running Qwen3-4B-family service on port `8767` with served name `qwen3-4b-instruct-2507`. Use that only if intentionally reproducing that exact pod process.
 
 Then run benchmark:
 
 ```bash
 RUN_ID=qwen3_4b_temp0 \
-MODEL=qwen3-4b-instruct-2507 \
-BASE_URL=http://127.0.0.1:8767/v1 \
+MODEL=Qwen3-4B \
+BASE_URL=http://127.0.0.1:8021/v1 \
 PINCHBENCH_MODEL_API_KEY=dummy \
 PINCHBENCH_MODEL_TEMPERATURE=0 \
 OUTPUT_DIR=results/val5_isolated/qwen3_4b_temp0 \

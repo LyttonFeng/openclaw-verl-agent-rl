@@ -53,32 +53,34 @@ The system `python3` on the pod is not the training environment. Use `/root/open
 
 Training rollouts use OpenClaw as the agent runtime, and OpenClaw calls a vLLM OpenAI-compatible endpoint.
 
-Reference Qwen3-4B server on the pod:
+Canonical Qwen3-4B server for this branch:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 VLLM_ALLOW_RUNTIME_LORA_UPDATING=True \
 /root/openclaw-venv/bin/python -m vllm.entrypoints.openai.api_server \
-  --model /workspace/qwen_models/qwen3-4b-instruct-2507 \
-  --served-model-name qwen3-4b-instruct-2507 \
+  --model Qwen/Qwen3-4B \
+  --served-model-name Qwen3-4B \
   --host 127.0.0.1 \
-  --port 8767 \
-  --max-model-len 40960 \
+  --port 8021 \
+  --max-model-len 65536 \
   --enable-auto-tool-choice \
   --tool-call-parser hermes
 ```
 
+The reference pod may have other vLLM processes running. During environment capture, one active process served `/workspace/qwen_models/qwen3-4b-instruct-2507` as `qwen3-4b-instruct-2507` on port `8767`; that is useful for debugging the pod, but it is not the canonical default for this branch.
+
 Confirm the server:
 
 ```bash
-curl -s http://127.0.0.1:8767/v1/models
+curl -s http://127.0.0.1:8021/v1/models
 ```
 
 `train/run_naive_ppo_round.sh` should be run with the same served model name and endpoint:
 
 ```bash
-VLLM_BASE_URL=http://127.0.0.1:8767/v1
-ROLLOUT_MODEL=qwen3-4b-instruct-2507
-MODEL_PATH=/workspace/qwen_models/qwen3-4b-instruct-2507
+VLLM_BASE_URL=http://127.0.0.1:8021/v1
+ROLLOUT_MODEL=Qwen3-4B
+MODEL_PATH=Qwen/Qwen3-4B
 ```
 
 ## OpenClaw
@@ -131,9 +133,9 @@ source ~/.pinchbench_env
 RUN_ID=naive_overfit_r1 \
 N_RESPONSES=2 \
 NUM_WORKERS=1 \
-VLLM_BASE_URL=http://127.0.0.1:8767/v1 \
-ROLLOUT_MODEL=qwen3-4b-instruct-2507 \
-MODEL_PATH=/workspace/qwen_models/qwen3-4b-instruct-2507 \
+VLLM_BASE_URL=http://127.0.0.1:8021/v1 \
+ROLLOUT_MODEL=Qwen3-4B \
+MODEL_PATH=Qwen/Qwen3-4B \
 bash train/run_naive_ppo_round.sh
 ```
 
