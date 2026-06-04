@@ -18,7 +18,7 @@
       --graded-file $ROUND_DIR/selection/graded_trajectories_prm_pos_only.jsonl \\
       --lora-path   $PREV_ROUND/checkpoint/lora_adapter \\
       --output      $ROUND_DIR/rollout_logprobs.jsonl \\
-      --max-seq-length 65536 --rope-scaling-factor 2.0
+      --max-seq-length 65536
 """
 import argparse
 import json
@@ -41,7 +41,7 @@ def main():
     ap.add_argument('--lora-path', default=None,
                     help='Rollout 时所用的 LoRA（即 P_old）。空时用 base 模型（适用 R1 从 base 起跑）。')
     ap.add_argument('--max-seq-length', type=int, default=65536)
-    ap.add_argument('--rope-scaling-factor', type=float, default=2.0)
+    ap.add_argument('--rope-scaling-factor', type=float, default=None)
     ap.add_argument('--output', required=True, help='输出 JSONL 路径')
     ap.add_argument(
         '--dtype', choices=['bf16', 'fp32'], default='bf16',

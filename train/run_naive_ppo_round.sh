@@ -39,8 +39,8 @@ NUM_WORKERS="${NUM_WORKERS:-1}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-600}"
 JUDGE_MODEL="${JUDGE_MODEL:-deepseek-v4-pro}"
 
-MAX_SEQ_LENGTH="${MAX_SEQ_LENGTH:-65536}"
-ROPE_SCALING_FACTOR="${ROPE_SCALING_FACTOR:-2.0}"
+MAX_SEQ_LENGTH="${MAX_SEQ_LENGTH:-40960}"
+ROPE_SCALING_FACTOR="${ROPE_SCALING_FACTOR:-}"
 LR="${LR:-5e-6}"
 LORA_RANK="${LORA_RANK:-16}"
 GRAD_ACCUM_STEPS="${GRAD_ACCUM_STEPS:-2}"
@@ -97,8 +97,10 @@ LOGPROB_ARGS=(
   --model-path "$MODEL_PATH"
   --output "$LOGPROBS_FILE"
   --max-seq-length "$MAX_SEQ_LENGTH"
-  --rope-scaling-factor "$ROPE_SCALING_FACTOR"
 )
+if [ -n "$ROPE_SCALING_FACTOR" ]; then
+  LOGPROB_ARGS+=(--rope-scaling-factor "$ROPE_SCALING_FACTOR")
+fi
 if [ -n "$PREV_LORA" ]; then
   LOGPROB_ARGS+=(--lora-path "$PREV_LORA")
 fi
@@ -114,11 +116,13 @@ TRAIN_ARGS=(
   --lora-rank "$LORA_RANK"
   --grad-accum-steps "$GRAD_ACCUM_STEPS"
   --max-seq-length "$MAX_SEQ_LENGTH"
-  --rope-scaling-factor "$ROPE_SCALING_FACTOR"
   --logprobs-file "$LOGPROBS_FILE"
   --clip-eps "$CLIP_EPS"
   --kl-beta "$KL_BETA"
 )
+if [ -n "$ROPE_SCALING_FACTOR" ]; then
+  TRAIN_ARGS+=(--rope-scaling-factor "$ROPE_SCALING_FACTOR")
+fi
 if [ -n "$REF_LOGPROBS_FILE" ]; then
   TRAIN_ARGS+=(--ref-logprobs-file "$REF_LOGPROBS_FILE" --ref-kl-beta "$REF_KL_BETA")
 fi
