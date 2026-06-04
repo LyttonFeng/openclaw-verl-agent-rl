@@ -32,6 +32,18 @@ Environment details and package pins:
 - `env/benchmark_environment.md`
 - `env/requirements.txt`
 
+Optional preflight:
+
+```bash
+bash scripts/check_repro_env.sh
+```
+
+If vLLM is not started yet, skip only the endpoint check:
+
+```bash
+CHECK_VLLM=0 bash scripts/check_repro_env.sh
+```
+
 ## Start Qwen3-4B Serving
 
 This branch is centered on training `Qwen/Qwen3-4B`.
@@ -114,6 +126,7 @@ Tracked baseline table:
 - `train/compute_rollout_logprobs.py`: recomputes `P_old` logprobs.
 - `train/train_meeting_grpo_step.py`: PyTorch/PEFT PPO-style LoRA update.
 - `train/run_naive_ppo_round.sh`: end-to-end training round wrapper.
+- `scripts/check_repro_env.sh`: quickstart preflight checker.
 - `scripts/start_qwen3_vllm.sh`: canonical Qwen3-4B vLLM serving wrapper.
 - `scripts/apply_oc_hermes_patch.sh`: OpenClaw fallback parser for Qwen3 `<tool_call>` text.
 - `scripts/run_val5_bench_isolated.sh`: isolated Val5 benchmark wrapper.
