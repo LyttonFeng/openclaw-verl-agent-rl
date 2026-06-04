@@ -46,6 +46,8 @@ LORA_RANK="${LORA_RANK:-16}"
 GRAD_ACCUM_STEPS="${GRAD_ACCUM_STEPS:-2}"
 CLIP_EPS="${CLIP_EPS:-0.2}"
 KL_BETA="${KL_BETA:-0.02}"
+REF_LOGPROBS_FILE="${REF_LOGPROBS_FILE:-}"
+REF_KL_BETA="${REF_KL_BETA:-0.02}"
 VARIANCE_THRESHOLD="${VARIANCE_THRESHOLD:-1e-8}"
 
 mkdir -p "$RUN_DIR/rollouts" "$RUN_DIR/selection" "$RUN_DIR/checkpoint"
@@ -117,6 +119,9 @@ TRAIN_ARGS=(
   --clip-eps "$CLIP_EPS"
   --kl-beta "$KL_BETA"
 )
+if [ -n "$REF_LOGPROBS_FILE" ]; then
+  TRAIN_ARGS+=(--ref-logprobs-file "$REF_LOGPROBS_FILE" --ref-kl-beta "$REF_KL_BETA")
+fi
 if [ -n "$PREV_LORA" ]; then
   TRAIN_ARGS+=(--lora-path "$PREV_LORA")
 fi

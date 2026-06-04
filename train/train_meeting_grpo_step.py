@@ -220,6 +220,8 @@ def train_grpo_step(
     old_logprobs_file: str | None = None,
     clip_eps: float = 0.2,
     kl_beta: float = 0.0,
+    ref_logprobs_file: str | None = None,
+    ref_kl_beta: float = 0.0,
     per_turn_loss: bool = False,
 ):
     """
@@ -311,10 +313,26 @@ def train_grpo_step(
     else:
         logger.info("  No old_logprobs_file → vanilla PG (no ratio, no KL)")
 
+    # Optional fixed reference policy log_probs. This is distinct from PPO's
+    # rollout-time old policy: old may be the previous LoRA, while ref is kept
+    # fixed at the base model to prevent multi-round drift.
+    ref_logprobs_map = {}
+    if ref_logprobs_file:
+        with open(ref_logprobs_file) as f:
+            for line in f:
+                rec = json.loads(line)
+                key = (rec['task_id'], rec['response_idx'])
+                ref_logprobs_map[key] = rec.get('trainable_log_probs', [])
+        logger.info(
+            f"  Loaded fixed reference logprobs for {len(ref_logprobs_map)} rollouts "
+            f"(ref_kl_beta={ref_kl_beta})"
+        )
+
     # ── Training loop (batch_size=1, gradient accumulation) ──────────────
 
     total_loss = 0.0
     total_kl = 0.0
+    total_ref_kl = 0.0
     n_steps = 0
     n_skipped = 0
     optimizer.zero_grad()
@@ -460,6 +478,7 @@ def train_grpo_step(
 
             # ── PPO: ratio + clip + KL（启用 --logprobs-file 时） ────────────
             kl_value = torch.tensor(0.0, device=token_log_probs.device)
+            ref_kl_value = torch.tensor(0.0, device=token_log_probs.device)
             if old_logprobs_file:
                 key = (record['task_id'], record['response_idx'])
                 old_lp_list = old_logprobs_map.get(key)
@@ -476,14 +495,31 @@ def train_grpo_step(
                     surr1 = ratio * train_advantages
                     surr2 = ratio.clamp(1.0 - clip_eps, 1.0 + clip_eps) * train_advantages
                     pg_loss = -_reduce(torch.min(surr1, surr2))
-                    # KL k3 estimator: KL(π_θ || π_ref) where ref=old in our setup.
+                    # KL k3 estimator against rollout-time old policy.
                     # k3 = exp(log_ratio_ref) - log_ratio_ref - 1, where
                     # log_ratio_ref = log_p_ref - log_p_θ = -log_ratio
                     kl_value = _reduce(torch.exp(-log_ratio) + log_ratio - 1.0)
-                    loss = (pg_loss + kl_beta * kl_value) / grad_accum_steps
+                    loss = pg_loss + kl_beta * kl_value
             else:
                 # Vanilla policy gradient (legacy path)
-                loss = -_reduce(train_advantages * token_log_probs) / grad_accum_steps
+                loss = -_reduce(train_advantages * token_log_probs)
+
+            if ref_logprobs_file:
+                key = (record['task_id'], record['response_idx'])
+                ref_lp_list = ref_logprobs_map.get(key)
+                if ref_lp_list is None or len(ref_lp_list) != token_log_probs.shape[0]:
+                    logger.warning(
+                        f"  Sample {i} ({key}): ref_logprobs missing or len mismatch "
+                        f"({len(ref_lp_list) if ref_lp_list else 'None'} vs {token_log_probs.shape[0]}); "
+                        "skipping fixed reference KL"
+                    )
+                else:
+                    ref_log_probs = torch.tensor(ref_lp_list, dtype=torch.float32, device=token_log_probs.device)
+                    ref_log_ratio = (token_log_probs - ref_log_probs).clamp(-20.0, 20.0)
+                    ref_kl_value = _reduce(torch.exp(-ref_log_ratio) + ref_log_ratio - 1.0)
+                    loss = loss + ref_kl_beta * ref_kl_value
+
+            loss = loss / grad_accum_steps
 
         loss.backward()
 
@@ -496,13 +532,15 @@ def train_grpo_step(
 
         total_loss += loss.item() * grad_accum_steps
         total_kl += float(kl_value.item()) if old_logprobs_file else 0.0
+        total_ref_kl += float(ref_kl_value.item()) if ref_logprobs_file else 0.0
 
         if (i + 1) % 5 == 0:
             n_pos_turns = sum(1 for s in prm_turn_scores if s > 0)
             n_neg_turns = sum(1 for s in prm_turn_scores if s < 0)
             kl_str = f" kl={float(kl_value.item()):.4f}" if old_logprobs_file else ""
+            ref_kl_str = f" ref_kl={float(ref_kl_value.item()):.4f}" if ref_logprobs_file else ""
             logger.info(
-                f"    sample {i+1}/{len(records)}: loss={loss.item()*grad_accum_steps:.4f}{kl_str} "
+                f"    sample {i+1}/{len(records)}: loss={loss.item()*grad_accum_steps:.4f}{kl_str}{ref_kl_str} "
                 f"adv={advantage:.3f} tokens={len(token_ids)} "
                 f"trainable={n_trainable} ({n_trainable/len(token_ids)*100:.0f}%) "
                 f"prm_turns=+{n_pos_turns}/-{n_neg_turns}/{n_assistant_turns}"
@@ -540,6 +578,9 @@ def train_grpo_step(
         "clip_eps": clip_eps if old_logprobs_file else None,
         "kl_beta": kl_beta if old_logprobs_file else None,
         "avg_kl": (total_kl / max(len(records) - n_skipped, 1)) if old_logprobs_file else None,
+        "fixed_ref_kl_enabled": bool(ref_logprobs_file),
+        "ref_kl_beta": ref_kl_beta if ref_logprobs_file else None,
+        "avg_ref_kl": (total_ref_kl / max(len(records) - n_skipped, 1)) if ref_logprobs_file else None,
     }
     (output_path / "training_meta.json").write_text(json.dumps(meta, indent=2))
 
@@ -591,11 +632,23 @@ def main():
         default=None,
         help="JSONL of token log_probs from the rollout-time policy (P_old). "
              "When provided, switches loss from vanilla PG to PPO with ratio + clip. "
-             "In our setup ref=old, so KL(π_θ || π_old) is also taken from the same file. "
-             "Generate via rl/train/compute_rollout_logprobs.py.",
+             "Generate via train/compute_rollout_logprobs.py.",
     )
     parser.add_argument("--clip-eps", type=float, default=0.2, help="PPO clip epsilon (default 0.2)")
     parser.add_argument("--kl-beta", type=float, default=0.0, help="KL penalty coefficient (default 0=off; recommend 0.02 when PPO enabled)")
+    parser.add_argument(
+        "--ref-logprobs-file",
+        type=str,
+        default=None,
+        help="JSONL of token log_probs from a fixed reference policy, usually the base model. "
+             "This adds a separate KL(pi_theta || pi_ref) penalty and is distinct from P_old.",
+    )
+    parser.add_argument(
+        "--ref-kl-beta",
+        type=float,
+        default=0.0,
+        help="Fixed reference KL penalty coefficient (default 0=off).",
+    )
     parser.add_argument("--per-turn-loss", action="store_true",
                         help="按 turn 等权累加 loss（消除 PRM 长 turn 多放大的偏置）。"
                              "建议启用 PRM (prm-beta>0) 时配合使用。")
@@ -629,6 +682,8 @@ def main():
         old_logprobs_file=args.logprobs_file,
         clip_eps=args.clip_eps,
         kl_beta=args.kl_beta,
+        ref_logprobs_file=args.ref_logprobs_file,
+        ref_kl_beta=args.ref_kl_beta,
         per_turn_loss=args.per_turn_loss,
     )
 
