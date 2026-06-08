@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Meeting Analysis Val3 Training Data: 14 Samples + 12 Tasks</title>
+<style>
+:root {
+  --bg:#f5f1e8; --ink:#1d2528; --muted:#687076; --card:#fffaf0; --line:#ddd2bd;
+  --green:#2f7d59; --blue:#286e8f; --orange:#c46a2d; --red:#aa3f32; --shadow:0 18px 45px rgba(49,42,31,.12);
+}
+* { box-sizing:border-box; }
+body { margin:0; font-family: ui-serif, Georgia, 'Times New Roman', serif; background:radial-gradient(circle at top left,#fffdf5 0,#f5f1e8 36%,#ece2cf 100%); color:var(--ink); }
+header { padding:42px 52px 24px; border-bottom:1px solid var(--line); }
+h1 { margin:0; font-size:42px; letter-spacing:-.04em; }
+.subtitle { max-width:980px; color:var(--muted); font-size:18px; line-height:1.55; margin:14px 0 0; }
+main { padding:28px 52px 60px; }
+.grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; margin:22px 0; }
+.card { background:rgba(255,250,240,.92); border:1px solid var(--line); border-radius:18px; padding:18px; box-shadow:var(--shadow); }
+.card b { display:block; font-size:34px; line-height:1; margin-bottom:8px; }
+.card span { color:var(--muted); font-size:14px; }
+.notice { border-left:5px solid var(--orange); background:#fff7e8; padding:16px 18px; border-radius:14px; margin:22px 0; line-height:1.55; }
+.ok { border-left-color:var(--green); background:#eef8f1; }
+section.block { margin-top:34px; }
+h2 { font-size:25px; margin:0 0 14px; letter-spacing:-.02em; }
+.chips { display:flex; gap:10px; flex-wrap:wrap; margin:12px 0 18px; }
+.chip { display:inline-flex; align-items:center; gap:9px; border:1px solid var(--line); background:#fffdf7; border-radius:999px; padding:8px 12px; font-family:ui-sans-serif, system-ui, sans-serif; }
+.chip em { display:inline-grid; place-items:center; min-width:25px; height:25px; border-radius:50%; background:#233; color:#fff; font-style:normal; font-size:13px; }
+table { width:100%; border-collapse:separate; border-spacing:0; background:var(--card); border:1px solid var(--line); border-radius:16px; overflow:hidden; box-shadow:var(--shadow); }
+th,td { padding:12px 14px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top; }
+th { background:#efe5d1; font-family:ui-sans-serif, system-ui, sans-serif; font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:#4d5559; }
+tr:last-child td { border-bottom:0; }
+code { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px; background:#f2eadb; padding:2px 5px; border-radius:5px; }
+.toolbar { display:flex; gap:12px; flex-wrap:wrap; margin:12px 0 18px; }
+button { border:1px solid var(--line); background:#fffaf0; color:var(--ink); padding:9px 13px; border-radius:999px; cursor:pointer; font-weight:700; }
+button.active { background:#263238; color:white; border-color:#263238; }
+.samples { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.sample { background:rgba(255,250,240,.96); border:1px solid var(--line); border-radius:20px; padding:18px; box-shadow:var(--shadow); }
+.sample-head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; }
+.eyebrow { font-family:ui-sans-serif, system-ui, sans-serif; color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
+.sample h3 { margin:6px 0 6px; font-size:21px; }
+.sample p { margin:0; color:var(--muted); font-family:ui-sans-serif, system-ui, sans-serif; font-size:13px; line-height:1.45; }
+.score { min-width:78px; text-align:center; border-radius:16px; padding:10px; background:conic-gradient(var(--green) var(--score), #eadfcb 0); position:relative; }
+.score::after { content:''; position:absolute; inset:6px; background:#fffaf0; border-radius:12px; }
+.score strong,.score span { position:relative; z-index:1; display:block; }
+.score strong { font-size:22px; }
+.score span { color:var(--muted); font-size:11px; font-family:ui-sans-serif, system-ui, sans-serif; }
+.bar { height:9px; background:#eadfcb; border-radius:99px; overflow:hidden; margin:14px 0; }
+.bar i { display:block; height:100%; background:linear-gradient(90deg,var(--orange),var(--green)); }
+details { margin-top:10px; }
+summary { cursor:pointer; color:var(--blue); font-weight:700; }
+.columns { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; }
+h4 { margin:0 0 6px; font-family:ui-sans-serif, system-ui, sans-serif; }
+pre { white-space:pre-wrap; word-break:break-word; max-height:360px; overflow:auto; background:#1f2528; color:#f5f1e8; border-radius:14px; padding:14px; font-size:12px; line-height:1.45; }
+footer { color:var(--muted); font-family:ui-sans-serif, system-ui, sans-serif; margin-top:36px; font-size:13px; }
+@media (max-width: 980px) { .grid,.samples,.columns { grid-template-columns:1fr; } header,main { padding-left:22px; padding-right:22px; } h1 { font-size:32px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Meeting Analysis Val3 训练数据可视化</h1>
+  <p class="subtitle">当前视图展示两类训练输入：Claude Code 提供的 14 条真实 OpenClaw prompt-response 样本，以及我们为快速 Val3 复现实验定义的 12 个 Val3-aligned slim train task。二者用途相关，但格式不同。</p>
+</header>
+<main>
+  <div class="grid">
+    <div class="card"><b>14</b><span>JSONL prompt-response samples</span></div>
+    <div class="card"><b>12</b><span>Val3-aligned slim train tasks</span></div>
+    <div class="card"><b>0.71</b><span>14 samples mean score</span></div>
+    <div class="card"><b>0.58-0.96</b><span>score range</span></div>
+  </div>
+  <div class="notice ok">
+    <b>格式检查：</b>14 条 JSONL 样本 schema 一致，且 metadata.uses_val_task 全部为 false。
+    <br>说明：12 项不是 JSONL 样本，而是 slim training task specs，因此不应和 14 条样本强行做同 schema 校验。
+  </div>
+
+  <section class="block">
+    <h2>14 条样本覆盖</h2>
+    <div class="chips"><span class="chip"><b>commitment_evidence_ledger</b><em>4</em></span>
+<span class="chip"><b>speaker_claim_ledger</b><em>4</em></span>
+<span class="chip"><b>stakeholder_evidence_ledger</b><em>4</em></span>
+<span class="chip"><b>decision_evidence_ledger</b><em>2</em></span></div>
+    <div class="chips"><span class="chip"><b>tech</b><em>4</em></span>
+<span class="chip"><b>advisory</b><em>4</em></span>
+<span class="chip"><b>gov</b><em>3</em></span>
+<span class="chip"><b>council</b><em>3</em></span></div>
+    <table>
+      <thead><tr><th>Capability</th><th>Count</th><th>Primary target</th></tr></thead>
+      <tbody>
+        <tr><td><code>commitment_evidence_ledger</code></td><td>4</td><td><code>task_meeting_tech_action_items</code></td></tr><tr><td><code>speaker_claim_ledger</code></td><td>4</td><td><code>task_meeting_gov_speaker_summary</code></td></tr><tr><td><code>stakeholder_evidence_ledger</code></td><td>4</td><td><code>task_meeting_advisory_stakeholders</code></td></tr><tr><td><code>decision_evidence_ledger</code></td><td>2</td><td><code>action / decision tracking support</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="block">
+    <h2>12 个 Slim Train Tasks</h2>
+    <table>
+      <thead><tr><th>Family</th><th>Task ID</th><th>Training capability</th><th>Val3 target</th><th>Local file</th></tr></thead>
+      <tbody><tr><td>advisory</td><td><code>task_meeting_advisory_attendees</code></td><td>stakeholder/entity extraction</td><td><code>task_meeting_advisory_stakeholders</code></td><td>yes</td></tr><tr><td>advisory</td><td><code>task_meeting_advisory_technical</code></td><td>issue/topic/concern extraction</td><td><code>task_meeting_advisory_stakeholders</code></td><td>yes</td></tr><tr><td>advisory</td><td><code>task_meeting_advisory_timeline</code></td><td>event ordering/evidence tracking</td><td><code>task_meeting_advisory_stakeholders</code></td><td>yes</td></tr><tr><td>gov</td><td><code>task_meeting_gov_qa_extract</code></td><td>speaker-question-answer attribution</td><td><code>task_meeting_gov_speaker_summary</code></td><td>yes</td></tr><tr><td>gov</td><td><code>task_meeting_gov_recommendations</code></td><td>speaker claim/recommendation summary</td><td><code>task_meeting_gov_speaker_summary</code></td><td>yes</td></tr><tr><td>gov</td><td><code>task_meeting_gov_next_steps</code></td><td>action/next-step extraction</td><td><code>task_meeting_gov_speaker_summary</code></td><td>yes</td></tr><tr><td>gov</td><td><code>task_meeting_gov_controversy</code></td><td>multi-position/stance extraction</td><td><code>task_meeting_gov_speaker_summary</code></td><td>yes</td></tr><tr><td>tech</td><td><code>task_meeting_tech_decisions</code></td><td>decision/action tracking</td><td><code>task_meeting_tech_action_items</code></td><td>yes</td></tr><tr><td>tech</td><td><code>task_meeting_tech_product_features</code></td><td>product topic extraction</td><td><code>task_meeting_tech_action_items</code></td><td>yes</td></tr><tr><td>tech</td><td><code>task_meeting_tech_messaging</code></td><td>positioning/rationale extraction</td><td><code>task_meeting_tech_action_items</code></td><td>yes</td></tr><tr><td>tech</td><td><code>task_meeting_tech_competitors</code></td><td>entity comparison/competitive context</td><td><code>task_meeting_tech_action_items</code></td><td>yes</td></tr><tr><td>tech</td><td><code>task_meeting_tldr</code></td><td>concise synthesis</td><td><code>task_meeting_tech_action_items</code></td><td>yes</td></tr></tbody>
+    </table>
+  </section>
+
+  <section class="block">
+    <h2>Val3 测试集</h2>
+    <table>
+      <thead><tr><th>Task ID</th><th>Capability</th></tr></thead>
+      <tbody><tr><td><code>task_meeting_advisory_stakeholders</code></td><td>stakeholder / entity / stance / evidence</td></tr><tr><td><code>task_meeting_gov_speaker_summary</code></td><td>speaker attribution / quote-backed summary</td></tr><tr><td><code>task_meeting_tech_action_items</code></td><td>owner / action / deadline / dependency</td></tr></tbody>
+    </table>
+  </section>
+
+  <section class="block">
+    <h2>样本详情</h2>
+    <div class="toolbar">
+      <button class="active" onclick="filterSamples('all', this)">全部</button>
+      <button onclick="filterSamples('commitment_evidence_ledger', this)">commitment_evidence_ledger (4)</button><button onclick="filterSamples('speaker_claim_ledger', this)">speaker_claim_ledger (4)</button><button onclick="filterSamples('stakeholder_evidence_ledger', this)">stakeholder_evidence_ledger (4)</button><button onclick="filterSamples('decision_evidence_ledger', this)">decision_evidence_ledger (2)</button>
+    </div>
+    <div class="samples" id="samples">
+    <article class="sample" data-family="tech" data-capability="commitment_evidence_ledger">
+      <div class="sample-head">
+        <div>
+          <div class="eyebrow">#01 · claude_code_val3_0001</div>
+          <h3>commitment_evidence_ledger</h3>
+          <p>task_meeting_tech_decisions · family=tech · variant=evidence_ledger</p>
+        </div>
+        <div class="score" style="--score:73.0%"><strong>0.73</strong><span>score</span></div>
+      </div>
+      <div class="bar"><i style="width:73.0%"></i></div>
+      <details>
+        <summary>查看 prompt / response 摘要</summary>
+        <div class="columns">
+          <section><h4>Prompt Preview</h4><pre>I have a GitLab Product Marketing team meeting transcript in `meeting_transcript.md`.
+
+Your task: build a **Commitment Evidence Table** that extracts every action item, commitment, or follow-up that someone took ownership of during this meeting.
+
+Write the output to `commitment_evidence.md` as a markdown table:
+
+| Owner | Action/Commitment | Deadline | Topic | Evidence Quote |
+
+Rules:
+- **Evidence Quote** must be copied directly from the transcript showing the commitment
+- **Owner** must be a specific person&#x27;s name, not &quot;the team&quot; (unless truly collective)
+- Include both explicit commitments (&quot;I&#x27;ll do X&quot;) and implicit ones (assigned by others)
+- Note deadlines where mentioned (&quot;by Tuesday&quot;, &quot;end of day&quot;)
+- Target: at least 6 distinct commitment rows
+- End with: &quot;Total: N commitments. With deadline: X. Without deadline: Y.&quot;</pre></section>
+          <section><h4>Response Preview</h4><pre># commitment_evidence.md
+|
+|---
+| Owner | Action/Commitment | Deadline | Topic | Evidence Quote |
+|------|------------------|---------|-------|----------------|
+| Tai | Support corp events team | by Tuesday | Event Support | &quot;I think we can help the corp events team...&quot; |
+| Cindy | Pick event to focus on | end of day | Event Support | &quot;Cindy being you and I just picking the one...&quot; |
+| Brian | Add product announcements | N/A | Product Announcements | &quot;I probably should have added it but...&quot; |
+| Cormac | Highlight vulnerability management | N/A | Security | &quot;We can highlight vulnerability management...&quot; |
+| Brian | Discuss VS Code integrations | N/A | Integrations | &quot;One other cool thing about that is...&quot; |
+| Cormac | Stack rank features by MAU | N/A | Feature Prioritization | &quot;We can stack rank features by MAU...&quot; |
+
+Total: 6 commitments. With deadline: 2. Without deadline: 4.</pre></section>
+        </div>
+      </details>
+    </article>
+    
+    <article class="sample" data-family="gov" data-capability="commitment_evidence_ledger">
+      <div class="sample-head">
+        <div>
+          <div class="eyebrow">#02 · claude_code_val3_0002</div>
+          <h3>commitment_evidence_ledger</h3>
+          <p>task_meeting_gov_next_steps · family=gov · variant=evidence_ledger</p>
+        </div>
+        <div class="score" style="--score:70.0%"><strong>0.70</strong><span>score</span></div>
+      </div>
+      <div class="bar"><i style="width:70.0%"></i></div>
+      <details>
+        <summary>查看 prompt / response 摘要</summary>
+        <div class="columns">
+          <section><h4>Prompt Preview</h4><pre>I have a transcript of NASA&#x27;s first public UAP hearing in `transcript.md`. This is a long document (~265KB).
+
+Your task: build a **Commitment Evidence Table** extracting every forward-looking commitment, next step, or planned action mentioned during this hearing.
+
+IMPORTANT: This transcript is very long. Use grep/search with terms like &quot;will&quot;, &quot;plan&quot;, &quot;commit&quot;, &quot;next&quot;, &quot;report&quot;, &quot;deadline&quot;, &quot;timeline&quot; to find commitment-related passages throughout the document.
+
+Write the output to `commitment_evidence.md` as a markdown table:
+
+| Responsible Party | Action/Commitment | Timeline | Area | Evidence Quote |
+
+Rules:
+- **Evidence Quote** must be verbatim from the transcript
+- Include NASA commitments, AARO plans, panel deliverables, and interagency coordination items
+- Cover commitments from BOTH presentations and Q&amp;A
+- Target: at least 10 distinct commitment rows
+- End with: &quot;Total: N commitm...</pre></section>
+          <section><h4>Response Preview</h4><pre># commitment_evidence.md
+|
+|---
+| Responsible Party | Action/Commitment | Timeline | Area | Evidence Quote |
+| NASA | Release final UAP report this summer | This summer | UAP Study | &quot;Their final report will be released this summer and we will publish it on our website.&quot; |
+| NASA | Ensure transparency and open data | Ongoing | Data Access | &quot;Scientific research is intended to be publicly available and transparent...&quot; |
+| UAP Independent Study Team | Create roadmap for UAP analysis | Seven months | Research | &quot;The UAP independent study was commissioned to create a roadmap...&quot; |
+| NASA | Use unclassified data for analysis | Ongoing | Data Analysis | &quot;There is really great benefit to studying unclassified data...&quot; |
+| NASA | Publish data on data.nasa.gov | Ongoing | Open Data | &quot;I invite you to visit our open data portal at data.nasa.gov...&quot; |
+| NASA | Address harassment of panelists | Ongoing | Human Resources | &quot;NASA stands behind our panelists and we do not tolerate abuse.&quot; |
+| NASA | Enhance situational awareness | Ongoing | Air Safety | &quot;This study aims to enhance situational awareness...&quot; |
+| UAP Team | Use data from civilian entities | Ongoing | Data Sources | &quot;This team has used unclassified data from civilian government entities...&quot; |
+| NASA | Ensure data accessibility | Ongoing | Data Policy | &quot;Everything we use at NASA is open and anyone can look at these records...&quot; |
+...</pre></section>
+        </div>
+      </details>
+    </article>
+    
+    <article class="sample" data-family="advisory" data-capability="commitment_evidence_ledger">
+      <div class="sample-head">
+        <div>
+          <div class="eyebrow">#03 · claude_code_val3_0003</div>
+          <h3>commitment_evidence_ledger</h3>
+          <p>task_meeting_advisory_timeline · family=advisory · variant=evidence_ledger</p>
+        </div>
+        <div class="score" style="--score:60.0%"><strong>0.60</strong><span>score</span></div>
+      </div>
+      <div class="bar"><i style="width:60.0%"></i></div>
+      <details>
+        <summary>查看 prompt / response 摘要</summary>
+        <div class="columns">
+          <section><h4>Prompt Preview</h4><pre>I have a government advisory committee meeting transcript in `meeting-transcript.md`. This is a CSMAC meeting about federal spectrum sharing.
+
+Your task: build a **Commitment Evidence Table** extracting every action item, deliverable, or commitment made during this meeting — by working groups, individual members, or NTIA staff.
+
+Write the output to `commitment_evidence.md` as a markdown table:
+
+| Owner (Person/Group) | Action/Deliverable | Deadline/Timeframe | Topic | Evidence Quote |
+
+Rules:
+- **Evidence Quote** must be verbatim from the transcript
+- Include working group deliverables, individual commitments, and scheduling decisions
+- Capture specific dates/timeframes where mentioned (e.g., &quot;September&quot;, &quot;July 24&quot;, &quot;January&quot;)
+- Target: at least 8 distinct commitment rows
+- End with: &quot;Total: N commitments. With deadline: X. Without deadline: Y.&quot;</pre></section>
+          <section><h4>Response Preview</h4><pre># commitment_evidence.md
+## Commitment Evidence Table
+
+| Owner | Action/Deliverable | Deadline/Timeframe | Topic | Evidence Quote |
+|------|-------------------|-------------------|-------|----------------|
+| CSMAC | New work effort on sharing | Ongoing | Spectrum sharing | &quot;I hope all of you are as excited to get involved in this new effort as we are to have you all involved in this.&quot; |
+| FCC | TV White Spaces Program | Ongoing | Spectrum sharing | &quot;The FCC has gotten the T.V. White Spaces Program up and running, one way of having devices being able to find out what spectrum is available in the market that the device happens to be located in.&quot; |
+| NTIA | Study 1755-1850 band | Ongoing | Spectrum sharing | &quot;We then identified the 1755 to 1850 band as the next band to study.&quot; |
+| NTIA | Identify 115 MHz shared spectrum | 2010 | Spectrum sharing | &quot;After we completed our fast track report which identified 115 MHz of spectrum that could be made available on a shared basis...&quot; |
+| NTIA | Evaluate comparable bands | Ongoing | Spectrum sharing | &quot;we solicited and suggested alternative comparable bands because if the government&#x27;s going to relocate its systems, they have to have places to go.&quot; |
+| Government | Analyze 3100 spectrum assignments | Ongoing | Spectrum sharing | &quot;we had over 3100 assignments to at least eight distinct applications...&quot; |
+| Government | Seek cost info for band...</pre></section>
+        </div>
+      </details>
+    </article>
+    
+    <article class="sample" data-family="council" data-capability="commitment_evidence_ledger">
+      <div class="sample-head">
+        <div>
+          <div class="eyebrow">#04 · claude_code_val3_0004</div>
+          <h3>commitment_evidence_ledger</h3>
+          <p>task_meeting_council_upcoming · family=council · variant=evidence_ledger</p>
+        </div>
+        <div class="score" style="--score:58.0%"><strong>0.58</strong><span>score</span></div>
+      </div>
+      <div class="bar"><i style="width:58.0%"></i></div>
+      <details>
+        <summary>查看 prompt / response 摘要</summary>
+        <div class="columns">
+          <section><h4>Prompt Preview</h4><pre>I have a Tampa City Council meeting transcript in `transcript.md`. This is a realtime captioning transcript (~206KB).
+
+Your task: build a **Commitment Evidence Table** extracting every action item, follow-up commitment, or scheduled next step from this council meeting.
+
+IMPORTANT: This transcript is very long. Use grep/search for terms like &quot;April 16&quot;, &quot;May&quot;, &quot;follow up&quot;, &quot;report back&quot;, &quot;continued&quot;, &quot;workshop&quot;, &quot;schedule&quot; to find commitment language throughout.
+
+Write the output to `commitment_evidence.md` as a markdown table:
+
+| Responsible Party | Action/Commitment | Deadline/Date | Agenda Item | Evidence Quote |
+
+Rules:
+- **Evidence Quote** must be verbatim from the transcript
+- Include council directives to staff, staff commitments to council, scheduled future actions, and items continued to future dates
+- Cover the ENTIRE meeting&#x27;s agenda items
+- Target: at least 12 distinct commitm...</pre></section>
+          <section><h4>Response Preview</h4><pre># commitment_evidence.md
+|
+|---
+| Responsible Party | Action/Commitment | Deadline/Date | Agenda Item | Evidence Quote |
+|---
+| Councilwoman Naya Young | Remove ATU Employee of the Month Award | April 16, 2026 | Agenda Item 2 | &quot;I&#x27;m removing item number 2, the ATU... they had not made an ATU employee of the month selection for April.&quot; |
+| Councilwoman Lynn Hurtak | Correct Calendar for ATU Award | April 16, 2026 | Agenda Item 2 | &quot;As soon as I have that information, I&#x27;ll make a motion to correct the calendar.&quot; |
+| Councilman Charlie Miranda | Remove Items 14 and 15 from Consent Agenda | April 16, 2026 | Consent Agenda | &quot;I think we can just talk about that during... when we go to the agenda item, of items that have been pulled from the consent agenda.&quot; |
+| Councilman Luis Viera | Staff Report on Property Reclamation | April 16, 2026 | Staff Report 29 | &quot;HE INDEPENDENTLY DEVELOPED AND EXECUTED A STRATEGICALLY OPERATION PLAN TO RECLAIM THESE PROPERTIES.&quot; |
+| Chief Bercaw | Recognize Officer Darryl McNeil | April 16, 2026 | Officer of the Month | &quot;HE WORKS ON OUR STREET ANTI-CRIMES SQUAD AND ALSO ON OUR SQUAD TEAM.&quot; |
+| Councilman Alan Clendenin | Clarify Political Allegations | April 16, 2026 | Council Statement | &quot;THE ALLEGATION ITSELF IS A COMPLETELY FABRICATED POLITICAL ATTACK DESIGNED TO MISLEAD AND DISTRACT.&quot; |
+| Councilwoman Lynn Hurtak | Motion to Receive and File 33, 34, ...</pre></section>
+        </div>
+      </details>
+    </article>
+    
+    <article class="sample" data-family="tech" data-capability="decision_evidence_ledger">
+      <div class="sample-head">
+        <div>
+          <div class="eyebrow">#05 · claude_code_val3_0005</div>
+          <h3>decision_evidence_ledger</h3>
+          <p>task_meeting_tech_decisions · family=tech · variant=evidence_ledger</p>
+        </div>
+        <div class="score" style="--score:80.0%"><strong>0.80</strong><span>score</span></div>
+      </div>
+      <div class="bar"><i style="width:80.0%"></i></div>
+      <details>
+        <summary>查看 prompt / response 摘要</summary>
+        <div class="columns">
+          <section><h4>Prompt Preview</h4><pre>I have a GitLab Product Marketing team meeting transcript in `meeting_transcript.md`.
+
+Your task: build a **Decision Evidence Table** capturing every decision made, consensus reached, or direction agreed upon during this meeting.
+
+Write the output to `decision_evidence.md` as a markdown table:
+
+| Topic | Decision/Direction | Proposed By | Status (final/tentative/needs follow-up) | Evidence Quote |
+
+Rules:
+- **Evidence Quote** must be a direct quote from the transcript
+- Include explicit decisions (e.g., tagline chosen) AND implicit consensus (e.g., agreement on approach)
+- Distinguish between final decisions and things that need follow-up
+- Target: at least 6 distinct decision rows
+- End with: &quot;Total: N decisions captured. Final: X. Needs follow-up: Y.&quot;</pre></section>
+          <section><h4>Response Preview</h4><pre># decision_evidence.md
+|
+|---
+| Topic | Decision/Direction | Proposed By | Status (final/tentative/needs follow-up) | Evidence Quote |
+|------|------------------|------------|----------------------------------------|------------------|
+| Event Support | GTM team sponsors events, PMM handles campaigns | Speaker | Final | &quot;The current tactic that we&#x27;re going with is go to market team signs up and kind of sponsors that event so you support it as a pmm your campaign manager does the campaigns for that event.&quot; |
+| Corporate Events Tracking | Farm out event support to GTM teams | Speaker | Tentative | &quot;I think we had in slack sort of farmed each one of them out that&#x27;s so I guess the ask would be to work with your gtm team.&quot; |
+| Product Announcements | Highlight vulnerability management and 14.0 features | Team | Final | &quot;We can take the stuff from 14.00 and then maybe add a few more so that we can hit kind of different areas of press.&quot; |
+| Excitement Levels | Measure with MAU metrics | Speaker | Tentative | &quot;We probably may not have it for everything but at least some of it wherever we have it is it&#x27;s probably something we can use.&quot; |
+| Key Iterations | Bucket features under UX improvements | Team | Final | &quot;I think this is kind of the general gist of this assignment is okay we have commit coming up we have some amount of like we have a stage uh you know a metaphorical stage to say s...</pre></section>
+        </div>
+      </details>
+    </article>
+    
+    <article class="sample" data-family="advisory" data-capability="decision_evidence_ledger">
+      <div class="sample-head">
+        <div>
+          <div class="eyebrow">#06 · claude_code_val3_0006</div>
+          <h3>decision_evidence_ledger</h3>
+          <p>task_meeting_advisory_technical · family=advisory · variant=evidence_ledger</p>
+        </div>
+        <div class="score" style="--score:60.0%"><strong>0.60</strong><span>score</span></div>
+      </div>
+      <div class="bar"><i style="width:60.0%"></i></div>
+      <details>
+        <summary>查看 prompt / response 摘要</summary>
+        <div class="columns">
+          <section><h4>Prompt Preview</h4><pre>I have a government advisory committee meeting transcript in `meeting-transcript.md`. This is a CSMAC meeting about federal spectrum sharing.
+
+Your task: build a **Decision Evidence Table** capturing every decision, action item, proposed direction, or consensus reached during this meeting.
+
+Write the output to `decision_evidence.md` as a markdown table:
+
+| Topic/Item | Decision/Action | Proposed By | Status | Evidence Quote |
+
+Rules:
+- **Evidence Quote** must be a direct quote from the transcript
+- Include formal decisions, working group assignments, next meeting scheduling, and informal agreements
+- Note when decisions are tentative vs final
+- Target: at least 8 distinct decision rows
+- End with: &quot;Total: N decisions/actions captured&quot;</pre></section>
+          <section><h4>Response Preview</h4><pre># decision_evidence.md
+## Decision Evidence Table
+
+| Topic/Item | Decision/Action | Proposed By | Status | Evidence Quote |
+|------------|----------------|-------------|--------|----------------|
+| Meeting Protocol | Enforce phone muting for remote participants | Chair Fontes | Final | &quot;If we could just ask those who are on the call if they&#x27;re not speaking to put the phone on mute, that will help everybody who is participating on the call.&quot; |
+| New Work Effort | Focus on facilitating spectrum sharing between commercial and federal users | Larry Strickling | Final | &quot;Karl has laid out a plan for how we&#x27;re going to organize to do this within the CSMAC framework.&quot; |
+| Spectrum Goal | Re-purpose 500 MHz of spectrum for wireless broadband | Tom Power | Final | &quot;The Obama administration concluded that re-purposing 500 MHz of spectrum... was the goal within ten years.&quot; |
+| Band Focus | Study 1755-1850 MHz as next priority | Karl Nebbia | Final | &quot;We identified the 1755 to 1850 band as the next band to study.&quot; |
+| Spectrum Availability | Consider 115 MHz for wireless broadband | Karl Nebbia | Final | &quot;We&#x27;ve since added a 195 additional MHz... and identified 115 MHz of spectrum that could be made available.&quot; |
+| Committee Membership | Address Greg Rosston&#x27;s absence | Chair Fontes | Final | &quot;Greg Rosston is unable to be here physically... he may be able to join the meeting by conference ...</pre></section>
+        </div>
+      </details>
+    </article>
+    
+    <article class="sample" data-family="tech" data-capability="speaker_claim_ledger">
+      <div class="sample-head">
+        <div>
+          <div class="eyebrow">#07 · claude_code_val3_0007</div>
+          <h3>speaker_claim_ledger</h3>
+          <p>task_meeting_tech_messaging · family=tech · variant=evidence_ledger</p>
+        </div>
+        <div class="score" style="--score:96.0%"><strong>0.96</strong><span>score</span></div>
+      </div>
+      <div class="bar"><i style="width:96.0%"></i></div>
+      <details>
+        <summary>查看 prompt / response 摘要</summary>
+        <div class="columns">
+          <section><h4>Prompt Preview</h4><pre>I have a GitLab Product Marketing team meeting transcript in `meeting_transcript.md`.
+
+Your task: build a **Speaker Claim Table** mapping every substantive idea, proposal, opinion, or question to its speaker.
+
+Write the output to `speaker_claims.md` as a markdown table:
+
+| Speaker | Claim/Proposal | Stance (enthusiastic/cautious/questioning/neutral) | Source Quote | Topic |
+
+Rules:
+- **Source Quote** must be verbatim from the transcript
+- Each active participant should have at least 2 rows
+- Capture both strong positions and subtle reactions (pushback, enthusiasm, hesitation)
+- Target: at least 10 distinct claim rows
+- End with: &quot;Total: N claims from M speakers&quot;</pre></section>
+          <section><h4>Response Preview</h4><pre># speaker_claims.md
+## Speaker Claim Table
+
+| Speaker | Claim/Proposal | Stance | Source Quote | Topic |
+|--------|----------------|--------|-------------|------|
+| Tai | Request for event support from GTM teams | Cautious | &quot;the event support that we need isn&#x27;t as nailed down as it needs to be&quot; | Event Support |
+| Cindy | Need campaign manager commitments for events | Neutral | &quot;if you don&#x27;t get any more feedback, yeah do y&#x27;all um does anybody have like a regular sink...&quot; | Campaign Management |
+| Brian | Difficulty of product announcements due to public roadmap | Cautious | &quot;it&#x27;s really really tough to make product announcements because our entire roadmap is completely public&quot; | Product Announcements |
+| Cormac | Highlight vulnerability management as key security feature | Enthusiastic | &quot;vulnerability management because there were tiny little mvcs all the way along...&quot; | Security |
+| Tai | GitOps event cancellation and need for new focus | Neutral | &quot;git ops has been cancelled after the enablement&quot; | Event Strategy |
+| Brian | Propose using 14.0 features for new announcements | Neutral | &quot;we can reuse some of those things and plug them in here&quot; | Feature Reuse |
+| Cormac | Propose vulnerability management as key security feature | Enthusiastic | &quot;vulnerability management was was one of the features out of we looked at 14.00...&quot; | Security |
+| Brian | Suggest three key announ...</pre></section>
+        </div>
+      </details>
+    </article>
+    
+    <article class="sample" data-family="gov" data-capability="speaker_claim_ledger">
+      <div class="sample-head">
+        <div>
+          <div class="eyebrow">#08 · claude_code_val3_0008</div>
+          <h3>speaker_claim_ledger</h3>
+          <p>task_meeting_gov_qa_extract · family=gov · variant=evidence_ledger</p>
+        </div>
+        <div class="score" style="--score:62.0%"><strong>0.62</strong><span>score</span></div>
+      </div>
+      <div class="bar"><i style="width:62.0%"></i></div>
+      <details>
+        <summary>查看 prompt / response 摘要</summary>
+        <div class="columns">
+          <section><h4>Prompt Preview</h4><pre>I have a transcript of NASA&#x27;s first public UAP hearing in `transcript.md`. This is a long document (~265KB).
+
+Your task: build a **Speaker Claim Table** that maps every substantive claim, question, or recommendation to its speaker, with a direct quote as evidence.
+
+IMPORTANT: This transcript is very long. You MUST use grep/search to find all speaker names and their contributions throughout the entire document. Read the opening, panel presentations, AND the Q&amp;A session separately.
+
+Write the output to `speaker_claims.md` as a markdown table:
+
+| Speaker | Role/Affiliation | Claim/Statement | Stance (supportive/skeptical/neutral/concerned) | Source Quote | Topic |
+
+Rules:
+- **Source Quote** must be a verbatim excerpt from the transcript
+- Each speaker should have at least 2 rows if they made multiple substantive points
+- Cover ALL sections: opening, individual presentations, panel discussio...</pre></section>
+          <section><h4>Response Preview</h4><pre># speaker_claims.md
+|
+|---
+| Speaker | Role/Affiliation | Claim/Statement | Stance (supportive/skeptical/neutral/concerned) | Source Quote | Topic
+|---
+| Dan Evans | NASA Federal Official | Advocates for scientific rigor in UAP study | supportive | &quot;We must work together, pulling our resources, our knowledge and our expertise.&quot; | UAP Research
+| Dan Evans | NASA Federal Official | Addresses harassment of panelists and NASA&#x27;s support | concerned | &quot;Harassment only leads to further stigmatization of the UAP field.&quot; | Panelist Safety
+| Dan Evans | NASA Federal Official | Explains FACA and NDAA changes to UAP definition | informative | &quot;This panel’s remit was expanded to encompass not just aerial UAP.&quot; | Legal Framework
+| Nicola Fox | NASA Associate Administrator | Emphasizes transparency and open data | supportive | &quot;We invite you to visit our open data portal at data.nasa.gov.&quot; | Data Accessibility
+| Nicola Fox | NASA Associate Administrator | Discusses unclassified data benefits | supportive | &quot;Unidentified Anomalous Phenomena sightings themselves are not classified.&quot; | Data Sources
+| David Spergle | NASA Scientist | Answers data calibration question | neutral | &quot;The data is not very well calibrated.&quot; | Data Calibration
+| Nadia Drake | Panelist | Calls for increased public engagement | supportive | &quot;We need to reduce the stigma surrounding UAP reporting.&quot; | Public Awareness
+| Pau...</pre></section>
+        </div>
+      </details>
+    </article>
+    
+    <article class="sample" data-family="advisory" data-capability="speaker_claim_ledger">
+      <div class="sample-head">
+        <div>
+          <div class="eyebrow">#09 · claude_code_val3_0009</div>
+          <h3>speaker_claim_ledger</h3>
+          <p>task_meeting_advisory_technical · family=advisory · variant=evidence_ledger</p>
+        </div>
+        <div class="score" style="--score:72.0%"><strong>0.72</strong><span>score</span></div>
+      </div>
+      <div class="bar"><i style="width:72.0%"></i></div>
+      <details>
+        <summary>查看 prompt / response 摘要</summary>
+        <div class="columns">
+          <section><h4>Prompt Preview</h4><pre>I have a government advisory committee meeting transcript in `meeting-transcript.md`. This is a CSMAC meeting about federal spectrum sharing.
+
+Your task: build a **Speaker Claim Table** mapping every substantive statement, position, or question to its speaker, with direct quote evidence.
+
+Write the output to `speaker_claims.md` as a markdown table:
+
+| Speaker | Role/Affiliation | Claim/Statement | Stance (supportive/critical/neutral/questioning) | Source Quote | Topic |
+
+Rules:
+- **Source Quote** must be verbatim from the transcript
+- Each active speaker should have at least 2 rows for their distinct points
+- Cover the full meeting: opening remarks, working group reports, AND open discussion
+- Target: at least 12 distinct claim rows
+- End with: &quot;Total: N claims from M speakers&quot;</pre></section>
+          <section><h4>Response Preview</h4><pre># speaker_claims.md
+## Speaker Claim Table
+
+| Speaker | Role/Affiliation | Claim/Statement | Stance (supportive/critical/neutral/questioning) | Source Quote | Topic |
+|--------|------------------|------------------|-----------------------------------------------|--------------|-------|
+| Brian Fontes | Chair, National Emergency Number Association | Advocated for collaborative spectrum sharing between commercial and federal users | Supportive | &quot;We&#x27;re concentrating on sharing, just as the President called for two years ago.&quot; | Federal-Commercial Spectrum Sharing |
+| Larry Strickling | Assistant Secretary of Commerce | Highlighted the need for long-term spectrum management planning | Supportive | &quot;We&#x27;ve listened to you, and today I&#x27;m excited to have Karl roll out a new work effort...&quot; | Spectrum Management Strategy |
+| Tom Power | White House Office of Science and Technology Policy | Emphasized the importance of sharing despite challenges | Supportive | &quot;Sharing is probably not the first option you would jump to... but it&#x27;s necessary.&quot; | Spectrum Sharing Challenges |
+| Karl Nebbia | NTIA Associate Administrator | Explained the rationale for studying 1755-1850 band | Neutral | &quot;This band represented the last major piece... without major system redesign.&quot; | 1755-1850 Band Study |
+| Mark McHenry | Shared Spectrum Company | Advocated for dynamic spectrum technologies | Supportive | &quot;...</pre></section>
+        </div>
+      </details>
+    </article>
+    
+    <article class="sample" data-family="council" data-capability="speaker_claim_ledger">
+      <div class="sample-head">
+        <div>
+          <div class="eyebrow">#10 · claude_code_val3_0010</div>
+          <h3>speaker_claim_ledger</h3>
+          <p>task_meeting_council_public_comment · family=council · variant=evidence_ledger</p>
+        </div>
+        <div class="score" style="--score:68.0%"><strong>0.68</strong><span>score</span></div>
+      </div>
+      <div class="bar"><i style="width:68.0%"></i></div>
+      <details>
+        <summary>查看 prompt / response 摘要</summary>
+        <div class="columns">
+          <section><h4>Prompt Preview</h4><pre>I have a Tampa City Council meeting transcript in `transcript.md`. This is a realtime captioning transcript (~206KB).
+
+Your task: build a **Speaker Claim Table** mapping every substantive statement, position, question, or concern to its speaker.
+
+IMPORTANT: This transcript is very long. Use grep/search to locate different speakers and agenda items throughout the document. Read each section separately.
+
+Write the output to `speaker_claims.md` as a markdown table:
+
+| Speaker | Role (Council/Staff/Public/Presenter) | Claim/Statement | Stance | Source Quote | Agenda Item |
+
+Rules:
+- **Source Quote** must be verbatim from the transcript
+- Include council members, city staff presentations, AND public commenters
+- Cover ALL agenda items across the full meeting
+- Target: at least 18 distinct claim rows
+- End with: &quot;Total: N claims from M speakers&quot;</pre></section>
+          <section><h4>Response Preview</h4><pre># speaker_claims.md
+| Speaker | Role | Claim/Statement | Stance | Source Quote | Agenda Item |
+|--------|------|------------------|--------|--------------|------------|
+| Alan Clendenin | Council | Denounces false allegations against him | Denounces | &quot;The recent claims made by County Commissioner Wostal...&quot; | Meeting Proceedings |
+| Naya Young | Council | Introduces Pastor Sam and his community work | Supports | &quot;PASTOR SAM IS A GRADUATE OF SAN JOSE STATE UNIVERSITY...&quot; | Community Outreach |
+| Lynn Hurtak | Council | Removes ATU item due to no selection | Actions | &quot;IT&#x27;S BEEN REMOVED FROM THE AGENDA BECAUSE...&quot; | ATU Award |
+| Alan Clendenin | Council | Removes items from consent agenda | Procedural | &quot;CAN I GET A MOTION TO REMOVE THAT FROM THE CONSENT...&quot; | Consent Agenda |
+| Martin Shelby | Council | Questions staff presence for agenda items | Procedural | &quot;DO YOU WANT THAT PLACED UNDER STAFF REPORTS...&quot; | Staff Reports |
+| Alan Clendenin | Council | Acknowledges memo from clerk | Procedural | &quot;WE GOT THE MEMO FROM THEM.&quot; | Staff Reports |
+| Luis Viera | Council | Honors Officer McNeil | Commends | &quot;WE&#x27;RE HERE TO HONOR OFFICER DARRYL McNEIL...&quot; | Officer of the Month |
+| Chief Bercaw | Staff | Details Officer McNeil&#x27;s achievements | Commends | &quot;HE WORKS ON OUR STREET ANTI-CRIMES SQUAD...&quot; | Officer of the Month |
+| Brandon Barclay | Public | Presents plaque to Officer McNei...</pre></section>
+        </div>
+      </details>
+    </article>
+    
+    <article class="sample" data-family="tech" data-capability="stakeholder_evidence_ledger">
+      <div class="sample-head">
+        <div>
+          <div class="eyebrow">#11 · claude_code_val3_0011</div>
+          <h3>stakeholder_evidence_ledger</h3>
+          <p>task_meeting_tech_competitors · family=tech · variant=evidence_ledger</p>
+        </div>
+        <div class="score" style="--score:80.0%"><strong>0.80</strong><span>score</span></div>
+      </div>
+      <div class="bar"><i style="width:80.0%"></i></div>
+      <details>
+        <summary>查看 prompt / response 摘要</summary>
+        <div class="columns">
+          <section><h4>Prompt Preview</h4><pre>I have a GitLab Product Marketing team meeting transcript in `meeting_transcript.md`.
+
+Your task: build a **Stakeholder Evidence Table** identifying every team member who expressed a position, proposal, or concern during this meeting.
+
+Write the output to `stakeholder_evidence.md` as a markdown table:
+
+| Entity/Person | Role/Affiliation | Primary Concern | Position/Stance | Source Quote |
+
+Rules:
+- **Source Quote** must be copied directly from the transcript, not paraphrased
+- Include everyone who spoke, not just the meeting lead
+- Capture both explicit positions and implicit concerns (e.g., pushback, enthusiasm, hesitation)
+- Target: at least 6 distinct rows
+- End with: &quot;Total: N stakeholders identified&quot;</pre></section>
+          <section><h4>Response Preview</h4><pre># stakeholder_evidence.md
+## Stakeholder Evidence Table
+
+| Entity/Person | Role/Affiliation | Primary Concern | Position/Stance | Source Quote |
+|--------------|------------------|----------------|------------------|-------------|
+| Corporate Events Team | Product Marketing | Event support gaps | Advocate for GTM team collaboration | &quot;the event support that we need isn&#x27;t as nailed down as it needs to be&quot; |
+| Tai | Product Marketing | Event sponsorship | Seek GTM team involvement | &quot;need support from gtm teams so i guess the ask would be...&quot; |
+| Cindy | Product Marketing | Event selection | Prioritize one event | &quot;we can help the corp events team... pick the one that we want to do&quot; |
+| Vulnerability Management Team | Product Security | Security improvements | Advocate for vulnerability management | &quot;we replaced one of our scanners with semgrip... our answer to scanning single page applications&quot; |
+| Cormac | Product Marketing | UX improvements | Group features under UX | &quot;i was shy on calling out ux... but actually that&#x27;s how everybody does&quot; |
+| Brian | Product Marketing | VS Code integrations | Highlight community contributions | &quot;both of those vs code integrations... were community contributions&quot; |
+
+Total: 6 stakeholders identified</pre></section>
+        </div>
+      </details>
+    </article>
+    
+    <article class="sample" data-family="gov" data-capability="stakeholder_evidence_ledger">
+      <div class="sample-head">
+        <div>
+          <div class="eyebrow">#12 · claude_code_val3_0012</div>
+          <h3>stakeholder_evidence_ledger</h3>
+          <p>task_meeting_gov_controversy · family=gov · variant=evidence_ledger</p>
+        </div>
+        <div class="score" style="--score:70.0%"><strong>0.70</strong><span>score</span></div>
+      </div>
+      <div class="bar"><i style="width:70.0%"></i></div>
+      <details>
+        <summary>查看 prompt / response 摘要</summary>
+        <div class="columns">
+          <section><h4>Prompt Preview</h4><pre>I have a transcript of NASA&#x27;s first public meeting on UAPs (Unidentified Anomalous Phenomena) in `transcript.md`. This is a long document (~265KB).
+
+Your task: build a **Stakeholder Evidence Table** identifying every distinct entity, organization, or individual who expressed a position or concern about UAP research during this hearing.
+
+IMPORTANT: This transcript is very long. You MUST read it in multiple sections using offset/limit parameters, or use grep/search to locate all speakers throughout the document. Do NOT rely on a single read.
+
+Write the output to `stakeholder_evidence.md` as a markdown table:
+
+| Entity/Person | Role/Affiliation | Primary Concern | Position/Stance | Source Quote |
+
+Rules:
+- **Source Quote** must be copied directly from the transcript, not paraphrased
+- Include NASA officials, panel members, AARO representatives, public questioners, and any organizations refe...</pre></section>
+          <section><h4>Response Preview</h4><pre># stakeholder_evidence.md
+|
+|---
+| Entity/Person | Role/Affiliation | Primary Concern | Position/Stance | Source Quote |
+|---|---|---|---|---|
+| Dan Evans | NASA Official | UAP research transparency | Advocate for open dialogue | &quot;Hello, good morning and welcome. My name is Dan Evans and as the designated federal official for NASA’s Unidentified Anomalous Phenomena Independent Study team, I’d like to call this meeting to order and introduce the panelists.&quot; |
+| Nadia Drake | Panel Member | UAP analysis challenges | Support rigorous scientific methods | &quot;I have a few opening remarks but to begin, I’d like to pay tribute to the life of retired Air Force Master Sergeant Sam Sato...&quot; |
+| Paula Bontempi | Panel Member | UAP public perception | Promote scientific integrity | &quot;It’s disheartening to note that several of them have been subjected to online abuse...&quot; |
+| Federica Bianco | Panel Member | UAP data quality | Advocate for open data | &quot;The UAP independent study was commissioned to create a roadmap...&quot; |
+| David Grinspoon | Panel Member | UAP sensor calibration | Emphasize multi-sensor analysis | &quot;The UAP reports with the most detailed, contextual informations...&quot; |
+| Karlin Toner | Panel Member | UAP atmospheric illusions | Highlight optical illusions in space | &quot;Oftentimes in space, I would see things and I was like...&quot; |
+| Josh Sumeta | Panel Member | UAP data collection | Re...</pre></section>
+        </div>
+      </details>
+    </article>
+    
+    <article class="sample" data-family="advisory" data-capability="stakeholder_evidence_ledger">
+      <div class="sample-head">
+        <div>
+          <div class="eyebrow">#13 · claude_code_val3_0013</div>
+          <h3>stakeholder_evidence_ledger</h3>
+          <p>task_meeting_advisory_attendees · family=advisory · variant=evidence_ledger</p>
+        </div>
+        <div class="score" style="--score:70.0%"><strong>0.70</strong><span>score</span></div>
+      </div>
+      <div class="bar"><i style="width:70.0%"></i></div>
+      <details>
+        <summary>查看 prompt / response 摘要</summary>
+        <div class="columns">
+          <section><h4>Prompt Preview</h4><pre>I have a government advisory committee meeting transcript in `meeting-transcript.md`. This is a CSMAC meeting about federal spectrum sharing (1755-1850 MHz band).
+
+Your task: read the ENTIRE transcript carefully and build a **Stakeholder Evidence Table**. For every distinct entity or person who expressed a position, concern, or interest during the meeting, create one row.
+
+Write the output to `stakeholder_evidence.md` as a markdown table with these exact columns:
+
+| Entity/Person | Role/Affiliation | Primary Concern | Position/Stance | Source Quote |
+
+Rules:
+- **Source Quote** must be a direct quote copied from the transcript — not paraphrased
+- Cover the FULL transcript, not just the opening remarks. Use search/grep to find all speakers.
+- Include government officials, industry representatives, committee members, AND public participants
+- Target: at least 12 distinct rows
+- End with a c...</pre></section>
+          <section><h4>Response Preview</h4><pre># stakeholder_evidence.md
+|
+|---
+| Entity/Person | Role/Affiliation | Primary Concern | Position/Stance | Source Quote |
+|---|---|---|---|---|
+| Dr. Brian Fontes | Chair, CSMAC | Spectrum sharing policy | Advocate for collaborative approach | &quot;I&#x27;d like to turn it over now to Larry Strickling.&quot; |
+| Karl Nebbia | NTIA | Spectrum band study | Need for long-term planning | &quot;We felt it was critical to take an approach that would set a long-term direction for the government...&quot; |
+| Tom Power | White House | Spectrum sharing | Emphasize cooperation between sectors | &quot;I really just wanted to thank you all and congratulate you all for rolling up your sleeves...&quot; |
+| Larry Strickling | Assistant Secretary | Spectrum management | Highlight shared access necessity | &quot;I just want to tell those of you who felt that CSMAC wasn&#x27;t working hard enough...&quot; |
+| Tom Power | White House | Spectrum sharing | Acknowledge challenges of shared access | &quot;We know two things. One, spectrum is finite and two, we have compelling needs for spectrum on both sides...&quot; |
+| Karl Nebbia | NTIA | Spectrum band study | Need for alternative bands | &quot;We also recognize that it would be very difficult to get to 500 MHZ in ten years by doing it 25 MHZ at a time...&quot; |
+| Tom Power | White House | Spectrum sharing | Address commercial needs | &quot;I don&#x27;t want to give short shrift to the needs on the commercial side either thou...</pre></section>
+        </div>
+      </details>
+    </article>
+    
+    <article class="sample" data-family="council" data-capability="stakeholder_evidence_ledger">
+      <div class="sample-head">
+        <div>
+          <div class="eyebrow">#14 · claude_code_val3_0014</div>
+          <h3>stakeholder_evidence_ledger</h3>
+          <p>task_meeting_council_public_comment · family=council · variant=evidence_ledger</p>
+        </div>
+        <div class="score" style="--score:80.0%"><strong>0.80</strong><span>score</span></div>
+      </div>
+      <div class="bar"><i style="width:80.0%"></i></div>
+      <details>
+        <summary>查看 prompt / response 摘要</summary>
+        <div class="columns">
+          <section><h4>Prompt Preview</h4><pre>I have a Tampa City Council meeting transcript in `transcript.md`. This is a realtime captioning transcript (~206KB) covering multiple agenda items.
+
+Your task: build a **Stakeholder Evidence Table** mapping every person or organization who expressed a position, concern, or interest during this council meeting.
+
+IMPORTANT: This transcript is very long. You MUST use grep/search to locate speakers and sections throughout the document, then read relevant portions. Do NOT try to read it all in one pass.
+
+Write the output to `stakeholder_evidence.md` as a markdown table:
+
+| Entity/Person | Role/Affiliation | Primary Concern | Position/Stance | Source Quote |
+
+Rules:
+- **Source Quote** must be copied directly from the transcript
+- Include council members, city staff, presenters, AND public commenters
+- Cover ALL agenda items across the full meeting
+- Target: at least 15 distinct rows
+- End wit...</pre></section>
+          <section><h4>Response Preview</h4><pre># stakeholder_evidence.md
+|
+|---
+| Entity/Person | Role/Affiliation | Primary Concern | Position/Stance | Source Quote |
+|--------------|----------------|----------------|----------------|----------------|
+| Alan Clendenin | City Council Member | False allegations | Denies accusations, calls them baseless | &quot;The recent claims made by County Commissioner Wostal accusing me of nefariously releasing documents related to the Rays deal are completely false and without merit.&quot; |
+| Naya Young | City Councilwoman | Community service | Supports local partnerships, emphasizes family strength | &quot;I am so excited to bring Pastor Sam today because he is also an awesome neighbor to myself and my family.&quot; |
+| Pastor Sam Cancolla | Radiant Church Leader | Community outreach | Advocates for family strength and local partnerships | &quot;We have considered it home, and that is now where we get to be neighbors with the young family.&quot; |
+| Luis Viera | City Councilman | Officer recognition | Honors Officer McNeil for community policing | &quot;Officer McNeil&#x27;s dedication to crime reduction and community engagement shows he is a true guardian for the city.&quot; |
+| Chief Bercaw | Police Chief | Officer recognition | Commends Officer McNeil for proactive leadership | &quot;Officer McNeil&#x27;s efforts resulted in 22 reports, multiple arrests, and a significant reduction in calls for service.&quot; |
+| Officer Daryl McNeil | Poli...</pre></section>
+        </div>
+      </details>
+    </article>
+    </div>
+  </section>
+
+  <footer>
+    Source: <code>data/meeting_analysis_val3_slim_train/claude_code_14_samples.jsonl</code>. Generated for Val3 slim-train inspection. No Val3/Val5 gold or grading content is used in the 14-sample dataset.
+  </footer>
+</main>
+<script>
+function filterSamples(cap, btn) {
+  document.querySelectorAll('.toolbar button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.sample').forEach(el => {
+    el.style.display = (cap === 'all' || el.dataset.capability === cap) ? '' : 'none';
+  });
+}
+</script>
+</body>
+</html>

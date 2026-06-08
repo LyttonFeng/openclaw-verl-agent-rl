@@ -1,8 +1,76 @@
 # Data
 
-This directory holds compiled training prompts. The split definition lives in
-`rl/train/meeting_analysis_split.json` (23 train tasks / 5 test tasks across
-4 real meeting transcripts).
+This directory holds meeting-analysis training and evaluation data used by the
+RL and swarm-policy reproduction workflow.
+
+The original split definition lives in
+`rl/train/meeting_analysis_split.json` (23 train tasks / 5 held-out tasks across
+4 real meeting transcripts). For the current fast reproduction setting, we use a
+smaller Val3 diagnostic suite instead of the full Val5 suite.
+
+## Current Reproduction Setting
+
+### Training Data
+
+Primary slim training data:
+
+```text
+data/meeting_analysis_val3_slim_train/claude_code_14_samples.jsonl
+```
+
+Visualization:
+
+```text
+docs/data_visualizations/meeting_val3_training_data_14_plus_12.html
+```
+
+This file contains 14 high-quality Qwen3-4B OpenClaw rollout samples selected
+from non-validation meeting-analysis tasks. Each line is one JSON sample.
+
+Coverage:
+
+| Capability | Samples | Primary Target |
+| --- | ---: | --- |
+| `stakeholder_evidence_ledger` | 4 | `task_meeting_advisory_stakeholders` |
+| `speaker_claim_ledger` | 4 | `task_meeting_gov_speaker_summary` |
+| `commitment_evidence_ledger` | 4 | `task_meeting_tech_action_items` |
+| `decision_evidence_ledger` | 2 | action / decision tracking support |
+
+Data constraints:
+
+- `uses_val_task` must be `false` for every sample.
+- Samples must not use Val3/Val5 grading, expected behavior, gold answers, or
+  judge notes.
+- Responses should contain transcript-grounded evidence, quotes, or source
+  spans.
+- The current 14-sample file reports score range `0.58-0.96`, mean `0.71`.
+
+### Evaluation Data
+
+The fast diagnostic evaluation suite is Val3:
+
+| Suite | Task ID | Capability |
+| --- | --- | --- |
+| Val3 | `task_meeting_advisory_stakeholders` | stakeholder / entity / stance / evidence |
+| Val3 | `task_meeting_gov_speaker_summary` | speaker attribution / quote-backed summary |
+| Val3 | `task_meeting_tech_action_items` | owner / action / deadline / dependency |
+
+The previous Val5 suite is still useful for full reporting, but it is no longer
+the default fast iteration target. The two tasks excluded from Val3 are:
+
+| Task ID | Reason |
+| --- | --- |
+| `task_meeting_council_votes` | Requires stronger vote-recall scaffold / skill / swarm support than pure single-agent RL. |
+| `task_meeting_sentiment_analysis` | Highest cross-round variance; less suitable as a quick training-trend signal. |
+
+## Full Meeting-Analysis Split
+
+The full split remains:
+
+- 23 train tasks.
+- 5 held-out Val5 tasks.
+- 4 transcript families: NTIA advisory, Tampa council, NASA government hearing,
+  and GitLab product marketing meeting.
 
 To regenerate the parquet from task definitions:
 
