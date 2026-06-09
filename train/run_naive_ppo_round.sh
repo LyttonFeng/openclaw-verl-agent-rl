@@ -22,6 +22,20 @@ if [ -f "$HOME/.pinchbench_env" ]; then
   set +a
 fi
 
+# Training runs use the OpenClaw CLI on this pod. Older env files may still
+# carry ECS/remote-host settings; clear them here so a clean GitHub checkout
+# does not silently send rollouts to an external OpenClaw server.
+unset OPENCLAW_HOST ECS_HOST OPENCLAW_PORT OPENCLAW_USER OPENCLAW_SSH_KEY
+export PINCHBENCH_FORCE_LOCAL_OPENCLAW="${PINCHBENCH_FORCE_LOCAL_OPENCLAW:-1}"
+export OC_PROVIDER_JS="${OC_PROVIDER_JS:-/usr/lib/node_modules/openclaw/node_modules/@mariozechner/pi-ai/dist/providers/openai-completions.js}"
+export OPENCLAW_AGENT_TIMEOUT_SECONDS="${OPENCLAW_AGENT_TIMEOUT_SECONDS:-600}"
+export OPENCLAW_LLM_IDLE_TIMEOUT_SECONDS="${OPENCLAW_LLM_IDLE_TIMEOUT_SECONDS:-0}"
+export PINCHBENCH_OPENCLAW_CONTEXT_WINDOW="${PINCHBENCH_OPENCLAW_CONTEXT_WINDOW:-65536}"
+export PINCHBENCH_OPENCLAW_MAX_TOKENS="${PINCHBENCH_OPENCLAW_MAX_TOKENS:-8192}"
+export PINCHBENCH_SKIP_OPENCLAW_WEB_PREFLIGHT="${PINCHBENCH_SKIP_OPENCLAW_WEB_PREFLIGHT:-1}"
+export PINCHBENCH_MODEL_TEMPERATURE="${PINCHBENCH_MODEL_TEMPERATURE:-0}"
+export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
+
 RUN_ID="${RUN_ID:-naive_ppo_$(date +%Y%m%d_%H%M%S)}"
 RUN_DIR="${RUN_DIR:-$REPO_ROOT/results/train/$RUN_ID}"
 
@@ -34,7 +48,7 @@ TRAIN_SPLIT="${TRAIN_SPLIT:-$REPO_ROOT/data/train/meeting_analysis_all_samples_s
 TASKS_DIR="${TASKS_DIR:-$REPO_ROOT/data/train/tasks}"
 ASSETS_DIR="${ASSETS_DIR:-$REPO_ROOT/data/eval/assets}"
 
-N_RESPONSES="${N_RESPONSES:-2}"
+N_RESPONSES="${N_RESPONSES:-4}"
 NUM_WORKERS="${NUM_WORKERS:-1}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-600}"
 JUDGE_MODEL="${JUDGE_MODEL:-deepseek-v4-pro}"
@@ -49,6 +63,17 @@ KL_BETA="${KL_BETA:-0.02}"
 REF_LOGPROBS_FILE="${REF_LOGPROBS_FILE:-}"
 REF_KL_BETA="${REF_KL_BETA:-0.02}"
 VARIANCE_THRESHOLD="${VARIANCE_THRESHOLD:-1e-8}"
+STOP_VLLM_BEFORE_TRAIN="${STOP_VLLM_BEFORE_TRAIN:-1}"
+
+stop_vllm_for_training() {
+  if [ "$STOP_VLLM_BEFORE_TRAIN" != "1" ]; then
+    return 0
+  fi
+  echo
+  echo "[gpu] stopping vLLM before logprob/train to free single-GPU memory"
+  pkill -f "vllm.entrypoints.openai.api_server" 2>/dev/null || true
+  sleep 10
+}
 
 mkdir -p "$RUN_DIR/rollouts" "$RUN_DIR/selection" "$RUN_DIR/checkpoint"
 
@@ -58,9 +83,11 @@ echo "model_path:    $MODEL_PATH"
 echo "rollout_model: $ROLLOUT_MODEL"
 echo "vllm_base_url: $VLLM_BASE_URL"
 echo "prev_lora:     ${PREV_LORA:-none}"
+echo "train_split:   $TRAIN_SPLIT"
 echo "tasks_dir:     $TASKS_DIR"
 echo "n_responses:   $N_RESPONSES"
 echo "judge_model:   $JUDGE_MODEL"
+echo "local_claw:    $PINCHBENCH_FORCE_LOCAL_OPENCLAW"
 
 echo
 echo "[1/4] rollout sampling"
@@ -88,6 +115,8 @@ python3 train/select_grpo_samples.py \
   --drop-bad-trajectories
 
 FILTERED_FILE="$RUN_DIR/selection/graded_trajectories_prm_valid.jsonl"
+
+stop_vllm_for_training
 
 echo
 echo "[3/4] recompute P_old logprobs"
