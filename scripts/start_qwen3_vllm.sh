@@ -26,6 +26,7 @@ ROPE_SCALING="${ROPE_SCALING:-}"
 ENABLE_LORA="${ENABLE_LORA:-1}"
 MAX_LORAS="${MAX_LORAS:-1}"
 MAX_LORA_RANK="${MAX_LORA_RANK:-16}"
+LORA_MODULES="${LORA_MODULES:-}"
 APPLY_OPENCLAW_HERMES_PATCH="${APPLY_OPENCLAW_HERMES_PATCH:-1}"
 
 if [ "$APPLY_OPENCLAW_HERMES_PATCH" = "1" ]; then
@@ -53,6 +54,9 @@ fi
 
 if [ "$ENABLE_LORA" = "1" ]; then
   ARGS+=(--enable-lora --max-loras "$MAX_LORAS" --max-lora-rank "$MAX_LORA_RANK")
+  if [ -n "$LORA_MODULES" ]; then
+    ARGS+=(--lora-modules "$LORA_MODULES")
+  fi
 fi
 
 export CUDA_VISIBLE_DEVICES
@@ -65,5 +69,6 @@ echo "  served name:  $SERVED_MODEL_NAME"
 echo "  endpoint:     http://$VLLM_HOST:$VLLM_PORT/v1"
 echo "  hermes patch: $APPLY_OPENCLAW_HERMES_PATCH"
 echo "  lora:         $ENABLE_LORA"
+echo "  lora modules: ${LORA_MODULES:-none}"
 
 exec "$PYTHON_BIN" "${ARGS[@]}"
