@@ -24,8 +24,34 @@ Visualization:
 docs/data_visualizations/meeting_val3_training_data_14_plus_12.html
 ```
 
-This file contains 14 high-quality Qwen3-4B OpenClaw rollout samples selected
-from non-validation meeting-analysis tasks. Each line is one JSON sample.
+Online RL task registry:
+
+```text
+data/meeting_analysis_val3_slim_train/claude_code_14_tasks.json
+```
+
+This is the main entry point for the 14-task online RL smoke run. Each task
+contains `workspace_files`, `prompt`, `expected_output_file`, embedded
+`grade_function`, `llm_rubric`, `reward_contract`, and `rl_grouping`.
+
+Offline grouped rollout data:
+
+```text
+data/meeting_analysis_val3_slim_train/claude_code_14_grpo.jsonl
+```
+
+This contains 14 groups with 4 responses per group and can be used for offline
+GRPO sanity checks or seed data conversion.
+
+Reference best-response samples:
+
+```text
+data/meeting_analysis_val3_slim_train/claude_code_14_samples.jsonl
+```
+
+This file contains the best response per task selected from Qwen3-4B OpenClaw
+rollouts. It is mainly used for inspection and visualization; the online RL
+path should use `claude_code_14_tasks.json`.
 
 Coverage:
 

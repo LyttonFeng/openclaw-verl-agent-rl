@@ -3,15 +3,50 @@
 This directory contains the slim training data for the current meeting-analysis
 Val3 reproduction setting.
 
-Expected sample file:
+Primary online RL task registry:
+
+```text
+claude_code_14_tasks.json
+```
+
+Each entry is an executable RL task seed with:
+
+- `workspace_files`
+- `prompt`
+- `expected_output_file`
+- `grading.grade_function`
+- `grading.llm_rubric`
+- `reward_contract`
+- `rl_grouping`
+
+The online RL driver consumes this file:
+
+```bash
+python rl/train/generate_ledger_online_rollouts.py \
+  --tasks-file data/meeting_analysis_val3_slim_train/claude_code_14_tasks.json \
+  --vllm-base-url http://127.0.0.1:8021/v1 \
+  --model Qwen3-4B \
+  --output-dir /path/to/run \
+  --n-responses 4
+```
+
+Offline grouped rollout data:
+
+```text
+claude_code_14_grpo.jsonl
+```
+
+This file contains 14 groups with 4 responses per group, each with scalar
+scores and reward breakdowns. It is useful for offline GRPO sanity checks.
+
+Reference best-response sample file:
 
 ```text
 claude_code_14_samples.jsonl
 ```
 
-The file should contain 14 Qwen3-4B OpenClaw rollout samples selected from
-non-validation tasks. It is intended to train Val3-relevant capabilities without
-using Val3/Val5 grading, expected behavior, gold answers, or judge notes.
+This file contains the best response per task. It is mainly for inspection and
+visualization, not the main online RL entry point.
 
 ## Expected Schema
 

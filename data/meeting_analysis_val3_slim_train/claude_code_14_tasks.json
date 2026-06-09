@@ -1,0 +1,1206 @@
+[
+  {
+    "id": "ledger_commitment_gitlab",
+    "source": "claude_code_ledger_tasks",
+    "split": "train",
+    "meeting_family": "gitlab",
+    "target_capability": "commitment_evidence_ledger",
+    "workspace_files": [
+      {
+        "source": "meetings/2021-06-28-gitlab-product-marketing-meeting.md",
+        "dest": "meeting_transcript.md"
+      }
+    ],
+    "prompt": "I have a GitLab Product Marketing team meeting transcript in `meeting_transcript.md`.\n\nYour task: build a **Commitment Evidence Table** that extracts every action item, commitment, or follow-up that someone took ownership of during this meeting.\n\nWrite the output to `commitment_evidence.md` as a markdown table:\n\n| Owner | Action/Commitment | Deadline | Topic | Evidence Quote |\n\nRules:\n- **Evidence Quote** must be copied directly from the transcript showing the commitment\n- **Owner** must be a specific person's name, not \"the team\" (unless truly collective)\n- Include both explicit commitments (\"I'll do X\") and implicit ones (assigned by others)\n- Note deadlines where mentioned (\"by Tuesday\", \"end of day\")\n- Target: at least 6 distinct commitment rows\n- End with: \"Total: N commitments. With deadline: X. Without deadline: Y.\"",
+    "expected_output_file": "commitment_evidence.md",
+    "grading": {
+      "weights": {
+        "automated": 0.6,
+        "llm_judge": 0.4
+      },
+      "grade_function": "def grade(transcript: list, workspace_path: str) -> dict:\n    from pathlib import Path\n    import re\n    import sys\n    sys.path.insert(0, str(Path(workspace_path).parent))\n\n    scores = {}\n    workspace = Path(workspace_path)\n\n    report_path = workspace / \"commitment_evidence.md\"\n    if not report_path.exists():\n        for alt in [\"commitments.md\", \"commitment_table.md\", \"action_items.md\"]:\n            if (workspace / alt).exists():\n                report_path = workspace / alt\n                break\n\n    if not report_path.exists():\n        return {k: 0.0 for k in [\n            \"report_created\", \"table_format\", \"min_rows\",\n            \"quote_verified\", \"entity_verified\", \"deadlines_noted\", \"summary_line\"\n        ]}\n\n    scores[\"report_created\"] = 1.0\n    content = report_path.read_text()\n    cl = content.lower()\n\n    # Load source transcript for verification\n    source = \"\"\n    for fn in [\"meeting_transcript.md\", \"transcript.md\"]:\n        sp = workspace / fn\n        if sp.exists():\n            source = sp.read_text()\n            break\n\n    # Table format\n    pipe_lines = [l for l in content.split(\"\\n\") if \"|\" in l and len(l.strip()) > 10\n                  and not re.match(r'^[\\s|:-]+$', l.strip())]\n    scores[\"table_format\"] = 1.0 if len(pipe_lines) >= 3 else (0.5 if len(pipe_lines) >= 1 else 0.0)\n\n    # Row count\n    header_sep = len([l for l in content.split(\"\\n\") if re.match(r'^[\\s]*\\|[\\s:-]+\\|', l.strip())])\n    data_rows = max(0, len(pipe_lines) - 1 - header_sep)\n    scores[\"min_rows\"] = 1.0 if data_rows >= 5 else data_rows / 5.0\n\n    # QUOTE VERIFICATION: check quotes against source transcript\n    quotes = re.findall(r'[\"\"\"]([^\"\"\"]{10,})[\"\"\"]', content)\n    if quotes and source:\n        src_lower = re.sub(r'\\s+', ' ', source.lower())\n        verified = 0\n        for q in quotes:\n            q_norm = re.sub(r'\\s+', ' ', q.lower().strip())\n            if q_norm in src_lower:\n                verified += 1\n            elif len(q_norm) > 30 and q_norm[:30] in src_lower:\n                verified += 0.5\n        scores[\"quote_verified\"] = verified / len(quotes) if quotes else 0.0\n    else:\n        scores[\"quote_verified\"] = 0.0\n\n    # ENTITY VERIFICATION: check owner names against source\n    real_owners = [\"cormac\", \"samia\", \"william\", \"cindy\", \"brian\", \"tai\"]\n    if source:\n        src_lower = source.lower()\n        found_in_source = sum(1 for n in real_owners if n in src_lower and n in cl)\n        hallucinated = sum(1 for n in re.findall(r'\\|\\s*([A-Z][a-z]+)\\s*\\|', content)\n                          if n.lower() not in src_lower and n.lower() not in\n                          [\"owner\", \"action\", \"deadline\", \"topic\", \"evidence\", \"total\", \"commitment\"])\n        scores[\"entity_verified\"] = 1.0 if found_in_source >= 3 and hallucinated == 0 else (\n            0.5 if found_in_source >= 2 else 0.0)\n    else:\n        found = sum(1 for n in real_owners if n in cl)\n        scores[\"entity_verified\"] = 1.0 if found >= 3 else (0.5 if found >= 2 else 0.0)\n\n    # Deadlines\n    deadline_terms = [\"tuesday\", \"end of day\", \"eod\", \"by end\", \"deadline\", \"due\"]\n    dl_found = sum(1 for d in deadline_terms if d in cl)\n    scores[\"deadlines_noted\"] = 1.0 if dl_found >= 2 else (0.5 if dl_found >= 1 else 0.0)\n\n    # Summary\n    scores[\"summary_line\"] = 1.0 if re.search(r'total.*\\d+.*commitment', cl) else 0.0\n\n    return scores",
+      "llm_rubric": [
+        {
+          "name": "1: Commitment Completeness",
+          "weight": 0.35,
+          "anchors": {
+            "1.0": "Captures all major commitments across all topics (events, announcements, competitive, messaging). Includes both explicit (\"I'll do X\") and implicit assignments.",
+            "0.5": "Captures commitments from some topics but misses others.",
+            "0.0": "Few or no commitments extracted."
+          }
+        },
+        {
+          "name": "2: Owner Attribution Accuracy",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Each commitment correctly attributed to the right person by name. No hallucinated names.",
+            "0.5": "Some owners correct, some wrong or generic (\"team\", \"someone\").",
+            "0.0": "Owners mostly wrong or missing."
+          }
+        },
+        {
+          "name": "3: Evidence Quote Authenticity",
+          "weight": 0.2,
+          "anchors": {
+            "1.0": "Quotes are verbatim from transcript — can be found as exact substrings in the source.",
+            "0.5": "Some quotes partially match but are paraphrased.",
+            "0.0": "Quotes are clearly fabricated or not from this transcript."
+          }
+        },
+        {
+          "name": "4: Deadline & Summary Accuracy",
+          "weight": 0.15,
+          "anchors": {
+            "1.0": "Deadlines correctly extracted where mentioned (Tuesday, end of day). Summary count accurate.",
+            "0.5": "Some deadlines noted but incomplete.",
+            "0.0": "No deadlines or summary."
+          }
+        }
+      ]
+    },
+    "reward_contract": {
+      "score_range": [
+        0.0,
+        1.0
+      ],
+      "primary_score": "final_score",
+      "final_score_formula": "0.6 * automated_score + 0.4 * llm_judge_score",
+      "required_breakdown_keys": [
+        "report_created",
+        "table_format",
+        "min_rows",
+        "quote_verified",
+        "entity_verified",
+        "deadlines_noted",
+        "summary_line"
+      ],
+      "process_gate": {
+        "require_output_file": true,
+        "min_quote_verified": 0.01,
+        "min_table_format": 0.5
+      }
+    },
+    "rl_grouping": {
+      "group_id": "ledger_commitment_gitlab",
+      "rollouts_per_group": 4
+    }
+  },
+  {
+    "id": "ledger_commitment_nasa",
+    "source": "claude_code_ledger_tasks",
+    "split": "train",
+    "meeting_family": "nasa_gov",
+    "target_capability": "commitment_evidence_ledger",
+    "workspace_files": [
+      {
+        "source": "meetings/2025-07-30-nasa-holds-first-public-meeting-on-ufos-transcript.md",
+        "dest": "transcript.md"
+      }
+    ],
+    "prompt": "I have a transcript of NASA's first public UAP hearing in `transcript.md`. This is a long document (~265KB).\n\nYour task: build a **Commitment Evidence Table** extracting every forward-looking commitment, next step, or planned action mentioned during this hearing.\n\nIMPORTANT: This transcript is very long. Use grep/search with terms like \"will\", \"plan\", \"commit\", \"next\", \"report\", \"deadline\", \"timeline\" to find commitment-related passages throughout the document.\n\nWrite the output to `commitment_evidence.md` as a markdown table:\n\n| Responsible Party | Action/Commitment | Timeline | Area | Evidence Quote |\n\nRules:\n- **Evidence Quote** must be verbatim from the transcript\n- Include NASA commitments, AARO plans, panel deliverables, and interagency coordination items\n- Cover commitments from BOTH presentations and Q&A\n- Target: at least 10 distinct commitment rows\n- End with: \"Total: N commitments. With timeline: X. Without timeline: Y.\"",
+    "expected_output_file": "commitment_evidence.md",
+    "grading": {
+      "weights": {
+        "automated": 0.6,
+        "llm_judge": 0.4
+      },
+      "grade_function": "def grade(transcript: list, workspace_path: str) -> dict:\n    from pathlib import Path\n    import re\n\n    scores = {}\n    workspace = Path(workspace_path)\n\n    report_path = workspace / \"commitment_evidence.md\"\n    if not report_path.exists():\n        for alt in ['commitments.md', 'next_steps.md']:\n            if (workspace / alt).exists():\n                report_path = workspace / alt\n                break\n\n    if not report_path.exists():\n        return {k: 0.0 for k in [\n            \"report_created\", \"table_format\", \"min_rows\",\n            \"quote_verified\", \"entity_verified\",\n            \"timeline_refs\", \"summary_line\"\n        ]}\n\n    scores[\"report_created\"] = 1.0\n    content = report_path.read_text()\n    cl = content.lower()\n\n    # Load source transcript for verification\n    source = \"\"\n    for fn in [\"transcript.md\", \"meeting_transcript.md\", \"meeting-transcript.md\", \"transcript.md\"]:\n        sp = workspace / fn\n        if sp.exists():\n            source = sp.read_text()\n            break\n\n    # --- Table format ---\n    pipe_lines = [l for l in content.split(\"\\n\") if \"|\" in l and len(l.strip()) > 10\n                  and not re.match(r'^[\\s|:-]+$', l.strip())]\n    scores[\"table_format\"] = 1.0 if len(pipe_lines) >= 3 else (0.5 if len(pipe_lines) >= 1 else 0.0)\n\n    # --- Row count ---\n    header_sep = len([l for l in content.split(\"\\n\") if re.match(r'^[\\s]*\\|[\\s:-]+\\|', l.strip())])\n    data_rows = max(0, len(pipe_lines) - 1 - header_sep)\n    scores[\"min_rows\"] = 1.0 if data_rows >= 8 else data_rows / 8.0\n\n    # --- QUOTE VERIFICATION against source transcript ---\n    quotes = re.findall(r'[\"\\u201c\\u201d]([^\"\\u201c\\u201d]{10,})[\"\\u201c\\u201d]', content)\n    if quotes and source:\n        src_norm = re.sub(r'\\s+', ' ', source.lower())\n        verified = 0\n        for q in quotes:\n            q_norm = re.sub(r'\\s+', ' ', q.lower().strip())\n            if q_norm in src_norm:\n                verified += 1\n            elif len(q_norm) > 30 and q_norm[:30] in src_norm:\n                verified += 0.5\n        scores[\"quote_verified\"] = verified / len(quotes) if quotes else 0.0\n    else:\n        scores[\"quote_verified\"] = 0.0\n\n    # --- ENTITY VERIFICATION against source transcript ---\n    known = ['nasa', 'aaro', 'spergel', 'kirkpatrick', 'fox', 'evans', 'freie']\n    if source:\n        src_lower = source.lower()\n        found_real = sum(1 for n in known if n in src_lower and n in cl)\n        # Check for hallucinated names in table\n        table_names = re.findall(r'\\|\\s*([A-Z][a-z]{2,})\\s*\\|', content)\n        skip = {\"owner\", \"entity\", \"speaker\", \"person\", \"responsible\", \"topic\",\n                \"action\", \"deadline\", \"evidence\", \"total\", \"claim\", \"stance\",\n                \"role\", \"area\", \"status\", \"decision\", \"source\", \"quote\"}\n        hallucinated = sum(1 for n in set(table_names)\n                          if n.lower() not in src_lower and n.lower() not in skip)\n        scores[\"entity_verified\"] = 1.0 if found_real >= 3 and hallucinated <= 1 else (\n            0.7 if found_real >= 3 else (0.4 if found_real >= 2 else 0.0))\n    else:\n        found = sum(1 for n in known if n in cl)\n        scores[\"entity_verified\"] = 1.0 if found >= 3 else (0.5 if found >= 2 else 0.0)\n\n    # --- Domain-specific check ---\n    domain_terms = ['summer', 'august', 'annual', 'ongoing', 'report']\n    d_found = sum(1 for t in domain_terms if t in cl)\n    scores[\"timeline_refs\"] = 1.0 if d_found >= 3 else (\n        0.5 if d_found >= 1 else 0.0)\n\n    # --- Summary line ---\n    scores[\"summary_line\"] = 1.0 if re.search(r'total.*\\d+', cl) else 0.0\n\n    return scores",
+      "llm_rubric": [
+        {
+          "name": "1: Commitment Completeness",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Captures all major commitments — action items, deadlines, and follow-ups. NASA vs AARO commitments, panel deliverables, covering both presentations and Q&A. Long document requires multi-section reading.",
+            "0.5": "Captures commitments from some sections but misses others.",
+            "0.0": "Few or no commitments extracted."
+          }
+        },
+        {
+          "name": "2: Evidence Quote Authenticity",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Quotes are verbatim from transcript — can be found as exact substrings in the source document.",
+            "0.5": "Some quotes partially match but are paraphrased or slightly altered.",
+            "0.0": "Quotes are clearly fabricated, generic, or not from this transcript."
+          }
+        },
+        {
+          "name": "3: Entity/Attribution Accuracy",
+          "weight": 0.25,
+          "anchors": {
+            "1.0": "All named entities appear in the source transcript. Attributions (who said/did what) are correct. No hallucinated names.",
+            "0.5": "Most entities are real but some attributions are wrong or names hallucinated.",
+            "0.0": "Many hallucinated names or wrong attributions."
+          }
+        },
+        {
+          "name": "4: Document Coverage & Structure",
+          "weight": 0.15,
+          "anchors": {
+            "1.0": "Covers the FULL document (not just the beginning). Table is properly formatted with all required columns. Summary line present.",
+            "0.5": "Some coverage gaps or formatting issues.",
+            "0.0": "Only covers the first section or table is broken."
+          }
+        }
+      ]
+    },
+    "reward_contract": {
+      "score_range": [
+        0.0,
+        1.0
+      ],
+      "primary_score": "final_score",
+      "final_score_formula": "0.6 * automated_score + 0.4 * llm_judge_score",
+      "required_breakdown_keys": [
+        "report_created",
+        "table_format",
+        "min_rows",
+        "quote_verified",
+        "entity_verified",
+        "timeline_refs",
+        "summary_line"
+      ],
+      "process_gate": {
+        "require_output_file": true,
+        "min_quote_verified": 0.01,
+        "min_table_format": 0.5
+      }
+    },
+    "rl_grouping": {
+      "group_id": "ledger_commitment_nasa",
+      "rollouts_per_group": 4
+    }
+  },
+  {
+    "id": "ledger_commitment_ntia",
+    "source": "claude_code_ledger_tasks",
+    "split": "train",
+    "meeting_family": "ntia_advisory",
+    "target_capability": "commitment_evidence_ledger",
+    "workspace_files": [
+      {
+        "source": "meetings/2012-05-30-meeting-transcript-ntia-csmac.md",
+        "dest": "meeting-transcript.md"
+      }
+    ],
+    "prompt": "I have a government advisory committee meeting transcript in `meeting-transcript.md`. This is a CSMAC meeting about federal spectrum sharing.\n\nYour task: build a **Commitment Evidence Table** extracting every action item, deliverable, or commitment made during this meeting — by working groups, individual members, or NTIA staff.\n\nWrite the output to `commitment_evidence.md` as a markdown table:\n\n| Owner (Person/Group) | Action/Deliverable | Deadline/Timeframe | Topic | Evidence Quote |\n\nRules:\n- **Evidence Quote** must be verbatim from the transcript\n- Include working group deliverables, individual commitments, and scheduling decisions\n- Capture specific dates/timeframes where mentioned (e.g., \"September\", \"July 24\", \"January\")\n- Target: at least 8 distinct commitment rows\n- End with: \"Total: N commitments. With deadline: X. Without deadline: Y.\"",
+    "expected_output_file": "commitment_evidence.md",
+    "grading": {
+      "weights": {
+        "automated": 0.6,
+        "llm_judge": 0.4
+      },
+      "grade_function": "def grade(transcript: list, workspace_path: str) -> dict:\n    from pathlib import Path\n    import re\n\n    scores = {}\n    workspace = Path(workspace_path)\n\n    report_path = workspace / \"commitment_evidence.md\"\n    if not report_path.exists():\n        for alt in ['commitments.md', 'commitment_table.md']:\n            if (workspace / alt).exists():\n                report_path = workspace / alt\n                break\n\n    if not report_path.exists():\n        return {k: 0.0 for k in [\n            \"report_created\", \"table_format\", \"min_rows\",\n            \"quote_verified\", \"entity_verified\",\n            \"working_groups\", \"summary_line\"\n        ]}\n\n    scores[\"report_created\"] = 1.0\n    content = report_path.read_text()\n    cl = content.lower()\n\n    # Load source transcript for verification\n    source = \"\"\n    for fn in [\"meeting-transcript.md\", \"meeting_transcript.md\", \"meeting-transcript.md\", \"transcript.md\"]:\n        sp = workspace / fn\n        if sp.exists():\n            source = sp.read_text()\n            break\n\n    # --- Table format ---\n    pipe_lines = [l for l in content.split(\"\\n\") if \"|\" in l and len(l.strip()) > 10\n                  and not re.match(r'^[\\s|:-]+$', l.strip())]\n    scores[\"table_format\"] = 1.0 if len(pipe_lines) >= 3 else (0.5 if len(pipe_lines) >= 1 else 0.0)\n\n    # --- Row count ---\n    header_sep = len([l for l in content.split(\"\\n\") if re.match(r'^[\\s]*\\|[\\s:-]+\\|', l.strip())])\n    data_rows = max(0, len(pipe_lines) - 1 - header_sep)\n    scores[\"min_rows\"] = 1.0 if data_rows >= 6 else data_rows / 6.0\n\n    # --- QUOTE VERIFICATION against source transcript ---\n    quotes = re.findall(r'[\"\\u201c\\u201d]([^\"\\u201c\\u201d]{10,})[\"\\u201c\\u201d]', content)\n    if quotes and source:\n        src_norm = re.sub(r'\\s+', ' ', source.lower())\n        verified = 0\n        for q in quotes:\n            q_norm = re.sub(r'\\s+', ' ', q.lower().strip())\n            if q_norm in src_norm:\n                verified += 1\n            elif len(q_norm) > 30 and q_norm[:30] in src_norm:\n                verified += 0.5\n        scores[\"quote_verified\"] = verified / len(quotes) if quotes else 0.0\n    else:\n        scores[\"quote_verified\"] = 0.0\n\n    # --- ENTITY VERIFICATION against source transcript ---\n    known = ['nebbia', 'power', 'rush', 'warren', 'kahn', 'calabrese', 'hatfield']\n    if source:\n        src_lower = source.lower()\n        found_real = sum(1 for n in known if n in src_lower and n in cl)\n        # Check for hallucinated names in table\n        table_names = re.findall(r'\\|\\s*([A-Z][a-z]{2,})\\s*\\|', content)\n        skip = {\"owner\", \"entity\", \"speaker\", \"person\", \"responsible\", \"topic\",\n                \"action\", \"deadline\", \"evidence\", \"total\", \"claim\", \"stance\",\n                \"role\", \"area\", \"status\", \"decision\", \"source\", \"quote\"}\n        hallucinated = sum(1 for n in set(table_names)\n                          if n.lower() not in src_lower and n.lower() not in skip)\n        scores[\"entity_verified\"] = 1.0 if found_real >= 3 and hallucinated <= 1 else (\n            0.7 if found_real >= 3 else (0.4 if found_real >= 2 else 0.0))\n    else:\n        found = sum(1 for n in known if n in cl)\n        scores[\"entity_verified\"] = 1.0 if found >= 3 else (0.5 if found >= 2 else 0.0)\n\n    # --- Domain-specific check ---\n    domain_terms = ['wg1', 'wg2', 'wg3', 'wg4', 'wg5', 'working group']\n    d_found = sum(1 for t in domain_terms if t in cl)\n    scores[\"working_groups\"] = 1.0 if d_found >= 3 else (\n        0.5 if d_found >= 1 else 0.0)\n\n    # --- Summary line ---\n    scores[\"summary_line\"] = 1.0 if re.search(r'total.*\\d+', cl) else 0.0\n\n    return scores",
+      "llm_rubric": [
+        {
+          "name": "1: Commitment Completeness",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Captures all major commitments — action items, deadlines, and follow-ups. Working group deliverables, scheduling decisions, and member commitments with specific timeframes (July 24, September, January).",
+            "0.5": "Captures commitments from some sections but misses others.",
+            "0.0": "Few or no commitments extracted."
+          }
+        },
+        {
+          "name": "2: Evidence Quote Authenticity",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Quotes are verbatim from transcript — can be found as exact substrings in the source document.",
+            "0.5": "Some quotes partially match but are paraphrased or slightly altered.",
+            "0.0": "Quotes are clearly fabricated, generic, or not from this transcript."
+          }
+        },
+        {
+          "name": "3: Entity/Attribution Accuracy",
+          "weight": 0.25,
+          "anchors": {
+            "1.0": "All named entities appear in the source transcript. Attributions (who said/did what) are correct. No hallucinated names.",
+            "0.5": "Most entities are real but some attributions are wrong or names hallucinated.",
+            "0.0": "Many hallucinated names or wrong attributions."
+          }
+        },
+        {
+          "name": "4: Document Coverage & Structure",
+          "weight": 0.15,
+          "anchors": {
+            "1.0": "Covers the FULL document (not just the beginning). Table is properly formatted with all required columns. Summary line present.",
+            "0.5": "Some coverage gaps or formatting issues.",
+            "0.0": "Only covers the first section or table is broken."
+          }
+        }
+      ]
+    },
+    "reward_contract": {
+      "score_range": [
+        0.0,
+        1.0
+      ],
+      "primary_score": "final_score",
+      "final_score_formula": "0.6 * automated_score + 0.4 * llm_judge_score",
+      "required_breakdown_keys": [
+        "report_created",
+        "table_format",
+        "min_rows",
+        "quote_verified",
+        "entity_verified",
+        "working_groups",
+        "summary_line"
+      ],
+      "process_gate": {
+        "require_output_file": true,
+        "min_quote_verified": 0.01,
+        "min_table_format": 0.5
+      }
+    },
+    "rl_grouping": {
+      "group_id": "ledger_commitment_ntia",
+      "rollouts_per_group": 4
+    }
+  },
+  {
+    "id": "ledger_commitment_tampa",
+    "source": "claude_code_ledger_tasks",
+    "split": "train",
+    "meeting_family": "tampa_council",
+    "target_capability": "commitment_evidence_ledger",
+    "workspace_files": [
+      {
+        "source": "meetings/2026-04-02-tampa-city-council-transcript.md",
+        "dest": "transcript.md"
+      }
+    ],
+    "prompt": "I have a Tampa City Council meeting transcript in `transcript.md`. This is a realtime captioning transcript (~206KB).\n\nYour task: build a **Commitment Evidence Table** extracting every action item, follow-up commitment, or scheduled next step from this council meeting.\n\nIMPORTANT: This transcript is very long. Use grep/search for terms like \"April 16\", \"May\", \"follow up\", \"report back\", \"continued\", \"workshop\", \"schedule\" to find commitment language throughout.\n\nWrite the output to `commitment_evidence.md` as a markdown table:\n\n| Responsible Party | Action/Commitment | Deadline/Date | Agenda Item | Evidence Quote |\n\nRules:\n- **Evidence Quote** must be verbatim from the transcript\n- Include council directives to staff, staff commitments to council, scheduled future actions, and items continued to future dates\n- Cover the ENTIRE meeting's agenda items\n- Target: at least 12 distinct commitment rows\n- End with: \"Total: N commitments. With date: X. Without date: Y.\"",
+    "expected_output_file": "commitment_evidence.md",
+    "grading": {
+      "weights": {
+        "automated": 0.6,
+        "llm_judge": 0.4
+      },
+      "grade_function": "def grade(transcript: list, workspace_path: str) -> dict:\n    from pathlib import Path\n    import re\n\n    scores = {}\n    workspace = Path(workspace_path)\n\n    report_path = workspace / \"commitment_evidence.md\"\n    if not report_path.exists():\n        for alt in ['commitments.md', 'action_items.md']:\n            if (workspace / alt).exists():\n                report_path = workspace / alt\n                break\n\n    if not report_path.exists():\n        return {k: 0.0 for k in [\n            \"report_created\", \"table_format\", \"min_rows\",\n            \"quote_verified\", \"entity_verified\",\n            \"future_dates\", \"summary_line\"\n        ]}\n\n    scores[\"report_created\"] = 1.0\n    content = report_path.read_text()\n    cl = content.lower()\n\n    # Load source transcript for verification\n    source = \"\"\n    for fn in [\"transcript.md\", \"meeting_transcript.md\", \"meeting-transcript.md\", \"transcript.md\"]:\n        sp = workspace / fn\n        if sp.exists():\n            source = sp.read_text()\n            break\n\n    # --- Table format ---\n    pipe_lines = [l for l in content.split(\"\\n\") if \"|\" in l and len(l.strip()) > 10\n                  and not re.match(r'^[\\s|:-]+$', l.strip())]\n    scores[\"table_format\"] = 1.0 if len(pipe_lines) >= 3 else (0.5 if len(pipe_lines) >= 1 else 0.0)\n\n    # --- Row count ---\n    header_sep = len([l for l in content.split(\"\\n\") if re.match(r'^[\\s]*\\|[\\s:-]+\\|', l.strip())])\n    data_rows = max(0, len(pipe_lines) - 1 - header_sep)\n    scores[\"min_rows\"] = 1.0 if data_rows >= 8 else data_rows / 8.0\n\n    # --- QUOTE VERIFICATION against source transcript ---\n    quotes = re.findall(r'[\"\\u201c\\u201d]([^\"\\u201c\\u201d]{10,})[\"\\u201c\\u201d]', content)\n    if quotes and source:\n        src_norm = re.sub(r'\\s+', ' ', source.lower())\n        verified = 0\n        for q in quotes:\n            q_norm = re.sub(r'\\s+', ' ', q.lower().strip())\n            if q_norm in src_norm:\n                verified += 1\n            elif len(q_norm) > 30 and q_norm[:30] in src_norm:\n                verified += 0.5\n        scores[\"quote_verified\"] = verified / len(quotes) if quotes else 0.0\n    else:\n        scores[\"quote_verified\"] = 0.0\n\n    # --- ENTITY VERIFICATION against source transcript ---\n    known = ['clendenin', 'miranda', 'carlson', 'hurtak', 'young', 'viera', 'maniscalco']\n    if source:\n        src_lower = source.lower()\n        found_real = sum(1 for n in known if n in src_lower and n in cl)\n        # Check for hallucinated names in table\n        table_names = re.findall(r'\\|\\s*([A-Z][a-z]{2,})\\s*\\|', content)\n        skip = {\"owner\", \"entity\", \"speaker\", \"person\", \"responsible\", \"topic\",\n                \"action\", \"deadline\", \"evidence\", \"total\", \"claim\", \"stance\",\n                \"role\", \"area\", \"status\", \"decision\", \"source\", \"quote\"}\n        hallucinated = sum(1 for n in set(table_names)\n                          if n.lower() not in src_lower and n.lower() not in skip)\n        scores[\"entity_verified\"] = 1.0 if found_real >= 3 and hallucinated <= 1 else (\n            0.7 if found_real >= 3 else (0.4 if found_real >= 2 else 0.0))\n    else:\n        found = sum(1 for n in known if n in cl)\n        scores[\"entity_verified\"] = 1.0 if found >= 3 else (0.5 if found >= 2 else 0.0)\n\n    # --- Domain-specific check ---\n    domain_terms = ['april 16', 'may', 'budget', 'workshop', 'town hall']\n    d_found = sum(1 for t in domain_terms if t in cl)\n    scores[\"future_dates\"] = 1.0 if d_found >= 2 else (\n        0.5 if d_found >= 1 else 0.0)\n\n    # --- Summary line ---\n    scores[\"summary_line\"] = 1.0 if re.search(r'total.*\\d+', cl) else 0.0\n\n    return scores",
+      "llm_rubric": [
+        {
+          "name": "1: Commitment Completeness",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Captures all major commitments — action items, deadlines, and follow-ups. Council directives, continued items, scheduled events across ALL agenda items. Long document requires grep-based navigation.",
+            "0.5": "Captures commitments from some sections but misses others.",
+            "0.0": "Few or no commitments extracted."
+          }
+        },
+        {
+          "name": "2: Evidence Quote Authenticity",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Quotes are verbatim from transcript — can be found as exact substrings in the source document.",
+            "0.5": "Some quotes partially match but are paraphrased or slightly altered.",
+            "0.0": "Quotes are clearly fabricated, generic, or not from this transcript."
+          }
+        },
+        {
+          "name": "3: Entity/Attribution Accuracy",
+          "weight": 0.25,
+          "anchors": {
+            "1.0": "All named entities appear in the source transcript. Attributions (who said/did what) are correct. No hallucinated names.",
+            "0.5": "Most entities are real but some attributions are wrong or names hallucinated.",
+            "0.0": "Many hallucinated names or wrong attributions."
+          }
+        },
+        {
+          "name": "4: Document Coverage & Structure",
+          "weight": 0.15,
+          "anchors": {
+            "1.0": "Covers the FULL document (not just the beginning). Table is properly formatted with all required columns. Summary line present.",
+            "0.5": "Some coverage gaps or formatting issues.",
+            "0.0": "Only covers the first section or table is broken."
+          }
+        }
+      ]
+    },
+    "reward_contract": {
+      "score_range": [
+        0.0,
+        1.0
+      ],
+      "primary_score": "final_score",
+      "final_score_formula": "0.6 * automated_score + 0.4 * llm_judge_score",
+      "required_breakdown_keys": [
+        "report_created",
+        "table_format",
+        "min_rows",
+        "quote_verified",
+        "entity_verified",
+        "future_dates",
+        "summary_line"
+      ],
+      "process_gate": {
+        "require_output_file": true,
+        "min_quote_verified": 0.01,
+        "min_table_format": 0.5
+      }
+    },
+    "rl_grouping": {
+      "group_id": "ledger_commitment_tampa",
+      "rollouts_per_group": 4
+    }
+  },
+  {
+    "id": "ledger_decision_gitlab",
+    "source": "claude_code_ledger_tasks",
+    "split": "train",
+    "meeting_family": "gitlab",
+    "target_capability": "decision_evidence_ledger",
+    "workspace_files": [
+      {
+        "source": "meetings/2021-06-28-gitlab-product-marketing-meeting.md",
+        "dest": "meeting_transcript.md"
+      }
+    ],
+    "prompt": "I have a GitLab Product Marketing team meeting transcript in `meeting_transcript.md`.\n\nYour task: build a **Decision Evidence Table** capturing every decision made, consensus reached, or direction agreed upon during this meeting.\n\nWrite the output to `decision_evidence.md` as a markdown table:\n\n| Topic | Decision/Direction | Proposed By | Status (final/tentative/needs follow-up) | Evidence Quote |\n\nRules:\n- **Evidence Quote** must be a direct quote from the transcript\n- Include explicit decisions (e.g., tagline chosen) AND implicit consensus (e.g., agreement on approach)\n- Distinguish between final decisions and things that need follow-up\n- Target: at least 6 distinct decision rows\n- End with: \"Total: N decisions captured. Final: X. Needs follow-up: Y.\"",
+    "expected_output_file": "decision_evidence.md",
+    "grading": {
+      "weights": {
+        "automated": 0.6,
+        "llm_judge": 0.4
+      },
+      "grade_function": "def grade(transcript: list, workspace_path: str) -> dict:\n    from pathlib import Path\n    import re\n\n    scores = {}\n    workspace = Path(workspace_path)\n\n    report_path = workspace / \"decision_evidence.md\"\n    if not report_path.exists():\n        for alt in ['decisions.md', 'decision_table.md']:\n            if (workspace / alt).exists():\n                report_path = workspace / alt\n                break\n\n    if not report_path.exists():\n        return {k: 0.0 for k in [\n            \"report_created\", \"table_format\", \"min_rows\",\n            \"quote_verified\", \"entity_verified\",\n            \"decision_topics\", \"summary_line\"\n        ]}\n\n    scores[\"report_created\"] = 1.0\n    content = report_path.read_text()\n    cl = content.lower()\n\n    # Load source transcript for verification\n    source = \"\"\n    for fn in [\"meeting_transcript.md\", \"meeting_transcript.md\", \"meeting-transcript.md\", \"transcript.md\"]:\n        sp = workspace / fn\n        if sp.exists():\n            source = sp.read_text()\n            break\n\n    # --- Table format ---\n    pipe_lines = [l for l in content.split(\"\\n\") if \"|\" in l and len(l.strip()) > 10\n                  and not re.match(r'^[\\s|:-]+$', l.strip())]\n    scores[\"table_format\"] = 1.0 if len(pipe_lines) >= 3 else (0.5 if len(pipe_lines) >= 1 else 0.0)\n\n    # --- Row count ---\n    header_sep = len([l for l in content.split(\"\\n\") if re.match(r'^[\\s]*\\|[\\s:-]+\\|', l.strip())])\n    data_rows = max(0, len(pipe_lines) - 1 - header_sep)\n    scores[\"min_rows\"] = 1.0 if data_rows >= 5 else data_rows / 5.0\n\n    # --- QUOTE VERIFICATION against source transcript ---\n    quotes = re.findall(r'[\"\\u201c\\u201d]([^\"\\u201c\\u201d]{10,})[\"\\u201c\\u201d]', content)\n    if quotes and source:\n        src_norm = re.sub(r'\\s+', ' ', source.lower())\n        verified = 0\n        for q in quotes:\n            q_norm = re.sub(r'\\s+', ' ', q.lower().strip())\n            if q_norm in src_norm:\n                verified += 1\n            elif len(q_norm) > 30 and q_norm[:30] in src_norm:\n                verified += 0.5\n        scores[\"quote_verified\"] = verified / len(quotes) if quotes else 0.0\n    else:\n        scores[\"quote_verified\"] = 0.0\n\n    # --- ENTITY VERIFICATION against source transcript ---\n    known = ['william', 'cindy', 'cormac', 'brian', 'samia']\n    if source:\n        src_lower = source.lower()\n        found_real = sum(1 for n in known if n in src_lower and n in cl)\n        # Check for hallucinated names in table\n        table_names = re.findall(r'\\|\\s*([A-Z][a-z]{2,})\\s*\\|', content)\n        skip = {\"owner\", \"entity\", \"speaker\", \"person\", \"responsible\", \"topic\",\n                \"action\", \"deadline\", \"evidence\", \"total\", \"claim\", \"stance\",\n                \"role\", \"area\", \"status\", \"decision\", \"source\", \"quote\"}\n        hallucinated = sum(1 for n in set(table_names)\n                          if n.lower() not in src_lower and n.lower() not in skip)\n        scores[\"entity_verified\"] = 1.0 if found_real >= 3 and hallucinated <= 1 else (\n            0.7 if found_real >= 3 else (0.4 if found_real >= 2 else 0.0))\n    else:\n        found = sum(1 for n in known if n in cl)\n        scores[\"entity_verified\"] = 1.0 if found >= 3 else (0.5 if found >= 2 else 0.0)\n\n    # --- Domain-specific check ---\n    domain_terms = ['messaging', 'tagline', 'competitive', 'events', 'features', 'infographic', 'tier']\n    d_found = sum(1 for t in domain_terms if t in cl)\n    scores[\"decision_topics\"] = 1.0 if d_found >= 3 else (\n        0.5 if d_found >= 1 else 0.0)\n\n    # --- Summary line ---\n    scores[\"summary_line\"] = 1.0 if re.search(r'total.*\\d+', cl) else 0.0\n\n    return scores",
+      "llm_rubric": [
+        {
+          "name": "1: Decision Completeness",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Captures all major decisions — decisions, consensus, and direction. Decisions across ALL discussion topics (messaging, competitive, events, features). Status tracking (final vs tentative).",
+            "0.5": "Captures decisions from some sections but misses others.",
+            "0.0": "Few or no decisions extracted."
+          }
+        },
+        {
+          "name": "2: Evidence Quote Authenticity",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Quotes are verbatim from transcript — can be found as exact substrings in the source document.",
+            "0.5": "Some quotes partially match but are paraphrased or slightly altered.",
+            "0.0": "Quotes are clearly fabricated, generic, or not from this transcript."
+          }
+        },
+        {
+          "name": "3: Entity/Attribution Accuracy",
+          "weight": 0.25,
+          "anchors": {
+            "1.0": "All named entities appear in the source transcript. Attributions (who said/did what) are correct. No hallucinated names.",
+            "0.5": "Most entities are real but some attributions are wrong or names hallucinated.",
+            "0.0": "Many hallucinated names or wrong attributions."
+          }
+        },
+        {
+          "name": "4: Document Coverage & Structure",
+          "weight": 0.15,
+          "anchors": {
+            "1.0": "Covers the FULL document (not just the beginning). Table is properly formatted with all required columns. Summary line present.",
+            "0.5": "Some coverage gaps or formatting issues.",
+            "0.0": "Only covers the first section or table is broken."
+          }
+        }
+      ]
+    },
+    "reward_contract": {
+      "score_range": [
+        0.0,
+        1.0
+      ],
+      "primary_score": "final_score",
+      "final_score_formula": "0.6 * automated_score + 0.4 * llm_judge_score",
+      "required_breakdown_keys": [
+        "report_created",
+        "table_format",
+        "min_rows",
+        "quote_verified",
+        "entity_verified",
+        "decision_topics",
+        "summary_line"
+      ],
+      "process_gate": {
+        "require_output_file": true,
+        "min_quote_verified": 0.01,
+        "min_table_format": 0.5
+      }
+    },
+    "rl_grouping": {
+      "group_id": "ledger_decision_gitlab",
+      "rollouts_per_group": 4
+    }
+  },
+  {
+    "id": "ledger_decision_ntia",
+    "source": "claude_code_ledger_tasks",
+    "split": "train",
+    "meeting_family": "ntia_advisory",
+    "target_capability": "decision_evidence_ledger",
+    "workspace_files": [
+      {
+        "source": "meetings/2012-05-30-meeting-transcript-ntia-csmac.md",
+        "dest": "meeting-transcript.md"
+      }
+    ],
+    "prompt": "I have a government advisory committee meeting transcript in `meeting-transcript.md`. This is a CSMAC meeting about federal spectrum sharing.\n\nYour task: build a **Decision Evidence Table** capturing every decision, action item, proposed direction, or consensus reached during this meeting.\n\nWrite the output to `decision_evidence.md` as a markdown table:\n\n| Topic/Item | Decision/Action | Proposed By | Status | Evidence Quote |\n\nRules:\n- **Evidence Quote** must be a direct quote from the transcript\n- Include formal decisions, working group assignments, next meeting scheduling, and informal agreements\n- Note when decisions are tentative vs final\n- Target: at least 8 distinct decision rows\n- End with: \"Total: N decisions/actions captured\"",
+    "expected_output_file": "decision_evidence.md",
+    "grading": {
+      "weights": {
+        "automated": 0.6,
+        "llm_judge": 0.4
+      },
+      "grade_function": "def grade(transcript: list, workspace_path: str) -> dict:\n    from pathlib import Path\n    import re\n\n    scores = {}\n    workspace = Path(workspace_path)\n\n    report_path = workspace / \"decision_evidence.md\"\n    if not report_path.exists():\n        for alt in ['decisions.md']:\n            if (workspace / alt).exists():\n                report_path = workspace / alt\n                break\n\n    if not report_path.exists():\n        return {k: 0.0 for k in [\n            \"report_created\", \"table_format\", \"min_rows\",\n            \"quote_verified\", \"entity_verified\",\n            \"wg_refs\", \"summary_line\"\n        ]}\n\n    scores[\"report_created\"] = 1.0\n    content = report_path.read_text()\n    cl = content.lower()\n\n    # Load source transcript for verification\n    source = \"\"\n    for fn in [\"meeting-transcript.md\", \"meeting_transcript.md\", \"meeting-transcript.md\", \"transcript.md\"]:\n        sp = workspace / fn\n        if sp.exists():\n            source = sp.read_text()\n            break\n\n    # --- Table format ---\n    pipe_lines = [l for l in content.split(\"\\n\") if \"|\" in l and len(l.strip()) > 10\n                  and not re.match(r'^[\\s|:-]+$', l.strip())]\n    scores[\"table_format\"] = 1.0 if len(pipe_lines) >= 3 else (0.5 if len(pipe_lines) >= 1 else 0.0)\n\n    # --- Row count ---\n    header_sep = len([l for l in content.split(\"\\n\") if re.match(r'^[\\s]*\\|[\\s:-]+\\|', l.strip())])\n    data_rows = max(0, len(pipe_lines) - 1 - header_sep)\n    scores[\"min_rows\"] = 1.0 if data_rows >= 5 else data_rows / 5.0\n\n    # --- QUOTE VERIFICATION against source transcript ---\n    quotes = re.findall(r'[\"\\u201c\\u201d]([^\"\\u201c\\u201d]{10,})[\"\\u201c\\u201d]', content)\n    if quotes and source:\n        src_norm = re.sub(r'\\s+', ' ', source.lower())\n        verified = 0\n        for q in quotes:\n            q_norm = re.sub(r'\\s+', ' ', q.lower().strip())\n            if q_norm in src_norm:\n                verified += 1\n            elif len(q_norm) > 30 and q_norm[:30] in src_norm:\n                verified += 0.5\n        scores[\"quote_verified\"] = verified / len(quotes) if quotes else 0.0\n    else:\n        scores[\"quote_verified\"] = 0.0\n\n    # --- ENTITY VERIFICATION against source transcript ---\n    known = ['nebbia', 'power', 'rush', 'warren', 'kahn']\n    if source:\n        src_lower = source.lower()\n        found_real = sum(1 for n in known if n in src_lower and n in cl)\n        # Check for hallucinated names in table\n        table_names = re.findall(r'\\|\\s*([A-Z][a-z]{2,})\\s*\\|', content)\n        skip = {\"owner\", \"entity\", \"speaker\", \"person\", \"responsible\", \"topic\",\n                \"action\", \"deadline\", \"evidence\", \"total\", \"claim\", \"stance\",\n                \"role\", \"area\", \"status\", \"decision\", \"source\", \"quote\"}\n        hallucinated = sum(1 for n in set(table_names)\n                          if n.lower() not in src_lower and n.lower() not in skip)\n        scores[\"entity_verified\"] = 1.0 if found_real >= 3 and hallucinated <= 1 else (\n            0.7 if found_real >= 3 else (0.4 if found_real >= 2 else 0.0))\n    else:\n        found = sum(1 for n in known if n in cl)\n        scores[\"entity_verified\"] = 1.0 if found >= 3 else (0.5 if found >= 2 else 0.0)\n\n    # --- Domain-specific check ---\n    domain_terms = ['working group', 'wg1', 'wg2', 'boulder', 'transition']\n    d_found = sum(1 for t in domain_terms if t in cl)\n    scores[\"wg_refs\"] = 1.0 if d_found >= 2 else (\n        0.5 if d_found >= 1 else 0.0)\n\n    # --- Summary line ---\n    scores[\"summary_line\"] = 1.0 if re.search(r'total.*\\d+', cl) else 0.0\n\n    return scores",
+      "llm_rubric": [
+        {
+          "name": "1: Decision Completeness",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Captures all major decisions — decisions, consensus, and direction. Formal decisions, working group assignments, and scheduling. Status tracking (final vs pending).",
+            "0.5": "Captures decisions from some sections but misses others.",
+            "0.0": "Few or no decisions extracted."
+          }
+        },
+        {
+          "name": "2: Evidence Quote Authenticity",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Quotes are verbatim from transcript — can be found as exact substrings in the source document.",
+            "0.5": "Some quotes partially match but are paraphrased or slightly altered.",
+            "0.0": "Quotes are clearly fabricated, generic, or not from this transcript."
+          }
+        },
+        {
+          "name": "3: Entity/Attribution Accuracy",
+          "weight": 0.25,
+          "anchors": {
+            "1.0": "All named entities appear in the source transcript. Attributions (who said/did what) are correct. No hallucinated names.",
+            "0.5": "Most entities are real but some attributions are wrong or names hallucinated.",
+            "0.0": "Many hallucinated names or wrong attributions."
+          }
+        },
+        {
+          "name": "4: Document Coverage & Structure",
+          "weight": 0.15,
+          "anchors": {
+            "1.0": "Covers the FULL document (not just the beginning). Table is properly formatted with all required columns. Summary line present.",
+            "0.5": "Some coverage gaps or formatting issues.",
+            "0.0": "Only covers the first section or table is broken."
+          }
+        }
+      ]
+    },
+    "reward_contract": {
+      "score_range": [
+        0.0,
+        1.0
+      ],
+      "primary_score": "final_score",
+      "final_score_formula": "0.6 * automated_score + 0.4 * llm_judge_score",
+      "required_breakdown_keys": [
+        "report_created",
+        "table_format",
+        "min_rows",
+        "quote_verified",
+        "entity_verified",
+        "wg_refs",
+        "summary_line"
+      ],
+      "process_gate": {
+        "require_output_file": true,
+        "min_quote_verified": 0.01,
+        "min_table_format": 0.5
+      }
+    },
+    "rl_grouping": {
+      "group_id": "ledger_decision_ntia",
+      "rollouts_per_group": 4
+    }
+  },
+  {
+    "id": "ledger_speaker_gitlab",
+    "source": "claude_code_ledger_tasks",
+    "split": "train",
+    "meeting_family": "gitlab",
+    "target_capability": "speaker_claim_ledger",
+    "workspace_files": [
+      {
+        "source": "meetings/2021-06-28-gitlab-product-marketing-meeting.md",
+        "dest": "meeting_transcript.md"
+      }
+    ],
+    "prompt": "I have a GitLab Product Marketing team meeting transcript in `meeting_transcript.md`.\n\nYour task: build a **Speaker Claim Table** mapping every substantive idea, proposal, opinion, or question to its speaker.\n\nWrite the output to `speaker_claims.md` as a markdown table:\n\n| Speaker | Claim/Proposal | Stance (enthusiastic/cautious/questioning/neutral) | Source Quote | Topic |\n\nRules:\n- **Source Quote** must be verbatim from the transcript\n- Each active participant should have at least 2 rows\n- Capture both strong positions and subtle reactions (pushback, enthusiasm, hesitation)\n- Target: at least 10 distinct claim rows\n- End with: \"Total: N claims from M speakers\"",
+    "expected_output_file": "speaker_claims.md",
+    "grading": {
+      "weights": {
+        "automated": 0.6,
+        "llm_judge": 0.4
+      },
+      "grade_function": "def grade(transcript: list, workspace_path: str) -> dict:\n    from pathlib import Path\n    import re\n\n    scores = {}\n    workspace = Path(workspace_path)\n\n    report_path = workspace / \"speaker_claims.md\"\n    if not report_path.exists():\n        for alt in ['speakers.md', 'speaker_table.md']:\n            if (workspace / alt).exists():\n                report_path = workspace / alt\n                break\n\n    if not report_path.exists():\n        return {k: 0.0 for k in [\n            \"report_created\", \"table_format\", \"min_rows\",\n            \"quote_verified\", \"entity_verified\",\n            \"stance_labels\", \"summary_line\"\n        ]}\n\n    scores[\"report_created\"] = 1.0\n    content = report_path.read_text()\n    cl = content.lower()\n\n    # Load source transcript for verification\n    source = \"\"\n    for fn in [\"meeting_transcript.md\", \"meeting_transcript.md\", \"meeting-transcript.md\", \"transcript.md\"]:\n        sp = workspace / fn\n        if sp.exists():\n            source = sp.read_text()\n            break\n\n    # --- Table format ---\n    pipe_lines = [l for l in content.split(\"\\n\") if \"|\" in l and len(l.strip()) > 10\n                  and not re.match(r'^[\\s|:-]+$', l.strip())]\n    scores[\"table_format\"] = 1.0 if len(pipe_lines) >= 3 else (0.5 if len(pipe_lines) >= 1 else 0.0)\n\n    # --- Row count ---\n    header_sep = len([l for l in content.split(\"\\n\") if re.match(r'^[\\s]*\\|[\\s:-]+\\|', l.strip())])\n    data_rows = max(0, len(pipe_lines) - 1 - header_sep)\n    scores[\"min_rows\"] = 1.0 if data_rows >= 8 else data_rows / 8.0\n\n    # --- QUOTE VERIFICATION against source transcript ---\n    quotes = re.findall(r'[\"\\u201c\\u201d]([^\"\\u201c\\u201d]{10,})[\"\\u201c\\u201d]', content)\n    if quotes and source:\n        src_norm = re.sub(r'\\s+', ' ', source.lower())\n        verified = 0\n        for q in quotes:\n            q_norm = re.sub(r'\\s+', ' ', q.lower().strip())\n            if q_norm in src_norm:\n                verified += 1\n            elif len(q_norm) > 30 and q_norm[:30] in src_norm:\n                verified += 0.5\n        scores[\"quote_verified\"] = verified / len(quotes) if quotes else 0.0\n    else:\n        scores[\"quote_verified\"] = 0.0\n\n    # --- ENTITY VERIFICATION against source transcript ---\n    known = ['william', 'cindy', 'cormac', 'brian', 'samia', 'tai']\n    if source:\n        src_lower = source.lower()\n        found_real = sum(1 for n in known if n in src_lower and n in cl)\n        # Check for hallucinated names in table\n        table_names = re.findall(r'\\|\\s*([A-Z][a-z]{2,})\\s*\\|', content)\n        skip = {\"owner\", \"entity\", \"speaker\", \"person\", \"responsible\", \"topic\",\n                \"action\", \"deadline\", \"evidence\", \"total\", \"claim\", \"stance\",\n                \"role\", \"area\", \"status\", \"decision\", \"source\", \"quote\"}\n        hallucinated = sum(1 for n in set(table_names)\n                          if n.lower() not in src_lower and n.lower() not in skip)\n        scores[\"entity_verified\"] = 1.0 if found_real >= 3 and hallucinated <= 1 else (\n            0.7 if found_real >= 3 else (0.4 if found_real >= 2 else 0.0))\n    else:\n        found = sum(1 for n in known if n in cl)\n        scores[\"entity_verified\"] = 1.0 if found >= 3 else (0.5 if found >= 2 else 0.0)\n\n    # --- Domain-specific check ---\n    domain_terms = ['enthusiastic', 'cautious', 'questioning', 'neutral', 'supportive', 'positive']\n    d_found = sum(1 for t in domain_terms if t in cl)\n    scores[\"stance_labels\"] = 1.0 if d_found >= 2 else (\n        0.5 if d_found >= 1 else 0.0)\n\n    # --- Summary line ---\n    scores[\"summary_line\"] = 1.0 if re.search(r'total.*\\d+', cl) else 0.0\n\n    return scores",
+      "llm_rubric": [
+        {
+          "name": "1: Speaker Claim Completeness",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Captures all major claims — claims, questions, and recommendations per speaker. Multiple claims per active speaker. Stance detection. Tone/reaction nuances.",
+            "0.5": "Captures claims from some sections but misses others.",
+            "0.0": "Few or no claims extracted."
+          }
+        },
+        {
+          "name": "2: Evidence Quote Authenticity",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Quotes are verbatim from transcript — can be found as exact substrings in the source document.",
+            "0.5": "Some quotes partially match but are paraphrased or slightly altered.",
+            "0.0": "Quotes are clearly fabricated, generic, or not from this transcript."
+          }
+        },
+        {
+          "name": "3: Entity/Attribution Accuracy",
+          "weight": 0.25,
+          "anchors": {
+            "1.0": "All named entities appear in the source transcript. Attributions (who said/did what) are correct. No hallucinated names.",
+            "0.5": "Most entities are real but some attributions are wrong or names hallucinated.",
+            "0.0": "Many hallucinated names or wrong attributions."
+          }
+        },
+        {
+          "name": "4: Document Coverage & Structure",
+          "weight": 0.15,
+          "anchors": {
+            "1.0": "Covers the FULL document (not just the beginning). Table is properly formatted with all required columns. Summary line present.",
+            "0.5": "Some coverage gaps or formatting issues.",
+            "0.0": "Only covers the first section or table is broken."
+          }
+        }
+      ]
+    },
+    "reward_contract": {
+      "score_range": [
+        0.0,
+        1.0
+      ],
+      "primary_score": "final_score",
+      "final_score_formula": "0.6 * automated_score + 0.4 * llm_judge_score",
+      "required_breakdown_keys": [
+        "report_created",
+        "table_format",
+        "min_rows",
+        "quote_verified",
+        "entity_verified",
+        "stance_labels",
+        "summary_line"
+      ],
+      "process_gate": {
+        "require_output_file": true,
+        "min_quote_verified": 0.01,
+        "min_table_format": 0.5
+      }
+    },
+    "rl_grouping": {
+      "group_id": "ledger_speaker_gitlab",
+      "rollouts_per_group": 4
+    }
+  },
+  {
+    "id": "ledger_speaker_nasa",
+    "source": "claude_code_ledger_tasks",
+    "split": "train",
+    "meeting_family": "nasa_gov",
+    "target_capability": "speaker_claim_ledger",
+    "workspace_files": [
+      {
+        "source": "meetings/2025-07-30-nasa-holds-first-public-meeting-on-ufos-transcript.md",
+        "dest": "transcript.md"
+      }
+    ],
+    "prompt": "I have a transcript of NASA's first public UAP hearing in `transcript.md`. This is a long document (~265KB).\n\nYour task: build a **Speaker Claim Table** that maps every substantive claim, question, or recommendation to its speaker, with a direct quote as evidence.\n\nIMPORTANT: This transcript is very long. You MUST use grep/search to find all speaker names and their contributions throughout the entire document. Read the opening, panel presentations, AND the Q&A session separately.\n\nWrite the output to `speaker_claims.md` as a markdown table:\n\n| Speaker | Role/Affiliation | Claim/Statement | Stance (supportive/skeptical/neutral/concerned) | Source Quote | Topic |\n\nRules:\n- **Source Quote** must be a verbatim excerpt from the transcript\n- Each speaker should have at least 2 rows if they made multiple substantive points\n- Cover ALL sections: opening, individual presentations, panel discussion, AND public Q&A\n- Target: at least 20 distinct claim rows\n- End with: \"Total: N claims from M speakers\"",
+    "expected_output_file": "speaker_claims.md",
+    "grading": {
+      "weights": {
+        "automated": 0.6,
+        "llm_judge": 0.4
+      },
+      "grade_function": "def grade(transcript: list, workspace_path: str) -> dict:\n    from pathlib import Path\n    import re\n\n    scores = {}\n    workspace = Path(workspace_path)\n\n    report_path = workspace / \"speaker_claims.md\"\n    if not report_path.exists():\n        for alt in ['speakers.md']:\n            if (workspace / alt).exists():\n                report_path = workspace / alt\n                break\n\n    if not report_path.exists():\n        return {k: 0.0 for k in [\n            \"report_created\", \"table_format\", \"min_rows\",\n            \"quote_verified\", \"entity_verified\",\n            \"hearing_sections\", \"summary_line\"\n        ]}\n\n    scores[\"report_created\"] = 1.0\n    content = report_path.read_text()\n    cl = content.lower()\n\n    # Load source transcript for verification\n    source = \"\"\n    for fn in [\"transcript.md\", \"meeting_transcript.md\", \"meeting-transcript.md\", \"transcript.md\"]:\n        sp = workspace / fn\n        if sp.exists():\n            source = sp.read_text()\n            break\n\n    # --- Table format ---\n    pipe_lines = [l for l in content.split(\"\\n\") if \"|\" in l and len(l.strip()) > 10\n                  and not re.match(r'^[\\s|:-]+$', l.strip())]\n    scores[\"table_format\"] = 1.0 if len(pipe_lines) >= 3 else (0.5 if len(pipe_lines) >= 1 else 0.0)\n\n    # --- Row count ---\n    header_sep = len([l for l in content.split(\"\\n\") if re.match(r'^[\\s]*\\|[\\s:-]+\\|', l.strip())])\n    data_rows = max(0, len(pipe_lines) - 1 - header_sep)\n    scores[\"min_rows\"] = 1.0 if data_rows >= 12 else data_rows / 12.0\n\n    # --- QUOTE VERIFICATION against source transcript ---\n    quotes = re.findall(r'[\"\\u201c\\u201d]([^\"\\u201c\\u201d]{10,})[\"\\u201c\\u201d]', content)\n    if quotes and source:\n        src_norm = re.sub(r'\\s+', ' ', source.lower())\n        verified = 0\n        for q in quotes:\n            q_norm = re.sub(r'\\s+', ' ', q.lower().strip())\n            if q_norm in src_norm:\n                verified += 1\n            elif len(q_norm) > 30 and q_norm[:30] in src_norm:\n                verified += 0.5\n        scores[\"quote_verified\"] = verified / len(quotes) if quotes else 0.0\n    else:\n        scores[\"quote_verified\"] = 0.0\n\n    # --- ENTITY VERIFICATION against source transcript ---\n    known = ['evans', 'fox', 'spergel', 'kirkpatrick', 'freie', 'drake', 'lueders']\n    if source:\n        src_lower = source.lower()\n        found_real = sum(1 for n in known if n in src_lower and n in cl)\n        # Check for hallucinated names in table\n        table_names = re.findall(r'\\|\\s*([A-Z][a-z]{2,})\\s*\\|', content)\n        skip = {\"owner\", \"entity\", \"speaker\", \"person\", \"responsible\", \"topic\",\n                \"action\", \"deadline\", \"evidence\", \"total\", \"claim\", \"stance\",\n                \"role\", \"area\", \"status\", \"decision\", \"source\", \"quote\"}\n        hallucinated = sum(1 for n in set(table_names)\n                          if n.lower() not in src_lower and n.lower() not in skip)\n        scores[\"entity_verified\"] = 1.0 if found_real >= 3 and hallucinated <= 1 else (\n            0.7 if found_real >= 3 else (0.4 if found_real >= 2 else 0.0))\n    else:\n        found = sum(1 for n in known if n in cl)\n        scores[\"entity_verified\"] = 1.0 if found >= 3 else (0.5 if found >= 2 else 0.0)\n\n    # --- Domain-specific check ---\n    domain_terms = ['uap', 'stigma', 'harassment', 'classified', 'data', 'sensor', 'anomalous']\n    d_found = sum(1 for t in domain_terms if t in cl)\n    scores[\"hearing_sections\"] = 1.0 if d_found >= 3 else (\n        0.5 if d_found >= 1 else 0.0)\n\n    # --- Summary line ---\n    scores[\"summary_line\"] = 1.0 if re.search(r'total.*\\d+', cl) else 0.0\n\n    return scores",
+      "llm_rubric": [
+        {
+          "name": "1: Speaker Claim Completeness",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Captures all major claims — claims, questions, and recommendations per speaker. Covers opening, presentations, AND Q&A (not just one section). Long document navigation required.",
+            "0.5": "Captures claims from some sections but misses others.",
+            "0.0": "Few or no claims extracted."
+          }
+        },
+        {
+          "name": "2: Evidence Quote Authenticity",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Quotes are verbatim from transcript — can be found as exact substrings in the source document.",
+            "0.5": "Some quotes partially match but are paraphrased or slightly altered.",
+            "0.0": "Quotes are clearly fabricated, generic, or not from this transcript."
+          }
+        },
+        {
+          "name": "3: Entity/Attribution Accuracy",
+          "weight": 0.25,
+          "anchors": {
+            "1.0": "All named entities appear in the source transcript. Attributions (who said/did what) are correct. No hallucinated names.",
+            "0.5": "Most entities are real but some attributions are wrong or names hallucinated.",
+            "0.0": "Many hallucinated names or wrong attributions."
+          }
+        },
+        {
+          "name": "4: Document Coverage & Structure",
+          "weight": 0.15,
+          "anchors": {
+            "1.0": "Covers the FULL document (not just the beginning). Table is properly formatted with all required columns. Summary line present.",
+            "0.5": "Some coverage gaps or formatting issues.",
+            "0.0": "Only covers the first section or table is broken."
+          }
+        }
+      ]
+    },
+    "reward_contract": {
+      "score_range": [
+        0.0,
+        1.0
+      ],
+      "primary_score": "final_score",
+      "final_score_formula": "0.6 * automated_score + 0.4 * llm_judge_score",
+      "required_breakdown_keys": [
+        "report_created",
+        "table_format",
+        "min_rows",
+        "quote_verified",
+        "entity_verified",
+        "hearing_sections",
+        "summary_line"
+      ],
+      "process_gate": {
+        "require_output_file": true,
+        "min_quote_verified": 0.01,
+        "min_table_format": 0.5
+      }
+    },
+    "rl_grouping": {
+      "group_id": "ledger_speaker_nasa",
+      "rollouts_per_group": 4
+    }
+  },
+  {
+    "id": "ledger_speaker_ntia",
+    "source": "claude_code_ledger_tasks",
+    "split": "train",
+    "meeting_family": "ntia_advisory",
+    "target_capability": "speaker_claim_ledger",
+    "workspace_files": [
+      {
+        "source": "meetings/2012-05-30-meeting-transcript-ntia-csmac.md",
+        "dest": "meeting-transcript.md"
+      }
+    ],
+    "prompt": "I have a government advisory committee meeting transcript in `meeting-transcript.md`. This is a CSMAC meeting about federal spectrum sharing.\n\nYour task: build a **Speaker Claim Table** mapping every substantive statement, position, or question to its speaker, with direct quote evidence.\n\nWrite the output to `speaker_claims.md` as a markdown table:\n\n| Speaker | Role/Affiliation | Claim/Statement | Stance (supportive/critical/neutral/questioning) | Source Quote | Topic |\n\nRules:\n- **Source Quote** must be verbatim from the transcript\n- Each active speaker should have at least 2 rows for their distinct points\n- Cover the full meeting: opening remarks, working group reports, AND open discussion\n- Target: at least 12 distinct claim rows\n- End with: \"Total: N claims from M speakers\"",
+    "expected_output_file": "speaker_claims.md",
+    "grading": {
+      "weights": {
+        "automated": 0.6,
+        "llm_judge": 0.4
+      },
+      "grade_function": "def grade(transcript: list, workspace_path: str) -> dict:\n    from pathlib import Path\n    import re\n\n    scores = {}\n    workspace = Path(workspace_path)\n\n    report_path = workspace / \"speaker_claims.md\"\n    if not report_path.exists():\n        for alt in ['speakers.md', 'speaker_table.md']:\n            if (workspace / alt).exists():\n                report_path = workspace / alt\n                break\n\n    if not report_path.exists():\n        return {k: 0.0 for k in [\n            \"report_created\", \"table_format\", \"min_rows\",\n            \"quote_verified\", \"entity_verified\",\n            \"meeting_sections\", \"summary_line\"\n        ]}\n\n    scores[\"report_created\"] = 1.0\n    content = report_path.read_text()\n    cl = content.lower()\n\n    # Load source transcript for verification\n    source = \"\"\n    for fn in [\"meeting-transcript.md\", \"meeting_transcript.md\", \"meeting-transcript.md\", \"transcript.md\"]:\n        sp = workspace / fn\n        if sp.exists():\n            source = sp.read_text()\n            break\n\n    # --- Table format ---\n    pipe_lines = [l for l in content.split(\"\\n\") if \"|\" in l and len(l.strip()) > 10\n                  and not re.match(r'^[\\s|:-]+$', l.strip())]\n    scores[\"table_format\"] = 1.0 if len(pipe_lines) >= 3 else (0.5 if len(pipe_lines) >= 1 else 0.0)\n\n    # --- Row count ---\n    header_sep = len([l for l in content.split(\"\\n\") if re.match(r'^[\\s]*\\|[\\s:-]+\\|', l.strip())])\n    data_rows = max(0, len(pipe_lines) - 1 - header_sep)\n    scores[\"min_rows\"] = 1.0 if data_rows >= 8 else data_rows / 8.0\n\n    # --- QUOTE VERIFICATION against source transcript ---\n    quotes = re.findall(r'[\"\\u201c\\u201d]([^\"\\u201c\\u201d]{10,})[\"\\u201c\\u201d]', content)\n    if quotes and source:\n        src_norm = re.sub(r'\\s+', ' ', source.lower())\n        verified = 0\n        for q in quotes:\n            q_norm = re.sub(r'\\s+', ' ', q.lower().strip())\n            if q_norm in src_norm:\n                verified += 1\n            elif len(q_norm) > 30 and q_norm[:30] in src_norm:\n                verified += 0.5\n        scores[\"quote_verified\"] = verified / len(quotes) if quotes else 0.0\n    else:\n        scores[\"quote_verified\"] = 0.0\n\n    # --- ENTITY VERIFICATION against source transcript ---\n    known = ['nebbia', 'power', 'rush', 'warren', 'kahn', 'calabrese', 'hatfield', 'povelites']\n    if source:\n        src_lower = source.lower()\n        found_real = sum(1 for n in known if n in src_lower and n in cl)\n        # Check for hallucinated names in table\n        table_names = re.findall(r'\\|\\s*([A-Z][a-z]{2,})\\s*\\|', content)\n        skip = {\"owner\", \"entity\", \"speaker\", \"person\", \"responsible\", \"topic\",\n                \"action\", \"deadline\", \"evidence\", \"total\", \"claim\", \"stance\",\n                \"role\", \"area\", \"status\", \"decision\", \"source\", \"quote\"}\n        hallucinated = sum(1 for n in set(table_names)\n                          if n.lower() not in src_lower and n.lower() not in skip)\n        scores[\"entity_verified\"] = 1.0 if found_real >= 3 and hallucinated <= 1 else (\n            0.7 if found_real >= 3 else (0.4 if found_real >= 2 else 0.0))\n    else:\n        found = sum(1 for n in known if n in cl)\n        scores[\"entity_verified\"] = 1.0 if found >= 3 else (0.5 if found >= 2 else 0.0)\n\n    # --- Domain-specific check ---\n    domain_terms = ['sharing', 'relocation', 'working group', 'spectrum', 'parameter', 'cost']\n    d_found = sum(1 for t in domain_terms if t in cl)\n    scores[\"meeting_sections\"] = 1.0 if d_found >= 3 else (\n        0.5 if d_found >= 1 else 0.0)\n\n    # --- Summary line ---\n    scores[\"summary_line\"] = 1.0 if re.search(r'total.*\\d+', cl) else 0.0\n\n    return scores",
+      "llm_rubric": [
+        {
+          "name": "1: Speaker Claim Completeness",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Captures all major claims — claims, questions, and recommendations per speaker. Covers opening, working group reports, AND open discussion. Multiple claims per active member.",
+            "0.5": "Captures claims from some sections but misses others.",
+            "0.0": "Few or no claims extracted."
+          }
+        },
+        {
+          "name": "2: Evidence Quote Authenticity",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Quotes are verbatim from transcript — can be found as exact substrings in the source document.",
+            "0.5": "Some quotes partially match but are paraphrased or slightly altered.",
+            "0.0": "Quotes are clearly fabricated, generic, or not from this transcript."
+          }
+        },
+        {
+          "name": "3: Entity/Attribution Accuracy",
+          "weight": 0.25,
+          "anchors": {
+            "1.0": "All named entities appear in the source transcript. Attributions (who said/did what) are correct. No hallucinated names.",
+            "0.5": "Most entities are real but some attributions are wrong or names hallucinated.",
+            "0.0": "Many hallucinated names or wrong attributions."
+          }
+        },
+        {
+          "name": "4: Document Coverage & Structure",
+          "weight": 0.15,
+          "anchors": {
+            "1.0": "Covers the FULL document (not just the beginning). Table is properly formatted with all required columns. Summary line present.",
+            "0.5": "Some coverage gaps or formatting issues.",
+            "0.0": "Only covers the first section or table is broken."
+          }
+        }
+      ]
+    },
+    "reward_contract": {
+      "score_range": [
+        0.0,
+        1.0
+      ],
+      "primary_score": "final_score",
+      "final_score_formula": "0.6 * automated_score + 0.4 * llm_judge_score",
+      "required_breakdown_keys": [
+        "report_created",
+        "table_format",
+        "min_rows",
+        "quote_verified",
+        "entity_verified",
+        "meeting_sections",
+        "summary_line"
+      ],
+      "process_gate": {
+        "require_output_file": true,
+        "min_quote_verified": 0.01,
+        "min_table_format": 0.5
+      }
+    },
+    "rl_grouping": {
+      "group_id": "ledger_speaker_ntia",
+      "rollouts_per_group": 4
+    }
+  },
+  {
+    "id": "ledger_speaker_tampa",
+    "source": "claude_code_ledger_tasks",
+    "split": "train",
+    "meeting_family": "tampa_council",
+    "target_capability": "speaker_claim_ledger",
+    "workspace_files": [
+      {
+        "source": "meetings/2026-04-02-tampa-city-council-transcript.md",
+        "dest": "transcript.md"
+      }
+    ],
+    "prompt": "I have a Tampa City Council meeting transcript in `transcript.md`. This is a realtime captioning transcript (~206KB).\n\nYour task: build a **Speaker Claim Table** mapping every substantive statement, position, question, or concern to its speaker.\n\nIMPORTANT: This transcript is very long. Use grep/search to locate different speakers and agenda items throughout the document. Read each section separately.\n\nWrite the output to `speaker_claims.md` as a markdown table:\n\n| Speaker | Role (Council/Staff/Public/Presenter) | Claim/Statement | Stance | Source Quote | Agenda Item |\n\nRules:\n- **Source Quote** must be verbatim from the transcript\n- Include council members, city staff presentations, AND public commenters\n- Cover ALL agenda items across the full meeting\n- Target: at least 18 distinct claim rows\n- End with: \"Total: N claims from M speakers\"",
+    "expected_output_file": "speaker_claims.md",
+    "grading": {
+      "weights": {
+        "automated": 0.6,
+        "llm_judge": 0.4
+      },
+      "grade_function": "def grade(transcript: list, workspace_path: str) -> dict:\n    from pathlib import Path\n    import re\n\n    scores = {}\n    workspace = Path(workspace_path)\n\n    report_path = workspace / \"speaker_claims.md\"\n    if not report_path.exists():\n        for alt in ['speakers.md']:\n            if (workspace / alt).exists():\n                report_path = workspace / alt\n                break\n\n    if not report_path.exists():\n        return {k: 0.0 for k in [\n            \"report_created\", \"table_format\", \"min_rows\",\n            \"quote_verified\", \"entity_verified\",\n            \"role_types\", \"summary_line\"\n        ]}\n\n    scores[\"report_created\"] = 1.0\n    content = report_path.read_text()\n    cl = content.lower()\n\n    # Load source transcript for verification\n    source = \"\"\n    for fn in [\"transcript.md\", \"meeting_transcript.md\", \"meeting-transcript.md\", \"transcript.md\"]:\n        sp = workspace / fn\n        if sp.exists():\n            source = sp.read_text()\n            break\n\n    # --- Table format ---\n    pipe_lines = [l for l in content.split(\"\\n\") if \"|\" in l and len(l.strip()) > 10\n                  and not re.match(r'^[\\s|:-]+$', l.strip())]\n    scores[\"table_format\"] = 1.0 if len(pipe_lines) >= 3 else (0.5 if len(pipe_lines) >= 1 else 0.0)\n\n    # --- Row count ---\n    header_sep = len([l for l in content.split(\"\\n\") if re.match(r'^[\\s]*\\|[\\s:-]+\\|', l.strip())])\n    data_rows = max(0, len(pipe_lines) - 1 - header_sep)\n    scores[\"min_rows\"] = 1.0 if data_rows >= 10 else data_rows / 10.0\n\n    # --- QUOTE VERIFICATION against source transcript ---\n    quotes = re.findall(r'[\"\\u201c\\u201d]([^\"\\u201c\\u201d]{10,})[\"\\u201c\\u201d]', content)\n    if quotes and source:\n        src_norm = re.sub(r'\\s+', ' ', source.lower())\n        verified = 0\n        for q in quotes:\n            q_norm = re.sub(r'\\s+', ' ', q.lower().strip())\n            if q_norm in src_norm:\n                verified += 1\n            elif len(q_norm) > 30 and q_norm[:30] in src_norm:\n                verified += 0.5\n        scores[\"quote_verified\"] = verified / len(quotes) if quotes else 0.0\n    else:\n        scores[\"quote_verified\"] = 0.0\n\n    # --- ENTITY VERIFICATION against source transcript ---\n    known = ['clendenin', 'miranda', 'carlson', 'hurtak', 'williams', 'iman', 'poynor', 'bercaw']\n    if source:\n        src_lower = source.lower()\n        found_real = sum(1 for n in known if n in src_lower and n in cl)\n        # Check for hallucinated names in table\n        table_names = re.findall(r'\\|\\s*([A-Z][a-z]{2,})\\s*\\|', content)\n        skip = {\"owner\", \"entity\", \"speaker\", \"person\", \"responsible\", \"topic\",\n                \"action\", \"deadline\", \"evidence\", \"total\", \"claim\", \"stance\",\n                \"role\", \"area\", \"status\", \"decision\", \"source\", \"quote\"}\n        hallucinated = sum(1 for n in set(table_names)\n                          if n.lower() not in src_lower and n.lower() not in skip)\n        scores[\"entity_verified\"] = 1.0 if found_real >= 3 and hallucinated <= 1 else (\n            0.7 if found_real >= 3 else (0.4 if found_real >= 2 else 0.0))\n    else:\n        found = sum(1 for n in known if n in cl)\n        scores[\"entity_verified\"] = 1.0 if found >= 3 else (0.5 if found >= 2 else 0.0)\n\n    # --- Domain-specific check ---\n    domain_terms = ['council', 'staff', 'public', 'presenter', 'citizen']\n    d_found = sum(1 for t in domain_terms if t in cl)\n    scores[\"role_types\"] = 1.0 if d_found >= 2 else (\n        0.5 if d_found >= 1 else 0.0)\n\n    # --- Summary line ---\n    scores[\"summary_line\"] = 1.0 if re.search(r'total.*\\d+', cl) else 0.0\n\n    return scores",
+      "llm_rubric": [
+        {
+          "name": "1: Speaker Claim Completeness",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Captures all major claims — claims, questions, and recommendations per speaker. Council members, staff, AND public commenters. Covers early and late agenda items.",
+            "0.5": "Captures claims from some sections but misses others.",
+            "0.0": "Few or no claims extracted."
+          }
+        },
+        {
+          "name": "2: Evidence Quote Authenticity",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Quotes are verbatim from transcript — can be found as exact substrings in the source document.",
+            "0.5": "Some quotes partially match but are paraphrased or slightly altered.",
+            "0.0": "Quotes are clearly fabricated, generic, or not from this transcript."
+          }
+        },
+        {
+          "name": "3: Entity/Attribution Accuracy",
+          "weight": 0.25,
+          "anchors": {
+            "1.0": "All named entities appear in the source transcript. Attributions (who said/did what) are correct. No hallucinated names.",
+            "0.5": "Most entities are real but some attributions are wrong or names hallucinated.",
+            "0.0": "Many hallucinated names or wrong attributions."
+          }
+        },
+        {
+          "name": "4: Document Coverage & Structure",
+          "weight": 0.15,
+          "anchors": {
+            "1.0": "Covers the FULL document (not just the beginning). Table is properly formatted with all required columns. Summary line present.",
+            "0.5": "Some coverage gaps or formatting issues.",
+            "0.0": "Only covers the first section or table is broken."
+          }
+        }
+      ]
+    },
+    "reward_contract": {
+      "score_range": [
+        0.0,
+        1.0
+      ],
+      "primary_score": "final_score",
+      "final_score_formula": "0.6 * automated_score + 0.4 * llm_judge_score",
+      "required_breakdown_keys": [
+        "report_created",
+        "table_format",
+        "min_rows",
+        "quote_verified",
+        "entity_verified",
+        "role_types",
+        "summary_line"
+      ],
+      "process_gate": {
+        "require_output_file": true,
+        "min_quote_verified": 0.01,
+        "min_table_format": 0.5
+      }
+    },
+    "rl_grouping": {
+      "group_id": "ledger_speaker_tampa",
+      "rollouts_per_group": 4
+    }
+  },
+  {
+    "id": "ledger_stakeholder_gitlab",
+    "source": "claude_code_ledger_tasks",
+    "split": "train",
+    "meeting_family": "gitlab",
+    "target_capability": "stakeholder_evidence_ledger",
+    "workspace_files": [
+      {
+        "source": "meetings/2021-06-28-gitlab-product-marketing-meeting.md",
+        "dest": "meeting_transcript.md"
+      }
+    ],
+    "prompt": "I have a GitLab Product Marketing team meeting transcript in `meeting_transcript.md`.\n\nYour task: build a **Stakeholder Evidence Table** identifying every team member who expressed a position, proposal, or concern during this meeting.\n\nWrite the output to `stakeholder_evidence.md` as a markdown table:\n\n| Entity/Person | Role/Affiliation | Primary Concern | Position/Stance | Source Quote |\n\nRules:\n- **Source Quote** must be copied directly from the transcript, not paraphrased\n- Include everyone who spoke, not just the meeting lead\n- Capture both explicit positions and implicit concerns (e.g., pushback, enthusiasm, hesitation)\n- Target: at least 6 distinct rows\n- End with: \"Total: N stakeholders identified\"",
+    "expected_output_file": "stakeholder_evidence.md",
+    "grading": {
+      "weights": {
+        "automated": 0.6,
+        "llm_judge": 0.4
+      },
+      "grade_function": "def grade(transcript: list, workspace_path: str) -> dict:\n    from pathlib import Path\n    import re\n\n    scores = {}\n    workspace = Path(workspace_path)\n\n    report_path = workspace / \"stakeholder_evidence.md\"\n    if not report_path.exists():\n        for alt in ['stakeholders.md', 'stakeholder_table.md']:\n            if (workspace / alt).exists():\n                report_path = workspace / alt\n                break\n\n    if not report_path.exists():\n        return {k: 0.0 for k in [\n            \"report_created\", \"table_format\", \"min_rows\",\n            \"quote_verified\", \"entity_verified\",\n            \"discussion_topics\", \"summary_line\"\n        ]}\n\n    scores[\"report_created\"] = 1.0\n    content = report_path.read_text()\n    cl = content.lower()\n\n    # Load source transcript for verification\n    source = \"\"\n    for fn in [\"meeting_transcript.md\", \"meeting_transcript.md\", \"meeting-transcript.md\", \"transcript.md\"]:\n        sp = workspace / fn\n        if sp.exists():\n            source = sp.read_text()\n            break\n\n    # --- Table format ---\n    pipe_lines = [l for l in content.split(\"\\n\") if \"|\" in l and len(l.strip()) > 10\n                  and not re.match(r'^[\\s|:-]+$', l.strip())]\n    scores[\"table_format\"] = 1.0 if len(pipe_lines) >= 3 else (0.5 if len(pipe_lines) >= 1 else 0.0)\n\n    # --- Row count ---\n    header_sep = len([l for l in content.split(\"\\n\") if re.match(r'^[\\s]*\\|[\\s:-]+\\|', l.strip())])\n    data_rows = max(0, len(pipe_lines) - 1 - header_sep)\n    scores[\"min_rows\"] = 1.0 if data_rows >= 5 else data_rows / 5.0\n\n    # --- QUOTE VERIFICATION against source transcript ---\n    quotes = re.findall(r'[\"\\u201c\\u201d]([^\"\\u201c\\u201d]{10,})[\"\\u201c\\u201d]', content)\n    if quotes and source:\n        src_norm = re.sub(r'\\s+', ' ', source.lower())\n        verified = 0\n        for q in quotes:\n            q_norm = re.sub(r'\\s+', ' ', q.lower().strip())\n            if q_norm in src_norm:\n                verified += 1\n            elif len(q_norm) > 30 and q_norm[:30] in src_norm:\n                verified += 0.5\n        scores[\"quote_verified\"] = verified / len(quotes) if quotes else 0.0\n    else:\n        scores[\"quote_verified\"] = 0.0\n\n    # --- ENTITY VERIFICATION against source transcript ---\n    known = ['william', 'cindy', 'cormac', 'brian', 'samia', 'tai']\n    if source:\n        src_lower = source.lower()\n        found_real = sum(1 for n in known if n in src_lower and n in cl)\n        # Check for hallucinated names in table\n        table_names = re.findall(r'\\|\\s*([A-Z][a-z]{2,})\\s*\\|', content)\n        skip = {\"owner\", \"entity\", \"speaker\", \"person\", \"responsible\", \"topic\",\n                \"action\", \"deadline\", \"evidence\", \"total\", \"claim\", \"stance\",\n                \"role\", \"area\", \"status\", \"decision\", \"source\", \"quote\"}\n        hallucinated = sum(1 for n in set(table_names)\n                          if n.lower() not in src_lower and n.lower() not in skip)\n        scores[\"entity_verified\"] = 1.0 if found_real >= 3 and hallucinated <= 1 else (\n            0.7 if found_real >= 3 else (0.4 if found_real >= 2 else 0.0))\n    else:\n        found = sum(1 for n in known if n in cl)\n        scores[\"entity_verified\"] = 1.0 if found >= 3 else (0.5 if found >= 2 else 0.0)\n\n    # --- Domain-specific check ---\n    domain_terms = ['events', 'messaging', 'competitive', 'features', 'announcement']\n    d_found = sum(1 for t in domain_terms if t in cl)\n    scores[\"discussion_topics\"] = 1.0 if d_found >= 3 else (\n        0.5 if d_found >= 1 else 0.0)\n\n    # --- Summary line ---\n    scores[\"summary_line\"] = 1.0 if re.search(r'total.*\\d+', cl) else 0.0\n\n    return scores",
+      "llm_rubric": [
+        {
+          "name": "1: Stakeholder Completeness",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Captures all major stakeholders — stakeholder entities, positions, and concerns. Captures positions from ALL discussion topics, not just one. Nuance in enthusiasm vs concerns.",
+            "0.5": "Captures stakeholders from some sections but misses others.",
+            "0.0": "Few or no stakeholders extracted."
+          }
+        },
+        {
+          "name": "2: Evidence Quote Authenticity",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Quotes are verbatim from transcript — can be found as exact substrings in the source document.",
+            "0.5": "Some quotes partially match but are paraphrased or slightly altered.",
+            "0.0": "Quotes are clearly fabricated, generic, or not from this transcript."
+          }
+        },
+        {
+          "name": "3: Entity/Attribution Accuracy",
+          "weight": 0.25,
+          "anchors": {
+            "1.0": "All named entities appear in the source transcript. Attributions (who said/did what) are correct. No hallucinated names.",
+            "0.5": "Most entities are real but some attributions are wrong or names hallucinated.",
+            "0.0": "Many hallucinated names or wrong attributions."
+          }
+        },
+        {
+          "name": "4: Document Coverage & Structure",
+          "weight": 0.15,
+          "anchors": {
+            "1.0": "Covers the FULL document (not just the beginning). Table is properly formatted with all required columns. Summary line present.",
+            "0.5": "Some coverage gaps or formatting issues.",
+            "0.0": "Only covers the first section or table is broken."
+          }
+        }
+      ]
+    },
+    "reward_contract": {
+      "score_range": [
+        0.0,
+        1.0
+      ],
+      "primary_score": "final_score",
+      "final_score_formula": "0.6 * automated_score + 0.4 * llm_judge_score",
+      "required_breakdown_keys": [
+        "report_created",
+        "table_format",
+        "min_rows",
+        "quote_verified",
+        "entity_verified",
+        "discussion_topics",
+        "summary_line"
+      ],
+      "process_gate": {
+        "require_output_file": true,
+        "min_quote_verified": 0.01,
+        "min_table_format": 0.5
+      }
+    },
+    "rl_grouping": {
+      "group_id": "ledger_stakeholder_gitlab",
+      "rollouts_per_group": 4
+    }
+  },
+  {
+    "id": "ledger_stakeholder_nasa",
+    "source": "claude_code_ledger_tasks",
+    "split": "train",
+    "meeting_family": "nasa_gov",
+    "target_capability": "stakeholder_evidence_ledger",
+    "workspace_files": [
+      {
+        "source": "meetings/2025-07-30-nasa-holds-first-public-meeting-on-ufos-transcript.md",
+        "dest": "transcript.md"
+      }
+    ],
+    "prompt": "I have a transcript of NASA's first public meeting on UAPs (Unidentified Anomalous Phenomena) in `transcript.md`. This is a long document (~265KB).\n\nYour task: build a **Stakeholder Evidence Table** identifying every distinct entity, organization, or individual who expressed a position or concern about UAP research during this hearing.\n\nIMPORTANT: This transcript is very long. You MUST read it in multiple sections using offset/limit parameters, or use grep/search to locate all speakers throughout the document. Do NOT rely on a single read.\n\nWrite the output to `stakeholder_evidence.md` as a markdown table:\n\n| Entity/Person | Role/Affiliation | Primary Concern | Position/Stance | Source Quote |\n\nRules:\n- **Source Quote** must be copied directly from the transcript, not paraphrased\n- Include NASA officials, panel members, AARO representatives, public questioners, and any organizations referenced\n- Cover the FULL hearing: opening remarks, panel presentations, AND the Q&A session\n- Target: at least 15 distinct rows\n- End with: \"Total: N stakeholders identified\"",
+    "expected_output_file": "stakeholder_evidence.md",
+    "grading": {
+      "weights": {
+        "automated": 0.6,
+        "llm_judge": 0.4
+      },
+      "grade_function": "def grade(transcript: list, workspace_path: str) -> dict:\n    from pathlib import Path\n    import re\n\n    scores = {}\n    workspace = Path(workspace_path)\n\n    report_path = workspace / \"stakeholder_evidence.md\"\n    if not report_path.exists():\n        for alt in ['stakeholders.md']:\n            if (workspace / alt).exists():\n                report_path = workspace / alt\n                break\n\n    if not report_path.exists():\n        return {k: 0.0 for k in [\n            \"report_created\", \"table_format\", \"min_rows\",\n            \"quote_verified\", \"entity_verified\",\n            \"hearing_coverage\", \"summary_line\"\n        ]}\n\n    scores[\"report_created\"] = 1.0\n    content = report_path.read_text()\n    cl = content.lower()\n\n    # Load source transcript for verification\n    source = \"\"\n    for fn in [\"transcript.md\", \"meeting_transcript.md\", \"meeting-transcript.md\", \"transcript.md\"]:\n        sp = workspace / fn\n        if sp.exists():\n            source = sp.read_text()\n            break\n\n    # --- Table format ---\n    pipe_lines = [l for l in content.split(\"\\n\") if \"|\" in l and len(l.strip()) > 10\n                  and not re.match(r'^[\\s|:-]+$', l.strip())]\n    scores[\"table_format\"] = 1.0 if len(pipe_lines) >= 3 else (0.5 if len(pipe_lines) >= 1 else 0.0)\n\n    # --- Row count ---\n    header_sep = len([l for l in content.split(\"\\n\") if re.match(r'^[\\s]*\\|[\\s:-]+\\|', l.strip())])\n    data_rows = max(0, len(pipe_lines) - 1 - header_sep)\n    scores[\"min_rows\"] = 1.0 if data_rows >= 10 else data_rows / 10.0\n\n    # --- QUOTE VERIFICATION against source transcript ---\n    quotes = re.findall(r'[\"\\u201c\\u201d]([^\"\\u201c\\u201d]{10,})[\"\\u201c\\u201d]', content)\n    if quotes and source:\n        src_norm = re.sub(r'\\s+', ' ', source.lower())\n        verified = 0\n        for q in quotes:\n            q_norm = re.sub(r'\\s+', ' ', q.lower().strip())\n            if q_norm in src_norm:\n                verified += 1\n            elif len(q_norm) > 30 and q_norm[:30] in src_norm:\n                verified += 0.5\n        scores[\"quote_verified\"] = verified / len(quotes) if quotes else 0.0\n    else:\n        scores[\"quote_verified\"] = 0.0\n\n    # --- ENTITY VERIFICATION against source transcript ---\n    known = ['evans', 'fox', 'spergel', 'kirkpatrick', 'freie', 'drake', 'nasa', 'aaro', 'faa']\n    if source:\n        src_lower = source.lower()\n        found_real = sum(1 for n in known if n in src_lower and n in cl)\n        # Check for hallucinated names in table\n        table_names = re.findall(r'\\|\\s*([A-Z][a-z]{2,})\\s*\\|', content)\n        skip = {\"owner\", \"entity\", \"speaker\", \"person\", \"responsible\", \"topic\",\n                \"action\", \"deadline\", \"evidence\", \"total\", \"claim\", \"stance\",\n                \"role\", \"area\", \"status\", \"decision\", \"source\", \"quote\"}\n        hallucinated = sum(1 for n in set(table_names)\n                          if n.lower() not in src_lower and n.lower() not in skip)\n        scores[\"entity_verified\"] = 1.0 if found_real >= 3 and hallucinated <= 1 else (\n            0.7 if found_real >= 3 else (0.4 if found_real >= 2 else 0.0))\n    else:\n        found = sum(1 for n in known if n in cl)\n        scores[\"entity_verified\"] = 1.0 if found >= 3 else (0.5 if found >= 2 else 0.0)\n\n    # --- Domain-specific check ---\n    domain_terms = ['panel', 'q&a', 'question', 'public', 'presentation', 'opening']\n    d_found = sum(1 for t in domain_terms if t in cl)\n    scores[\"hearing_coverage\"] = 1.0 if d_found >= 2 else (\n        0.5 if d_found >= 1 else 0.0)\n\n    # --- Summary line ---\n    scores[\"summary_line\"] = 1.0 if re.search(r'total.*\\d+', cl) else 0.0\n\n    return scores",
+      "llm_rubric": [
+        {
+          "name": "1: Stakeholder Completeness",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Captures all major stakeholders — stakeholder entities, positions, and concerns. Covers opening, presentations, AND Q&A. Panel members, officials, and public questioners. Long document navigation.",
+            "0.5": "Captures stakeholders from some sections but misses others.",
+            "0.0": "Few or no stakeholders extracted."
+          }
+        },
+        {
+          "name": "2: Evidence Quote Authenticity",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Quotes are verbatim from transcript — can be found as exact substrings in the source document.",
+            "0.5": "Some quotes partially match but are paraphrased or slightly altered.",
+            "0.0": "Quotes are clearly fabricated, generic, or not from this transcript."
+          }
+        },
+        {
+          "name": "3: Entity/Attribution Accuracy",
+          "weight": 0.25,
+          "anchors": {
+            "1.0": "All named entities appear in the source transcript. Attributions (who said/did what) are correct. No hallucinated names.",
+            "0.5": "Most entities are real but some attributions are wrong or names hallucinated.",
+            "0.0": "Many hallucinated names or wrong attributions."
+          }
+        },
+        {
+          "name": "4: Document Coverage & Structure",
+          "weight": 0.15,
+          "anchors": {
+            "1.0": "Covers the FULL document (not just the beginning). Table is properly formatted with all required columns. Summary line present.",
+            "0.5": "Some coverage gaps or formatting issues.",
+            "0.0": "Only covers the first section or table is broken."
+          }
+        }
+      ]
+    },
+    "reward_contract": {
+      "score_range": [
+        0.0,
+        1.0
+      ],
+      "primary_score": "final_score",
+      "final_score_formula": "0.6 * automated_score + 0.4 * llm_judge_score",
+      "required_breakdown_keys": [
+        "report_created",
+        "table_format",
+        "min_rows",
+        "quote_verified",
+        "entity_verified",
+        "hearing_coverage",
+        "summary_line"
+      ],
+      "process_gate": {
+        "require_output_file": true,
+        "min_quote_verified": 0.01,
+        "min_table_format": 0.5
+      }
+    },
+    "rl_grouping": {
+      "group_id": "ledger_stakeholder_nasa",
+      "rollouts_per_group": 4
+    }
+  },
+  {
+    "id": "ledger_stakeholder_ntia",
+    "source": "claude_code_ledger_tasks",
+    "split": "train",
+    "meeting_family": "ntia_advisory",
+    "target_capability": "stakeholder_evidence_ledger",
+    "workspace_files": [
+      {
+        "source": "meetings/2012-05-30-meeting-transcript-ntia-csmac.md",
+        "dest": "meeting-transcript.md"
+      }
+    ],
+    "prompt": "I have a government advisory committee meeting transcript in `meeting-transcript.md`. This is a CSMAC meeting about federal spectrum sharing (1755-1850 MHz band).\n\nYour task: read the ENTIRE transcript carefully and build a **Stakeholder Evidence Table**. For every distinct entity or person who expressed a position, concern, or interest during the meeting, create one row.\n\nWrite the output to `stakeholder_evidence.md` as a markdown table:\n\n| Entity/Person | Role/Affiliation | Primary Concern | Position/Stance | Source Quote |\n\nRules:\n- **Source Quote** must be a direct quote copied from the transcript — not paraphrased\n- Cover the FULL transcript, not just the opening remarks. Use search/grep to find all speakers.\n- Include government officials, industry representatives, committee members, AND public participants\n- Target: at least 12 distinct rows\n- End with: \"Total: N stakeholders identified\"",
+    "expected_output_file": "stakeholder_evidence.md",
+    "grading": {
+      "weights": {
+        "automated": 0.6,
+        "llm_judge": 0.4
+      },
+      "grade_function": "def grade(transcript: list, workspace_path: str) -> dict:\n    from pathlib import Path\n    import re\n\n    scores = {}\n    workspace = Path(workspace_path)\n\n    report_path = workspace / \"stakeholder_evidence.md\"\n    if not report_path.exists():\n        for alt in ['stakeholders.md']:\n            if (workspace / alt).exists():\n                report_path = workspace / alt\n                break\n\n    if not report_path.exists():\n        return {k: 0.0 for k in [\n            \"report_created\", \"table_format\", \"min_rows\",\n            \"quote_verified\", \"entity_verified\",\n            \"stakeholder_types\", \"summary_line\"\n        ]}\n\n    scores[\"report_created\"] = 1.0\n    content = report_path.read_text()\n    cl = content.lower()\n\n    # Load source transcript for verification\n    source = \"\"\n    for fn in [\"meeting-transcript.md\", \"meeting_transcript.md\", \"meeting-transcript.md\", \"transcript.md\"]:\n        sp = workspace / fn\n        if sp.exists():\n            source = sp.read_text()\n            break\n\n    # --- Table format ---\n    pipe_lines = [l for l in content.split(\"\\n\") if \"|\" in l and len(l.strip()) > 10\n                  and not re.match(r'^[\\s|:-]+$', l.strip())]\n    scores[\"table_format\"] = 1.0 if len(pipe_lines) >= 3 else (0.5 if len(pipe_lines) >= 1 else 0.0)\n\n    # --- Row count ---\n    header_sep = len([l for l in content.split(\"\\n\") if re.match(r'^[\\s]*\\|[\\s:-]+\\|', l.strip())])\n    data_rows = max(0, len(pipe_lines) - 1 - header_sep)\n    scores[\"min_rows\"] = 1.0 if data_rows >= 8 else data_rows / 8.0\n\n    # --- QUOTE VERIFICATION against source transcript ---\n    quotes = re.findall(r'[\"\\u201c\\u201d]([^\"\\u201c\\u201d]{10,})[\"\\u201c\\u201d]', content)\n    if quotes and source:\n        src_norm = re.sub(r'\\s+', ' ', source.lower())\n        verified = 0\n        for q in quotes:\n            q_norm = re.sub(r'\\s+', ' ', q.lower().strip())\n            if q_norm in src_norm:\n                verified += 1\n            elif len(q_norm) > 30 and q_norm[:30] in src_norm:\n                verified += 0.5\n        scores[\"quote_verified\"] = verified / len(quotes) if quotes else 0.0\n    else:\n        scores[\"quote_verified\"] = 0.0\n\n    # --- ENTITY VERIFICATION against source transcript ---\n    known = ['nebbia', 'power', 'povelites', 'warren', 'kahn', 'calabrese', 'rush', 'hatfield', 'feldman']\n    if source:\n        src_lower = source.lower()\n        found_real = sum(1 for n in known if n in src_lower and n in cl)\n        # Check for hallucinated names in table\n        table_names = re.findall(r'\\|\\s*([A-Z][a-z]{2,})\\s*\\|', content)\n        skip = {\"owner\", \"entity\", \"speaker\", \"person\", \"responsible\", \"topic\",\n                \"action\", \"deadline\", \"evidence\", \"total\", \"claim\", \"stance\",\n                \"role\", \"area\", \"status\", \"decision\", \"source\", \"quote\"}\n        hallucinated = sum(1 for n in set(table_names)\n                          if n.lower() not in src_lower and n.lower() not in skip)\n        scores[\"entity_verified\"] = 1.0 if found_real >= 3 and hallucinated <= 1 else (\n            0.7 if found_real >= 3 else (0.4 if found_real >= 2 else 0.0))\n    else:\n        found = sum(1 for n in known if n in cl)\n        scores[\"entity_verified\"] = 1.0 if found >= 3 else (0.5 if found >= 2 else 0.0)\n\n    # --- Domain-specific check ---\n    domain_terms = ['ntia', 'dod', 'defense', 'commercial', 'industry', 'carrier', 'intel']\n    d_found = sum(1 for t in domain_terms if t in cl)\n    scores[\"stakeholder_types\"] = 1.0 if d_found >= 3 else (\n        0.5 if d_found >= 1 else 0.0)\n\n    # --- Summary line ---\n    scores[\"summary_line\"] = 1.0 if re.search(r'total.*\\d+', cl) else 0.0\n\n    return scores",
+      "llm_rubric": [
+        {
+          "name": "1: Stakeholder Completeness",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Captures all major stakeholders — stakeholder entities, positions, and concerns. Government, commercial, academic, and public interest stakeholders. Full meeting coverage. Entity-organization linkage.",
+            "0.5": "Captures stakeholders from some sections but misses others.",
+            "0.0": "Few or no stakeholders extracted."
+          }
+        },
+        {
+          "name": "2: Evidence Quote Authenticity",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Quotes are verbatim from transcript — can be found as exact substrings in the source document.",
+            "0.5": "Some quotes partially match but are paraphrased or slightly altered.",
+            "0.0": "Quotes are clearly fabricated, generic, or not from this transcript."
+          }
+        },
+        {
+          "name": "3: Entity/Attribution Accuracy",
+          "weight": 0.25,
+          "anchors": {
+            "1.0": "All named entities appear in the source transcript. Attributions (who said/did what) are correct. No hallucinated names.",
+            "0.5": "Most entities are real but some attributions are wrong or names hallucinated.",
+            "0.0": "Many hallucinated names or wrong attributions."
+          }
+        },
+        {
+          "name": "4: Document Coverage & Structure",
+          "weight": 0.15,
+          "anchors": {
+            "1.0": "Covers the FULL document (not just the beginning). Table is properly formatted with all required columns. Summary line present.",
+            "0.5": "Some coverage gaps or formatting issues.",
+            "0.0": "Only covers the first section or table is broken."
+          }
+        }
+      ]
+    },
+    "reward_contract": {
+      "score_range": [
+        0.0,
+        1.0
+      ],
+      "primary_score": "final_score",
+      "final_score_formula": "0.6 * automated_score + 0.4 * llm_judge_score",
+      "required_breakdown_keys": [
+        "report_created",
+        "table_format",
+        "min_rows",
+        "quote_verified",
+        "entity_verified",
+        "stakeholder_types",
+        "summary_line"
+      ],
+      "process_gate": {
+        "require_output_file": true,
+        "min_quote_verified": 0.01,
+        "min_table_format": 0.5
+      }
+    },
+    "rl_grouping": {
+      "group_id": "ledger_stakeholder_ntia",
+      "rollouts_per_group": 4
+    }
+  },
+  {
+    "id": "ledger_stakeholder_tampa",
+    "source": "claude_code_ledger_tasks",
+    "split": "train",
+    "meeting_family": "tampa_council",
+    "target_capability": "stakeholder_evidence_ledger",
+    "workspace_files": [
+      {
+        "source": "meetings/2026-04-02-tampa-city-council-transcript.md",
+        "dest": "transcript.md"
+      }
+    ],
+    "prompt": "I have a Tampa City Council meeting transcript in `transcript.md`. This is a realtime captioning transcript (~206KB) covering multiple agenda items.\n\nYour task: build a **Stakeholder Evidence Table** mapping every person or organization who expressed a position, concern, or interest during this council meeting.\n\nIMPORTANT: This transcript is very long. You MUST use grep/search to locate speakers and sections throughout the document, then read relevant portions. Do NOT try to read it all in one pass.\n\nWrite the output to `stakeholder_evidence.md` as a markdown table:\n\n| Entity/Person | Role/Affiliation | Primary Concern | Position/Stance | Source Quote |\n\nRules:\n- **Source Quote** must be copied directly from the transcript\n- Include council members, city staff, presenters, AND public commenters\n- Cover ALL agenda items across the full meeting\n- Target: at least 15 distinct rows\n- End with: \"Total: N stakeholders identified\"",
+    "expected_output_file": "stakeholder_evidence.md",
+    "grading": {
+      "weights": {
+        "automated": 0.6,
+        "llm_judge": 0.4
+      },
+      "grade_function": "def grade(transcript: list, workspace_path: str) -> dict:\n    from pathlib import Path\n    import re\n\n    scores = {}\n    workspace = Path(workspace_path)\n\n    report_path = workspace / \"stakeholder_evidence.md\"\n    if not report_path.exists():\n        for alt in ['stakeholders.md']:\n            if (workspace / alt).exists():\n                report_path = workspace / alt\n                break\n\n    if not report_path.exists():\n        return {k: 0.0 for k in [\n            \"report_created\", \"table_format\", \"min_rows\",\n            \"quote_verified\", \"entity_verified\",\n            \"participant_types\", \"summary_line\"\n        ]}\n\n    scores[\"report_created\"] = 1.0\n    content = report_path.read_text()\n    cl = content.lower()\n\n    # Load source transcript for verification\n    source = \"\"\n    for fn in [\"transcript.md\", \"meeting_transcript.md\", \"meeting-transcript.md\", \"transcript.md\"]:\n        sp = workspace / fn\n        if sp.exists():\n            source = sp.read_text()\n            break\n\n    # --- Table format ---\n    pipe_lines = [l for l in content.split(\"\\n\") if \"|\" in l and len(l.strip()) > 10\n                  and not re.match(r'^[\\s|:-]+$', l.strip())]\n    scores[\"table_format\"] = 1.0 if len(pipe_lines) >= 3 else (0.5 if len(pipe_lines) >= 1 else 0.0)\n\n    # --- Row count ---\n    header_sep = len([l for l in content.split(\"\\n\") if re.match(r'^[\\s]*\\|[\\s:-]+\\|', l.strip())])\n    data_rows = max(0, len(pipe_lines) - 1 - header_sep)\n    scores[\"min_rows\"] = 1.0 if data_rows >= 10 else data_rows / 10.0\n\n    # --- QUOTE VERIFICATION against source transcript ---\n    quotes = re.findall(r'[\"\\u201c\\u201d]([^\"\\u201c\\u201d]{10,})[\"\\u201c\\u201d]', content)\n    if quotes and source:\n        src_norm = re.sub(r'\\s+', ' ', source.lower())\n        verified = 0\n        for q in quotes:\n            q_norm = re.sub(r'\\s+', ' ', q.lower().strip())\n            if q_norm in src_norm:\n                verified += 1\n            elif len(q_norm) > 30 and q_norm[:30] in src_norm:\n                verified += 0.5\n        scores[\"quote_verified\"] = verified / len(quotes) if quotes else 0.0\n    else:\n        scores[\"quote_verified\"] = 0.0\n\n    # --- ENTITY VERIFICATION against source transcript ---\n    known = ['clendenin', 'miranda', 'maniscalco', 'hurtak', 'young', 'viera', 'carlson', 'williams', 'iman', 'poynor']\n    if source:\n        src_lower = source.lower()\n        found_real = sum(1 for n in known if n in src_lower and n in cl)\n        # Check for hallucinated names in table\n        table_names = re.findall(r'\\|\\s*([A-Z][a-z]{2,})\\s*\\|', content)\n        skip = {\"owner\", \"entity\", \"speaker\", \"person\", \"responsible\", \"topic\",\n                \"action\", \"deadline\", \"evidence\", \"total\", \"claim\", \"stance\",\n                \"role\", \"area\", \"status\", \"decision\", \"source\", \"quote\"}\n        hallucinated = sum(1 for n in set(table_names)\n                          if n.lower() not in src_lower and n.lower() not in skip)\n        scores[\"entity_verified\"] = 1.0 if found_real >= 3 and hallucinated <= 1 else (\n            0.7 if found_real >= 3 else (0.4 if found_real >= 2 else 0.0))\n    else:\n        found = sum(1 for n in known if n in cl)\n        scores[\"entity_verified\"] = 1.0 if found >= 3 else (0.5 if found >= 2 else 0.0)\n\n    # --- Domain-specific check ---\n    domain_terms = ['council', 'staff', 'public', 'commenter', 'presenter', 'citizen']\n    d_found = sum(1 for t in domain_terms if t in cl)\n    scores[\"participant_types\"] = 1.0 if d_found >= 2 else (\n        0.5 if d_found >= 1 else 0.0)\n\n    # --- Summary line ---\n    scores[\"summary_line\"] = 1.0 if re.search(r'total.*\\d+', cl) else 0.0\n\n    return scores",
+      "llm_rubric": [
+        {
+          "name": "1: Stakeholder Completeness",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Captures all major stakeholders — stakeholder entities, positions, and concerns. Council members, city staff, AND public commenters. Coverage of early AND late agenda items.",
+            "0.5": "Captures stakeholders from some sections but misses others.",
+            "0.0": "Few or no stakeholders extracted."
+          }
+        },
+        {
+          "name": "2: Evidence Quote Authenticity",
+          "weight": 0.3,
+          "anchors": {
+            "1.0": "Quotes are verbatim from transcript — can be found as exact substrings in the source document.",
+            "0.5": "Some quotes partially match but are paraphrased or slightly altered.",
+            "0.0": "Quotes are clearly fabricated, generic, or not from this transcript."
+          }
+        },
+        {
+          "name": "3: Entity/Attribution Accuracy",
+          "weight": 0.25,
+          "anchors": {
+            "1.0": "All named entities appear in the source transcript. Attributions (who said/did what) are correct. No hallucinated names.",
+            "0.5": "Most entities are real but some attributions are wrong or names hallucinated.",
+            "0.0": "Many hallucinated names or wrong attributions."
+          }
+        },
+        {
+          "name": "4: Document Coverage & Structure",
+          "weight": 0.15,
+          "anchors": {
+            "1.0": "Covers the FULL document (not just the beginning). Table is properly formatted with all required columns. Summary line present.",
+            "0.5": "Some coverage gaps or formatting issues.",
+            "0.0": "Only covers the first section or table is broken."
+          }
+        }
+      ]
+    },
+    "reward_contract": {
+      "score_range": [
+        0.0,
+        1.0
+      ],
+      "primary_score": "final_score",
+      "final_score_formula": "0.6 * automated_score + 0.4 * llm_judge_score",
+      "required_breakdown_keys": [
+        "report_created",
+        "table_format",
+        "min_rows",
+        "quote_verified",
+        "entity_verified",
+        "participant_types",
+        "summary_line"
+      ],
+      "process_gate": {
+        "require_output_file": true,
+        "min_quote_verified": 0.01,
+        "min_table_format": 0.5
+      }
+    },
+    "rl_grouping": {
+      "group_id": "ledger_stakeholder_tampa",
+      "rollouts_per_group": 4
+    }
+  }
+]
