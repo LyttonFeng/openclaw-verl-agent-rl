@@ -33,6 +33,32 @@ export PINCHBENCH_AGENT_SUFFIX="${PINCHBENCH_AGENT_SUFFIX:-$RUN_ID}"
 OUTPUT_DIR="${OUTPUT_DIR:-$REPO_ROOT/results/val3_isolated/$RUN_ID}"
 KEEP_OPENCLAW_HOME="${KEEP_OPENCLAW_HOME:-0}"
 KEEP_PINCHBENCH_RUN_ROOT="${KEEP_PINCHBENCH_RUN_ROOT:-0}"
+PRE_CLEAN_STALE_OPENCLAW="${PRE_CLEAN_STALE_OPENCLAW:-1}"
+
+pre_clean_stale_openclaw() {
+  if [ "$PRE_CLEAN_STALE_OPENCLAW" != "1" ]; then
+    return 0
+  fi
+
+  echo "Pre-cleaning stale Val3 OpenClaw state"
+  echo "  agent_suffix:         $PINCHBENCH_AGENT_SUFFIX"
+  echo "  run_id:               $RUN_ID"
+
+  # Keep cleanup scoped to this isolated run id / agent suffix. Do not match
+  # the model server process; vLLM is intentionally shared across benchmark runs.
+  pkill -f "scripts/benchmark.py.*${RUN_ID}" 2>/dev/null || true
+  pkill -f "scripts/benchmark.py.*${PINCHBENCH_AGENT_SUFFIX}" 2>/dev/null || true
+  pkill -f "bench-.*${PINCHBENCH_AGENT_SUFFIX}" 2>/dev/null || true
+  pkill -f "openclaw.*${PINCHBENCH_AGENT_SUFFIX}" 2>/dev/null || true
+
+  # Stale isolated homes can confuse OpenClaw agent discovery on reruns.
+  if [ "$KEEP_OPENCLAW_HOME" != "1" ]; then
+    rm -rf "$OPENCLAW_HOME"
+  fi
+  if [ "$KEEP_PINCHBENCH_RUN_ROOT" != "1" ]; then
+    rm -rf "$PINCHBENCH_RUN_ROOT"
+  fi
+}
 
 cleanup() {
   local status=$?
@@ -49,6 +75,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+pre_clean_stale_openclaw
 mkdir -p "$PINCHBENCH_OPENCLAW_HOME" "$PINCHBENCH_RUN_ROOT" "$OUTPUT_DIR"
 
 # Stable OpenClaw runtime settings for long meeting_analysis tasks.
