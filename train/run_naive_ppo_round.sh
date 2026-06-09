@@ -35,6 +35,7 @@ export PINCHBENCH_OPENCLAW_MAX_TOKENS="${PINCHBENCH_OPENCLAW_MAX_TOKENS:-8192}"
 export PINCHBENCH_SKIP_OPENCLAW_WEB_PREFLIGHT="${PINCHBENCH_SKIP_OPENCLAW_WEB_PREFLIGHT:-1}"
 export PINCHBENCH_MODEL_TEMPERATURE="${PINCHBENCH_MODEL_TEMPERATURE:-0}"
 export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
 
 RUN_ID="${RUN_ID:-naive_ppo_$(date +%Y%m%d_%H%M%S)}"
 RUN_DIR="${RUN_DIR:-$REPO_ROOT/results/train/$RUN_ID}"
@@ -107,6 +108,7 @@ echo "train_split:   $TRAIN_SPLIT"
 echo "tasks_dir:     $TASKS_DIR"
 echo "n_responses:   $N_RESPONSES"
 echo "judge_model:   $JUDGE_MODEL"
+echo "python_bin:    $PYTHON_BIN"
 echo "local_claw:    $PINCHBENCH_FORCE_LOCAL_OPENCLAW"
 echo "openclaw_home: $OPENCLAW_HOME"
 echo "run_root:      $PINCHBENCH_RUN_ROOT"
@@ -114,7 +116,7 @@ echo "agent_suffix:  $PINCHBENCH_AGENT_SUFFIX"
 
 echo
 echo "[1/4] rollout sampling"
-python3 train/generate_meeting_rollouts.py \
+"$PYTHON_BIN" train/generate_meeting_rollouts.py \
   --split-file "$TRAIN_SPLIT" \
   --split train \
   --tasks-dir "$TASKS_DIR" \
@@ -131,7 +133,7 @@ GRADED_FILE="$RUN_DIR/rollouts/graded_trajectories.jsonl"
 
 echo
 echo "[2/4] dynamic training-signal filter"
-python3 train/select_grpo_samples.py \
+"$PYTHON_BIN" train/select_grpo_samples.py \
   --graded-file "$GRADED_FILE" \
   --output-dir "$RUN_DIR/selection" \
   --variance-threshold "$VARIANCE_THRESHOLD" \
@@ -156,7 +158,7 @@ fi
 if [ -n "$PREV_LORA" ]; then
   LOGPROB_ARGS+=(--lora-path "$PREV_LORA")
 fi
-python3 train/compute_rollout_logprobs.py "${LOGPROB_ARGS[@]}"
+"$PYTHON_BIN" train/compute_rollout_logprobs.py "${LOGPROB_ARGS[@]}"
 
 echo
 echo "[4/4] PPO-style LoRA update"
@@ -181,7 +183,7 @@ fi
 if [ -n "$PREV_LORA" ]; then
   TRAIN_ARGS+=(--lora-path "$PREV_LORA")
 fi
-python3 train/train_meeting_grpo_step.py "${TRAIN_ARGS[@]}"
+"$PYTHON_BIN" train/train_meeting_grpo_step.py "${TRAIN_ARGS[@]}"
 
 echo
 echo "DONE"

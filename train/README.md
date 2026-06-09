@@ -11,3 +11,16 @@ Current files:
 - `generate_meeting_rollouts.py`: rollout sampler. It runs OpenClaw tasks against a vLLM OpenAI-compatible endpoint, snapshots workspace outputs/transcripts, and writes `graded_trajectories.jsonl`.
 - `select_grpo_samples.py`: dynamic signal filter. It drops task groups with no score variance and can drop obviously unusable trajectories before training.
 - `run_naive_ppo_round.sh`: minimal end-to-end round wrapper: rollout sampling, dynamic filtering, `P_old` logprob recomputation, and PPO-style LoRA update.
+
+Pod slim12 example:
+
+```bash
+PYTHON_BIN=/root/openclaw-venv/bin/python \
+MODEL_PATH=/workspace/qwen_models/qwen3-4b \
+ROLLOUT_MODEL=Qwen3-4B-base \
+VLLM_BASE_URL=http://127.0.0.1:8021/v1 \
+TRAIN_SPLIT=data/train/meeting_analysis_slim12_split.json \
+N_RESPONSES=4 \
+NUM_WORKERS=1 \
+bash train/run_naive_ppo_round.sh
+```
