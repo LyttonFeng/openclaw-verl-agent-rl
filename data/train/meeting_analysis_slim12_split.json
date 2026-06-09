@@ -1,0 +1,52 @@
+{
+  "description": "12-task PinchBench slim meeting-analysis training split for naive policy training. These tasks are the PinchBench-origin slim subset used in the Val3 canonical 26-task analysis.",
+  "train": [
+    "task_meeting_advisory_attendees",
+    "task_meeting_advisory_technical",
+    "task_meeting_advisory_timeline",
+    "task_meeting_gov_qa_extract",
+    "task_meeting_gov_recommendations",
+    "task_meeting_gov_next_steps",
+    "task_meeting_gov_controversy",
+    "task_meeting_tech_decisions",
+    "task_meeting_tech_product_features",
+    "task_meeting_tech_messaging",
+    "task_meeting_tech_competitors",
+    "task_meeting_tldr"
+  ],
+  "source": "pinchbench_slim",
+  "task_specs_dir": "data/train/tasks",
+  "assets_dir": "data/eval/assets",
+  "transcripts": {
+    "ntia_advisory": {
+      "file": "meetings/2012-05-30-meeting-transcript-ntia-csmac.md",
+      "task_count": 3,
+      "tasks": [
+        "task_meeting_advisory_attendees",
+        "task_meeting_advisory_technical",
+        "task_meeting_advisory_timeline"
+      ]
+    },
+    "nasa_uap": {
+      "file": "meetings/2025-07-30-nasa-holds-first-public-meeting-on-ufos-transcript.md",
+      "task_count": 4,
+      "tasks": [
+        "task_meeting_gov_qa_extract",
+        "task_meeting_gov_recommendations",
+        "task_meeting_gov_next_steps",
+        "task_meeting_gov_controversy"
+      ]
+    },
+    "gitlab_tech": {
+      "file": "meetings/2021-06-28-gitlab-product-marketing-meeting.md",
+      "task_count": 5,
+      "tasks": [
+        "task_meeting_tech_decisions",
+        "task_meeting_tech_product_features",
+        "task_meeting_tech_messaging",
+        "task_meeting_tech_competitors",
+        "task_meeting_tldr"
+      ]
+    }
+  }
+}
