@@ -15,9 +15,11 @@ Output: graded_trajectories.jsonl with schema:
 """
 
 import argparse
+import difflib
 import json
 import logging
 import os
+import re
 import sys
 import threading
 import time
@@ -37,6 +39,11 @@ sys.path.insert(0, str(REPO_ROOT / "rewards"))           # for `import meeting_r
 from lib_tasks import TaskLoader
 from agent_loop.diagnostics import diagnose
 from meeting_reward import compute_score
+
+from agent_loop.diagnostics.plugins.meeting_analysis import (
+    EXPECTED_INPUT_FILES,
+    EXPECTED_OUTPUT_FILE,
+)
 
 
 # Per-worker agent setup. Each worker gets its OWN agent_id + workspace_dir
@@ -196,6 +203,165 @@ def _snapshot_workspace(workspace_path: str, snapshot_dir: str) -> None:
             shutil.copy2(item, snap / item.name)
 
 
+BAD_ACCESS_PHRASES = (
+    "unable to access",
+    "cannot access",
+    "can't access",
+    "not provided",
+    "not available",
+    "transcript was truncated",
+    "transcript is truncated",
+    "based on the available information",
+    "based on limited information",
+    "hypothetical",
+    "assuming that",
+    "i do not have access",
+)
+
+
+READ_TOOL_RE = re.compile(r"\b(read|read_file|grep|rg|search|find)\b", re.I)
+WRITE_TOOL_RE = re.compile(r"\b(write|write_file|edit)\b", re.I)
+
+
+def _read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+def _workspace_source_text(workspace: Path) -> str:
+    chunks: list[str] = []
+    for name in EXPECTED_INPUT_FILES:
+        p = workspace / name
+        if p.is_file():
+            chunks.append(_read_text(p))
+    return "\n".join(chunks)
+
+
+def _workspace_output_text(task_id: str, workspace: Path) -> tuple[str, bool, int]:
+    expected = EXPECTED_OUTPUT_FILE.get(task_id, "")
+    expected_exists = False
+    chunks: list[str] = []
+
+    if expected:
+        p = workspace / expected
+        expected_exists = p.is_file()
+        if expected_exists:
+            chunks.append(_read_text(p))
+
+    for p in sorted(workspace.iterdir()) if workspace.is_dir() else []:
+        if not p.is_file() or p.name in EXPECTED_INPUT_FILES:
+            continue
+        if expected and p.name == expected:
+            continue
+        if p.suffix.lower() in {".md", ".txt", ".json", ".csv"}:
+            chunks.append(_read_text(p))
+
+    output = "\n".join(chunks)
+    return output, expected_exists, len(output)
+
+
+def _trace_features(transcript: list) -> dict:
+    tool_names: list[str] = []
+    tool_success = 0
+    tool_errors = 0
+    for row in transcript or []:
+        if not isinstance(row, dict) or row.get("type") != "message":
+            continue
+        msg = row.get("message") or {}
+        role = msg.get("role")
+        content = msg.get("content") or []
+        if role == "assistant" and isinstance(content, list):
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "toolCall":
+                    tool_names.append(str(item.get("name") or ""))
+        elif role == "toolResult":
+            if msg.get("isError"):
+                tool_errors += 1
+            else:
+                tool_success += 1
+
+    joined = " ".join(tool_names)
+    return {
+        "read_calls": len(READ_TOOL_RE.findall(joined)),
+        "write_calls": len(WRITE_TOOL_RE.findall(joined)),
+        "tool_success": tool_success,
+        "tool_errors": tool_errors,
+    }
+
+
+def _normalize_space(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def _extract_quotes(text: str) -> list[str]:
+    quotes: list[str] = []
+    patterns = [
+        r'"([^"\n]{18,240})"',
+        r"'([^'\n]{18,240})'",
+        r"`([^`\n]{18,240})`",
+        r"[“”]([^“”\n]{18,240})[“”]",
+    ]
+    for pattern in patterns:
+        quotes.extend(re.findall(pattern, text))
+    cleaned: list[str] = []
+    for q in quotes:
+        q = re.sub(r"\s+", " ", q).strip()
+        if len(q.split()) >= 4:
+            cleaned.append(q)
+    return cleaned[:20]
+
+
+def _quote_in_source(quote: str, source: str, threshold: float = 0.86) -> bool:
+    q = _normalize_space(quote)
+    s = _normalize_space(source)
+    if not q or not s:
+        return False
+    if q in s:
+        return True
+    if len(q) < 24:
+        return False
+
+    q_len = len(q)
+    step = max(24, q_len // 3)
+    for start in range(0, max(len(s) - q_len + step, 1), step):
+        window = s[start : start + q_len + 80]
+        if difflib.SequenceMatcher(None, q, window).ratio() >= threshold:
+            return True
+    return False
+
+
+def _policy_features(task_id: str, workspace_path: str, transcript: list, diagnostics: dict) -> dict:
+    workspace = Path(workspace_path)
+    output, expected_exists, output_chars = _workspace_output_text(task_id, workspace)
+    source = _workspace_source_text(workspace)
+    trace = _trace_features(transcript)
+
+    output_lower = output.lower()
+    quotes = _extract_quotes(output)
+    valid_quotes = sum(1 for q in quotes if _quote_in_source(q, source))
+    quote_ratio = valid_quotes / len(quotes) if quotes else None
+    failure_tags = set(diagnostics.get("failure_tags") or [])
+
+    return {
+        "expected_output_file": EXPECTED_OUTPUT_FILE.get(task_id, ""),
+        "expected_output_exists": expected_exists,
+        "output_chars": output_chars,
+        "writes_output": 1.0 if expected_exists or output_chars > 0 else 0.0,
+        "multi_read": 1.0 if trace["read_calls"] > 0 or "transcript_not_read" not in failure_tags else 0.0,
+        "output_quality": 0.0 if "output_too_short" in failure_tags or output_chars < 50 else 1.0,
+        "read_calls": trace["read_calls"],
+        "write_calls": trace["write_calls"],
+        "tool_success": trace["tool_success"],
+        "tool_errors": trace["tool_errors"],
+        "bad_access_phrase": any(phrase in output_lower for phrase in BAD_ACCESS_PHRASES),
+        "quotes": len(quotes),
+        "valid_quotes": valid_quotes,
+        "quote_verified_ratio": quote_ratio,
+    }
+
+
 def _save_transcript(transcript: list, path: str) -> None:
     """Save raw transcript entries as JSONL for training."""
     with open(path, "w") as f:
@@ -282,7 +448,14 @@ def main():
 
         grading = grade_rollout(task, rollout)
         score = grading.get("score", 0.0)
-        is_fatal = grading.get("diagnostics", {}).get("fatal", False)
+        diagnostics = grading.get("diagnostics", {})
+        is_fatal = diagnostics.get("fatal", False)
+        policy_features = _policy_features(
+            task_id=task_id,
+            workspace_path=str(snapshot_dir),
+            transcript=rollout.get("transcript", []),
+            diagnostics=diagnostics,
+        )
 
         transcript_save_path = str(
             output_dir / "transcripts" / f"{task_id}_resp{resp_idx}.jsonl"
@@ -294,7 +467,8 @@ def main():
             "prompt": task.prompt,
             "response_idx": resp_idx,
             "score": score,
-            "diagnostics": grading.get("diagnostics", {}),
+            "diagnostics": diagnostics,
+            "policy_features": policy_features,
             "automated_score": grading.get("automated_score", 0.0),
             "judge_score": grading.get("judge_score", 0.0),
             "workspace_path": str(snapshot_dir),

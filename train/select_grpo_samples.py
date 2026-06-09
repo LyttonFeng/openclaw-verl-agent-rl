@@ -209,9 +209,25 @@ def _is_bad_trajectory(record: dict) -> bool:
     features = record.get("policy_features") or {}
     if float(features.get("writes_output", 1.0) or 0.0) <= 0.0:
         return True
+    if features.get("expected_output_file") and not features.get("expected_output_exists", True):
+        return True
     if float(features.get("multi_read", 1.0) or 0.0) <= 0.0:
         return True
     if float(features.get("output_quality", 1.0) or 0.0) <= 0.0:
+        return True
+    if int(features.get("output_chars", 500) or 0) < 100:
+        return True
+    if int(features.get("tool_success", 1) or 0) <= 0:
+        return True
+    if features.get("bad_access_phrase"):
+        return True
+
+    # Only enforce quote validity when the output contains several explicit
+    # quote-like spans. Some slim tasks are summaries/lists and do not require
+    # verbatim quotations, so absence of quotes is not a hard failure here.
+    quote_count = int(features.get("quotes", 0) or 0)
+    quote_ratio = features.get("quote_verified_ratio")
+    if quote_count >= 2 and quote_ratio is not None and float(quote_ratio) < 0.5:
         return True
 
     return False
