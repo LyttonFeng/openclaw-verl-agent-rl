@@ -28,7 +28,22 @@ PINCHBENCH_ROOT="${PINCHBENCH_ROOT:-/tmp/pinchbench}"
 export OPENCLAW_HOME="${OPENCLAW_HOME:-$OPENCLAW_HOME_ROOT/$RUN_ID}"
 export PINCHBENCH_OPENCLAW_HOME="${PINCHBENCH_OPENCLAW_HOME:-$OPENCLAW_HOME/.openclaw}"
 export PINCHBENCH_RUN_ROOT="${PINCHBENCH_RUN_ROOT:-$PINCHBENCH_ROOT/$RUN_ID}"
-export PINCHBENCH_AGENT_SUFFIX="${PINCHBENCH_AGENT_SUFFIX:-$RUN_ID}"
+
+# OpenClaw normalizes/truncates long agent IDs. Benchmark transcript lookup uses
+# the requested agent ID, so a truncated ID means "sessions dir does not exist".
+# Keep the default suffix short even when RUN_ID is verbose.
+if [ -z "${PINCHBENCH_AGENT_SUFFIX:-}" ]; then
+  RUN_ID_SHORT="$(printf '%s' "$RUN_ID" | tr -cd '[:alnum:]_-' | cut -c1-12)"
+  RUN_ID_CKSUM="$(printf '%s' "$RUN_ID" | cksum | awk '{print $1}')"
+  export PINCHBENCH_AGENT_SUFFIX="v3_${RUN_ID_SHORT}_${RUN_ID_CKSUM}"
+else
+  export PINCHBENCH_AGENT_SUFFIX
+fi
+if [ "${#PINCHBENCH_AGENT_SUFFIX}" -gt 32 ]; then
+  SUFFIX_SHORT="$(printf '%s' "$PINCHBENCH_AGENT_SUFFIX" | tr -cd '[:alnum:]_-' | cut -c1-16)"
+  SUFFIX_CKSUM="$(printf '%s' "$PINCHBENCH_AGENT_SUFFIX" | cksum | awk '{print $1}')"
+  export PINCHBENCH_AGENT_SUFFIX="${SUFFIX_SHORT}_${SUFFIX_CKSUM}"
+fi
 
 OUTPUT_DIR="${OUTPUT_DIR:-$REPO_ROOT/results/val3_isolated/$RUN_ID}"
 KEEP_OPENCLAW_HOME="${KEEP_OPENCLAW_HOME:-0}"
