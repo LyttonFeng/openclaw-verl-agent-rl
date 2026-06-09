@@ -39,6 +39,25 @@ export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 RUN_ID="${RUN_ID:-naive_ppo_$(date +%Y%m%d_%H%M%S)}"
 RUN_DIR="${RUN_DIR:-$REPO_ROOT/results/train/$RUN_ID}"
 
+OPENCLAW_HOME_ROOT="${OPENCLAW_HOME_ROOT:-$RUN_DIR/runtime/openclaw_home}"
+PINCHBENCH_ROOT="${PINCHBENCH_ROOT:-$RUN_DIR/runtime/pinchbench}"
+export OPENCLAW_HOME="${OPENCLAW_HOME:-$OPENCLAW_HOME_ROOT/$RUN_ID}"
+export PINCHBENCH_OPENCLAW_HOME="${PINCHBENCH_OPENCLAW_HOME:-$OPENCLAW_HOME/.openclaw}"
+export PINCHBENCH_RUN_ROOT="${PINCHBENCH_RUN_ROOT:-$PINCHBENCH_ROOT/$RUN_ID}"
+
+if [ -z "${PINCHBENCH_AGENT_SUFFIX:-}" ]; then
+  RUN_ID_SHORT="$(printf '%s' "$RUN_ID" | tr -cd '[:alnum:]_-' | cut -c1-12)"
+  RUN_ID_CKSUM="$(printf '%s' "$RUN_ID" | cksum | awk '{print $1}')"
+  export PINCHBENCH_AGENT_SUFFIX="tr_${RUN_ID_SHORT}_${RUN_ID_CKSUM}"
+else
+  export PINCHBENCH_AGENT_SUFFIX
+fi
+if [ "${#PINCHBENCH_AGENT_SUFFIX}" -gt 32 ]; then
+  SUFFIX_SHORT="$(printf '%s' "$PINCHBENCH_AGENT_SUFFIX" | tr -cd '[:alnum:]_-' | cut -c1-16)"
+  SUFFIX_CKSUM="$(printf '%s' "$PINCHBENCH_AGENT_SUFFIX" | cksum | awk '{print $1}')"
+  export PINCHBENCH_AGENT_SUFFIX="${SUFFIX_SHORT}_${SUFFIX_CKSUM}"
+fi
+
 MODEL_PATH="${MODEL_PATH:-Qwen/Qwen3-4B}"
 ROLLOUT_MODEL="${ROLLOUT_MODEL:-Qwen3-4B}"
 VLLM_BASE_URL="${VLLM_BASE_URL:-http://127.0.0.1:8021/v1}"
@@ -75,7 +94,8 @@ stop_vllm_for_training() {
   sleep 10
 }
 
-mkdir -p "$RUN_DIR/rollouts" "$RUN_DIR/selection" "$RUN_DIR/checkpoint"
+mkdir -p "$RUN_DIR/rollouts" "$RUN_DIR/selection" "$RUN_DIR/checkpoint" \
+  "$PINCHBENCH_OPENCLAW_HOME" "$PINCHBENCH_RUN_ROOT"
 
 echo "== naive meeting-analysis PPO round =="
 echo "run_dir:       $RUN_DIR"
@@ -88,6 +108,9 @@ echo "tasks_dir:     $TASKS_DIR"
 echo "n_responses:   $N_RESPONSES"
 echo "judge_model:   $JUDGE_MODEL"
 echo "local_claw:    $PINCHBENCH_FORCE_LOCAL_OPENCLAW"
+echo "openclaw_home: $OPENCLAW_HOME"
+echo "run_root:      $PINCHBENCH_RUN_ROOT"
+echo "agent_suffix:  $PINCHBENCH_AGENT_SUFFIX"
 
 echo
 echo "[1/4] rollout sampling"

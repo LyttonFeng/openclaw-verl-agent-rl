@@ -55,6 +55,16 @@ _worker_agents: dict[int, str] = {}  # worker_idx → agent_id
 _worker_lock = threading.Lock()
 
 
+def _short_agent_suffix() -> str:
+    suffix = os.environ.get("PINCHBENCH_AGENT_SUFFIX", "").strip()
+    if not suffix:
+        suffix = f"tr_{int(time.time())}"
+    suffix = re.sub(r"[^a-zA-Z0-9_-]", "", suffix)
+    if len(suffix) > 28:
+        suffix = suffix[:20]
+    return suffix or f"tr_{int(time.time())}"
+
+
 def _ensure_agent(model: str, vllm_base_url: str, worker_idx: int) -> str:
     """Ensure the benchmark agent for this worker exists and is configured for
     vLLM endpoint. Each worker owns a unique agent_id + workspace_dir."""
@@ -63,14 +73,15 @@ def _ensure_agent(model: str, vllm_base_url: str, worker_idx: int) -> str:
             return _worker_agents[worker_idx]
 
         from lib_agent import ensure_agent_exists
-        # Suffix agent_id with worker index so concurrent OpenClaw sessions
-        # don't share state. Lowercase + safe chars only.
-        base = f"bench-custom-{model.lower().replace('/', '-')}"
-        agent_id = f"{base}-w{worker_idx}"
+        # Keep agent IDs short. OpenClaw normalizes/truncates long IDs, and
+        # transcript lookup depends on the final store directory name.
+        suffix = _short_agent_suffix().lower()
+        agent_id = f"{suffix}-w{worker_idx}"
 
         # Each worker gets its own workspace path under the same run_id.
+        run_root = Path(os.environ.get("PINCHBENCH_RUN_ROOT", "/tmp/pinchbench"))
         workspace_dir = Path(
-            f"/tmp/pinchbench/{_ROLLOUT_RUN_ID}/worker_{worker_idx}/agent_workspace"
+            run_root / _ROLLOUT_RUN_ID / f"worker_{worker_idx}" / "agent_workspace"
         )
         workspace_dir.mkdir(parents=True, exist_ok=True)
         ensure_agent_exists(
