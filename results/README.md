@@ -6,4 +6,4 @@ It should contain compact benchmark results, score tables, artifact indexes, and
 
 Current files:
 
-- `isolated_val5_temp0_baseline_results.md`: isolated Val5 temperature-0 baseline table with per-task and total scores.
+- `isolated_val3_temp0_baseline_results.md`: isolated Val3 temperature-0 baseline table with per-task and total scores.

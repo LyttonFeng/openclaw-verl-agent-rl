@@ -1,6 +1,6 @@
 # Naive Meeting Analysis RL
 
-Minimal branch for running the meeting-analysis naive RL loop and isolated Val5 benchmark.
+Minimal branch for running the meeting-analysis naive RL loop and isolated Val3 benchmark.
 
 The branch intentionally keeps only the files needed for:
 
@@ -8,7 +8,7 @@ The branch intentionally keeps only the files needed for:
 2. filtering rollouts with no useful training signal,
 3. recomputing rollout-time `P_old` logprobs,
 4. applying a PyTorch/PEFT PPO-style LoRA update,
-5. reproducing the isolated Val5 temperature-0 benchmark.
+5. reproducing the isolated Val3 temperature-0 benchmark.
 
 ## Reference Environment
 
@@ -87,7 +87,7 @@ Main outputs:
 - `results/train/<RUN_ID>/rollout_logprobs.jsonl`
 - `results/train/<RUN_ID>/checkpoint/lora_adapter`
 
-## Run Isolated Val5 Benchmark
+## Run Isolated Val3 Benchmark
 
 Qwen3-4B local vLLM baseline:
 
@@ -95,13 +95,13 @@ Qwen3-4B local vLLM baseline:
 source /root/openclaw-venv/bin/activate
 source ~/.pinchbench_env
 
-RUN_ID=qwen3_4b_temp0 \
-MODEL=Qwen3-4B \
+RUN_ID=qwen3_4b_base_val3_temp0 \
+MODEL=Qwen3-4B-base \
 BASE_URL=http://127.0.0.1:8021/v1 \
 PINCHBENCH_MODEL_API_KEY=dummy \
 PINCHBENCH_MODEL_TEMPERATURE=0 \
-OUTPUT_DIR=results/val5_isolated/qwen3_4b_temp0 \
-bash scripts/run_val5_bench_isolated.sh
+OUTPUT_DIR=results/val3_isolated/qwen3_4b_base_val3_temp0 \
+bash scripts/run_val3_bench_isolated.sh
 ```
 
 DeepSeek API baseline example:
@@ -111,13 +111,13 @@ RUN_ID=dsv4_pro_temp0 \
 MODEL=deepseek-v4-pro \
 BASE_URL=https://api.deepseek.com/v1 \
 PINCHBENCH_MODEL_TEMPERATURE=0 \
-OUTPUT_DIR=results/val5_isolated/dsv4_pro_temp0 \
-bash scripts/run_val5_bench_isolated.sh
+OUTPUT_DIR=results/val3_isolated/dsv4_pro_temp0 \
+bash scripts/run_val3_bench_isolated.sh
 ```
 
 Tracked baseline table:
 
-- `results/isolated_val5_temp0_baseline_results.md`
+- `results/isolated_val3_temp0_baseline_results.md`
 
 ## Where The Logic Lives
 
@@ -129,6 +129,6 @@ Tracked baseline table:
 - `scripts/check_repro_env.sh`: quickstart preflight checker.
 - `scripts/start_qwen3_vllm.sh`: canonical Qwen3-4B vLLM serving wrapper.
 - `scripts/apply_oc_hermes_patch.sh`: OpenClaw fallback parser for Qwen3 `<tool_call>` text.
-- `scripts/run_val5_bench_isolated.sh`: isolated Val5 benchmark wrapper.
+- `scripts/run_val3_bench_isolated.sh`: isolated Val3 benchmark wrapper.
 - `scripts/lib_agent.py`: OpenClaw agent config and CLI execution against vLLM/OpenAI-compatible endpoints.
 - `rewards/meeting_reward.py`: meeting-analysis terminal reward helper.

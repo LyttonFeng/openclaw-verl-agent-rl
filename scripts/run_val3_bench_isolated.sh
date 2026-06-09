@@ -6,8 +6,8 @@
 #   - task_meeting_gov_speaker_summary
 #   - task_meeting_tech_action_items
 #
-# This wrapper mirrors run_val5_bench_isolated.sh but defaults to the local
-# Qwen3-4B base endpoint and forces temperature=0 for stable baseline runs.
+# This wrapper defaults to the local Qwen3-4B base endpoint and forces
+# temperature=0 for stable baseline runs.
 
 set -euo pipefail
 
@@ -19,7 +19,7 @@ BASE_URL="${BASE_URL:-http://127.0.0.1:8021/v1}"
 RUNS="${RUNS:-3}"
 TIMEOUT_MULTIPLIER="${TIMEOUT_MULTIPLIER:-3}"
 JUDGE_MODEL="${JUDGE_MODEL:-deepseek-v4-pro}"
-TASKS_DIR="${TASKS_DIR:-$REPO_ROOT/pinchbench_tasks/meeting_analysis}"
+TASKS_DIR="${TASKS_DIR:-$REPO_ROOT/data/eval/val5}"
 VAL3_TASKS="${VAL3_TASKS:-task_meeting_advisory_stakeholders,task_meeting_gov_speaker_summary,task_meeting_tech_action_items}"
 
 RUN_ID="${RUN_ID:-$(date +%Y%m%d_%H%M%S)_$RANDOM}"
@@ -120,6 +120,9 @@ PY
 export PINCHBENCH_TASKS_DIR="$TASKS_DIR"
 export PINCHBENCH_GRADE_JUDGE_BASE_URL="${PINCHBENCH_GRADE_JUDGE_BASE_URL:-https://api.deepseek.com/v1}"
 export PINCHBENCH_GRADE_JUDGE_MODEL="$JUDGE_MODEL"
+# Val3 uses this pod's local OpenClaw CLI/runtime. Ignore stale remote/ECS
+# variables that may exist in ~/.pinchbench_env from older experiments.
+unset OPENCLAW_HOST ECS_HOST OPENCLAW_PORT OPENCLAW_USER OPENCLAW_SSH_KEY
 export PINCHBENCH_FORCE_LOCAL_OPENCLAW="${PINCHBENCH_FORCE_LOCAL_OPENCLAW:-1}"
 export PINCHBENCH_SKIP_OPENCLAW_WEB_PREFLIGHT="${PINCHBENCH_SKIP_OPENCLAW_WEB_PREFLIGHT:-1}"
 export PINCHBENCH_OPENCLAW_CONTEXT_WINDOW="${PINCHBENCH_OPENCLAW_CONTEXT_WINDOW:-65536}"

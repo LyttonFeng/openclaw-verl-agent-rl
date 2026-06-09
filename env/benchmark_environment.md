@@ -1,6 +1,6 @@
 # Benchmark Environment
 
-This file documents the environment needed to reproduce the isolated meeting-analysis Val5 benchmark.
+This file documents the environment needed to reproduce the isolated meeting-analysis Val3 benchmark.
 
 Reference pod:
 
@@ -32,7 +32,7 @@ openclaw --version
 Use:
 
 ```bash
-bash scripts/run_val5_bench_isolated.sh
+bash scripts/run_val3_bench_isolated.sh
 ```
 
 The wrapper creates private runtime state for each benchmark run:
@@ -46,7 +46,7 @@ This prevents stale agents, sessions, and workspaces from contaminating scores.
 
 ## Default Protocol
 
-`scripts/run_val5_bench_isolated.sh` defaults:
+`scripts/run_val3_bench_isolated.sh` defaults:
 
 ```bash
 RUNS=3
@@ -73,8 +73,8 @@ RUN_ID=dsv4_pro_temp0 \
 MODEL=deepseek-v4-pro \
 BASE_URL=https://api.deepseek.com/v1 \
 PINCHBENCH_MODEL_TEMPERATURE=0 \
-OUTPUT_DIR=results/val5_isolated/dsv4_pro_temp0 \
-bash scripts/run_val5_bench_isolated.sh
+OUTPUT_DIR=results/val3_isolated/dsv4_pro_temp0 \
+bash scripts/run_val3_bench_isolated.sh
 ```
 
 ## Local vLLM Baseline
@@ -93,17 +93,17 @@ During environment capture, the pod also had a running Qwen3-4B-family service o
 Then run benchmark:
 
 ```bash
-RUN_ID=qwen3_4b_temp0 \
-MODEL=Qwen3-4B \
+RUN_ID=qwen3_4b_base_val3_temp0 \
+MODEL=Qwen3-4B-base \
 BASE_URL=http://127.0.0.1:8021/v1 \
 PINCHBENCH_MODEL_API_KEY=dummy \
 PINCHBENCH_MODEL_TEMPERATURE=0 \
-OUTPUT_DIR=results/val5_isolated/qwen3_4b_temp0 \
-bash scripts/run_val5_bench_isolated.sh
+OUTPUT_DIR=results/val3_isolated/qwen3_4b_base_val3_temp0 \
+bash scripts/run_val3_bench_isolated.sh
 ```
 
 ## Result Document
 
 Baseline table is tracked in:
 
-- `results/isolated_val5_temp0_baseline_results.md`
+- `results/isolated_val3_temp0_baseline_results.md`

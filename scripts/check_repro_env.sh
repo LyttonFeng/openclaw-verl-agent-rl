@@ -11,10 +11,10 @@ cd "$REPO_ROOT"
 
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 VLLM_BASE_URL="${VLLM_BASE_URL:-http://127.0.0.1:8021/v1}"
-ROLLOUT_MODEL="${ROLLOUT_MODEL:-Qwen3-4B}"
+ROLLOUT_MODEL="${ROLLOUT_MODEL:-Qwen3-4B-base}"
 CHECK_VLLM="${CHECK_VLLM:-1}"
 CHECK_OPENCLAW_PATCH="${CHECK_OPENCLAW_PATCH:-1}"
-OC_PROVIDER_JS="${OC_PROVIDER_JS:-/usr/local/lib/node_modules/openclaw/node_modules/@mariozechner/pi-ai/dist/providers/openai-completions.js}"
+OC_PROVIDER_JS="${OC_PROVIDER_JS:-/usr/lib/node_modules/openclaw/node_modules/@mariozechner/pi-ai/dist/providers/openai-completions.js}"
 
 if [ -f "$HOME/.pinchbench_env" ]; then
   set -a
@@ -64,14 +64,15 @@ for path in \
   env/benchmark_environment.md \
   scripts/start_qwen3_vllm.sh \
   scripts/apply_oc_hermes_patch.sh \
-  scripts/run_val5_bench_isolated.sh \
+  scripts/run_val3_bench_isolated.sh \
   train/run_naive_ppo_round.sh \
   train/generate_meeting_rollouts.py \
   train/select_grpo_samples.py \
   train/compute_rollout_logprobs.py \
   train/train_meeting_grpo_step.py \
   data/train/meeting_analysis_all_samples_split.json \
-  results/isolated_val5_temp0_baseline_results.md
+  data/train/meeting_analysis_slim12_split.json \
+  results/isolated_val3_temp0_baseline_results.md
 do
   check_file "$path"
 done
@@ -200,7 +201,7 @@ PY
 
 echo
 echo "[7/7] Script syntax"
-for path in scripts/start_qwen3_vllm.sh scripts/apply_oc_hermes_patch.sh scripts/run_val5_bench_isolated.sh train/run_naive_ppo_round.sh; do
+for path in scripts/start_qwen3_vllm.sh scripts/apply_oc_hermes_patch.sh scripts/run_val3_bench_isolated.sh train/run_naive_ppo_round.sh; do
   if bash -n "$path"; then
     ok "$path syntax"
   else
