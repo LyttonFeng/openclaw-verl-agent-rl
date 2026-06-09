@@ -20,6 +20,7 @@ RUNS="${RUNS:-3}"
 TIMEOUT_MULTIPLIER="${TIMEOUT_MULTIPLIER:-3}"
 JUDGE_MODEL="${JUDGE_MODEL:-deepseek-v4-pro}"
 TASKS_DIR="${TASKS_DIR:-$REPO_ROOT/data/eval/val5}"
+SKILL_DIR="${PINCHBENCH_SKILL_DIR:-$REPO_ROOT/data/eval}"
 VAL3_TASKS="${VAL3_TASKS:-task_meeting_advisory_stakeholders,task_meeting_gov_speaker_summary,task_meeting_tech_action_items}"
 
 RUN_ID="${RUN_ID:-$(date +%Y%m%d_%H%M%S)_$RANDOM}"
@@ -118,6 +119,7 @@ path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", "utf-8")
 PY
 
 export PINCHBENCH_TASKS_DIR="$TASKS_DIR"
+export PINCHBENCH_SKILL_DIR="$SKILL_DIR"
 export PINCHBENCH_GRADE_JUDGE_BASE_URL="${PINCHBENCH_GRADE_JUDGE_BASE_URL:-https://api.deepseek.com/v1}"
 export PINCHBENCH_GRADE_JUDGE_MODEL="$JUDGE_MODEL"
 # Val3 uses this pod's local OpenClaw CLI/runtime. Ignore stale remote/ECS
@@ -143,6 +145,8 @@ echo "  agent_suffix:         $PINCHBENCH_AGENT_SUFFIX"
 echo "  runs:                 $RUNS"
 echo "  temperature:          $PINCHBENCH_MODEL_TEMPERATURE"
 echo "  timeout_multiplier:   $TIMEOUT_MULTIPLIER"
+echo "  tasks_dir:            $TASKS_DIR"
+echo "  skill_dir:            $PINCHBENCH_SKILL_DIR"
 echo "  tasks:                $VAL3_TASKS"
 
 "$PYTHON_BIN" "$REPO_ROOT/scripts/benchmark.py" \
