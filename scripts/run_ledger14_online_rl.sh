@@ -16,6 +16,14 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
+# Task workspace_files use source "meetings/<file>", resolved by the rollout
+# driver against assets/meetings/. On the naive branch the transcripts live at
+# data/eval/assets/meetings/, so link them in (idempotent) to avoid every
+# rollout failing with "Workspace file not found".
+if [ ! -e assets/meetings ] && [ -d data/eval/assets/meetings ]; then
+  mkdir -p assets && ln -sfn "$REPO_ROOT/data/eval/assets/meetings" assets/meetings
+fi
+
 if [ -f "$HOME/.pinchbench_env" ]; then
   set -a
   # shellcheck disable=SC1090
