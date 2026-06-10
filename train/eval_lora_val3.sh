@@ -78,7 +78,7 @@ PY
 # --- 2. tech_action_items behavior smoke ---
 echo "[2/3] tech_action_items behavior smoke (${SMOKE_RUNS} runs)"
 run_bench "task_meeting_tech_action_items" "$SMOKE_RUNS" "smoke"
-SMOKE_DIR="$(ls -dt "$OUT_ROOT"/smoke/*/ 2>/dev/null | head -1 || echo "$OUT_ROOT/smoke")"
+SMOKE_DIR="$OUT_ROOT/smoke"  # run_val3_bench_isolated writes 0001_<model>.json directly here
 echo "--- smoke scores ---"
 SMOKE_OUT="$(parse_scores "$SMOKE_DIR")"
 echo "$SMOKE_OUT"
@@ -91,6 +91,6 @@ fi
 # --- 3. full Val3 ---
 echo "[3/3] full Val3 (${VAL3_RUNS} runs/task)"
 run_bench "task_meeting_advisory_stakeholders,task_meeting_gov_speaker_summary,task_meeting_tech_action_items" "$VAL3_RUNS" "val3"
-VAL3_DIR="$(ls -dt "$OUT_ROOT"/val3/*/ 2>/dev/null | head -1 || echo "$OUT_ROOT/val3")"
+VAL3_DIR="$OUT_ROOT/val3"  # bench writes 0001_<model>.json directly here
 echo "--- Val3 scores (baseline: overall 50.9% / mean 0.5088) ---"
 parse_scores "$VAL3_DIR"
