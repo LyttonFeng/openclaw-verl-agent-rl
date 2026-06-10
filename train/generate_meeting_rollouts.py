@@ -282,8 +282,28 @@ def _trace_features(transcript: list) -> dict:
     tool_names: list[str] = []
     tool_success = 0
     tool_errors = 0
+    write_calls_seen = 0          # incremental, to detect compaction-before-write
+    compaction_seen = False
+    compaction_before_write = False
+    context_overflow = False
     for row in transcript or []:
-        if not isinstance(row, dict) or row.get("type") != "message":
+        if not isinstance(row, dict):
+            continue
+        if row.get("type") == "compaction":
+            compaction_seen = True
+            if write_calls_seen <= 0:
+                compaction_before_write = True
+            continue
+        # Context-overflow signal: the vLLM 40960 limit rejection text. Kept
+        # specific (not a bare "context length") to avoid false positives.
+        row_text = json.dumps(row, ensure_ascii=False).lower()
+        if (
+            "maximum context length" in row_text
+            or "reduce the length of the input prompt" in row_text
+            or ("input_tokens" in row_text and "requested" in row_text)
+        ):
+            context_overflow = True
+        if row.get("type") != "message":
             continue
         msg = row.get("message") or {}
         role = msg.get("role")
@@ -291,7 +311,10 @@ def _trace_features(transcript: list) -> dict:
         if role == "assistant" and isinstance(content, list):
             for item in content:
                 if isinstance(item, dict) and item.get("type") == "toolCall":
-                    tool_names.append(str(item.get("name") or ""))
+                    name = str(item.get("name") or "")
+                    tool_names.append(name)
+                    if WRITE_TOOL_RE.search(name):
+                        write_calls_seen += 1
         elif role == "toolResult":
             if msg.get("isError"):
                 tool_errors += 1
@@ -299,11 +322,17 @@ def _trace_features(transcript: list) -> dict:
                 tool_success += 1
 
     joined = " ".join(tool_names)
+    read_calls = len(READ_TOOL_RE.findall(joined))
+    write_calls = len(WRITE_TOOL_RE.findall(joined))
     return {
-        "read_calls": len(READ_TOOL_RE.findall(joined)),
-        "write_calls": len(WRITE_TOOL_RE.findall(joined)),
+        "read_calls": read_calls,
+        "write_calls": write_calls,
         "tool_success": tool_success,
         "tool_errors": tool_errors,
+        "compaction_seen": compaction_seen,
+        "compaction_before_write": compaction_before_write,
+        "context_overflow": context_overflow,
+        "read_without_write": read_calls > 0 and write_calls <= 0,
     }
 
 
@@ -371,6 +400,10 @@ def _policy_features(task_id: str, workspace_path: str, transcript: list, diagno
         "write_calls": trace["write_calls"],
         "tool_success": trace["tool_success"],
         "tool_errors": trace["tool_errors"],
+        "compaction_seen": trace["compaction_seen"],
+        "compaction_before_write": trace["compaction_before_write"],
+        "context_overflow": trace["context_overflow"],
+        "read_without_write": trace["read_without_write"],
         "bad_access_phrase": any(phrase in output_lower for phrase in BAD_ACCESS_PHRASES),
         "quotes": len(quotes),
         "valid_quotes": valid_quotes,

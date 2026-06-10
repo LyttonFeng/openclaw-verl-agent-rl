@@ -219,6 +219,18 @@ def _is_bad_trajectory(record: dict) -> bool:
         return True
     if int(features.get("tool_success", 1) or 0) <= 0:
         return True
+    # Agentic process gate: reject trajectories whose PROCESS is not worth
+    # imitating, even if they scrape a non-zero score. These are the behaviors
+    # that degraded tech_action_items (read-only / context overflow /
+    # compaction-before-write). write_calls<1 catches "never wrote a file".
+    if int(features.get("write_calls", 1) or 0) < 1:
+        return True
+    if features.get("context_overflow"):
+        return True
+    if features.get("compaction_before_write"):
+        return True
+    if features.get("read_without_write"):
+        return True
     if features.get("bad_access_phrase"):
         return True
 
