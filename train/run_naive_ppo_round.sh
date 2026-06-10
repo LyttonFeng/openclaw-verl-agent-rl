@@ -35,7 +35,15 @@ export PINCHBENCH_OPENCLAW_MAX_TOKENS="${PINCHBENCH_OPENCLAW_MAX_TOKENS:-8192}"
 export PINCHBENCH_SKIP_OPENCLAW_WEB_PREFLIGHT="${PINCHBENCH_SKIP_OPENCLAW_WEB_PREFLIGHT:-1}"
 export PINCHBENCH_MODEL_TEMPERATURE="${PINCHBENCH_MODEL_TEMPERATURE:-0}"
 export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
-PYTHON_BIN="${PYTHON_BIN:-python3}"
+# Prefer the project venv (has yaml/torch) if present; else generic python3.
+if [ -z "${PYTHON_BIN:-}" ]; then
+  if [ -x /root/openclaw-venv/bin/python ]; then PYTHON_BIN=/root/openclaw-venv/bin/python; else PYTHON_BIN=python3; fi
+fi
+# Fail fast with a clear message instead of crashing mid-rollout on a missing dep.
+if ! "$PYTHON_BIN" -c 'import yaml, torch' >/dev/null 2>&1; then
+  echo "ERROR: PYTHON_BIN=$PYTHON_BIN lacks yaml/torch. Set PYTHON_BIN to a venv that has them." >&2
+  exit 1
+fi
 
 RUN_ID="${RUN_ID:-naive_ppo_$(date +%Y%m%d_%H%M%S)}"
 RUN_DIR="${RUN_DIR:-$REPO_ROOT/results/train/$RUN_ID}"
@@ -59,12 +67,18 @@ if [ "${#PINCHBENCH_AGENT_SUFFIX}" -gt 32 ]; then
   export PINCHBENCH_AGENT_SUFFIX="${SUFFIX_SHORT}_${SUFFIX_CKSUM}"
 fi
 
-MODEL_PATH="${MODEL_PATH:-Qwen/Qwen3-4B}"
-ROLLOUT_MODEL="${ROLLOUT_MODEL:-Qwen3-4B}"
+# Prefer local weights if present; else pull from HF.
+if [ -z "${MODEL_PATH:-}" ]; then
+  if [ -d /workspace/qwen_models/qwen3-4b ]; then MODEL_PATH=/workspace/qwen_models/qwen3-4b; else MODEL_PATH="Qwen/Qwen3-4B"; fi
+fi
+# ROLLOUT_MODEL MUST equal the vLLM --served-model-name, else rollouts 404 -> all fatal.
+# Default matches the served name used by the vLLM start recipe / eval scripts.
+ROLLOUT_MODEL="${ROLLOUT_MODEL:-Qwen3-4B-base}"
 VLLM_BASE_URL="${VLLM_BASE_URL:-http://127.0.0.1:8021/v1}"
 PREV_LORA="${PREV_LORA:-}"
 
-TRAIN_SPLIT="${TRAIN_SPLIT:-$REPO_ROOT/data/train/meeting_analysis_all_samples_split.json}"
+# Default to the slim12 training set (the Val3-transfer experiment).
+TRAIN_SPLIT="${TRAIN_SPLIT:-$REPO_ROOT/data/train/meeting_analysis_slim12_split.json}"
 TASKS_DIR="${TASKS_DIR:-$REPO_ROOT/data/train/tasks}"
 ASSETS_DIR="${ASSETS_DIR:-$REPO_ROOT/data/eval/assets}"
 
