@@ -44,8 +44,23 @@ RUN pip install \
 # ---- the rest of the locked deps (vllm, transformers, flashinfer, ...) ------
 # requirements.lock.txt is the pod's `pip freeze` with the torch stack and any
 # private accel wheels commented out. PyPI resolves everything else.
+#
+# xformers 0.0.32.post1 publishes a hard `torch==2.8.0` pin in its metadata,
+# which collides with the torch 2.11.0 that vLLM 0.22.0 requires. On the source
+# pod the two coexist because xformers was installed with --no-deps. We do the
+# same: install everything except xformers, then add xformers without deps.
 COPY requirements.lock.txt /tmp/requirements.lock.txt
-RUN pip install -r /tmp/requirements.lock.txt
+RUN grep -viE '^xformers' /tmp/requirements.lock.txt > /tmp/req_noxformers.txt \
+    && pip install -r /tmp/req_noxformers.txt \
+    && pip install --no-deps xformers==0.0.32.post1
+
+# torch 2.11.0+cu130 bundles nccl-cu13 2.28.9; vLLM's deps drag in nccl-cu12
+# 2.27.3. Both write the SAME nvidia/nccl/lib/libnccl.so.2, so whichever lands
+# last wins — and cu12 2.27.3 landing last makes torch fail at import with
+# `undefined symbol: ncclDevCommDestroy` (a 2.28-only symbol). Reinstall the
+# cu13 build last so the 2.28.9 lib is the one on disk.
+RUN pip install --force-reinstall --no-deps nvidia-nccl-cu13==2.28.9 \
+    && python -c "import torch, vllm; assert torch.cuda.is_available(); print('torch', torch.__version__, 'vllm', vllm.__version__)"
 
 # ---- workspace layout (weights + repo mounted at runtime) ------------------
 RUN mkdir -p /workspace/qwen_models /workspace/repo

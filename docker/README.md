@@ -58,8 +58,25 @@ LORA_ADAPTER=/workspace/repo/results/train/<run>/checkpoint/lora_adapter \
 
 ## Notes / gotchas
 
+These two install-order traps were hit while validating the stack on a fresh
+pod (2026-06-10); the Dockerfile already handles both:
+
+- **xformers torch pin** — `xformers 0.0.32.post1` declares `torch==2.8.0` in its
+  metadata, which `ResolutionImpossible`-conflicts with the `torch==2.11.0` that
+  vLLM 0.22 needs. Fixed by installing it with `--no-deps` (matches the pod).
+- **nccl `.so` overwrite** — torch+cu130 ships `nvidia-nccl-cu13 2.28.9`, vLLM's
+  deps pull `nvidia-nccl-cu12 2.27.3`, and both write the *same*
+  `nvidia/nccl/lib/libnccl.so.2`. If cu12 lands last, torch dies at import with
+  `undefined symbol: ncclDevCommDestroy`. Fixed by force-reinstalling the cu13
+  build last.
+
+Other notes:
+
 - **`devel` base keeps `nvcc`** for flashinfer JIT. If your GPU never JIT-compiles,
   switch the `FROM` to `...-runtime-...` to shrink the image.
+- **Don't put the venv on a network FS.** Building it on a RunPod-style MFS mount
+  threw `OSError: [Errno 5]` under heavy concurrent writes. Keep the venv on local
+  disk (the Docker image layer is local; only mount *weights* from the volume).
 - **Private accel wheels** (`tokenspeed-*`, `torch_c_dlpack_ext`) are commented out
   in the lock — they are not on public PyPI. The stack runs without them; install
   only if you have the private index. Expect a small throughput delta.
