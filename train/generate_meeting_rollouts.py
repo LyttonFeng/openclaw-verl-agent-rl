@@ -46,13 +46,15 @@ from agent_loop.diagnostics.plugins.meeting_analysis import (
 )
 
 
-# Per-worker agent setup. Each worker gets its OWN agent_id + workspace_dir
-# so that concurrent rollouts cannot stomp on each other's workspace files.
-# This implements the rule recorded in feedback_workspace_isolation.md:
-#   "并发时每个 worker 独立 agent+workspace".
+# Per-ROLLOUT agent setup. Every rollout gets a FRESH OpenClaw agent
+# (its own agent_id + workspace_dir). Agents are NOT reused across rollouts:
+# a single rollout that wedges OpenClaw (e.g. a long-document context overflow
+# that hangs ~10min) used to corrupt the shared agent and cascade every
+# subsequent rollout into "Transcript not found" / fatal. Fresh-agent-per-rollout
+# contains such a failure to the one rollout that caused it.
 _ROLLOUT_RUN_ID = f"rollout_{int(time.time())}"
-_worker_agents: dict[int, str] = {}  # worker_idx → agent_id
-_worker_lock = threading.Lock()
+_seq_lock = threading.Lock()
+_rollout_seq = 0
 
 
 def _short_agent_suffix() -> str:
@@ -65,34 +67,37 @@ def _short_agent_suffix() -> str:
     return suffix or f"tr_{int(time.time())}"
 
 
-def _ensure_agent(model: str, vllm_base_url: str, worker_idx: int) -> str:
-    """Ensure the benchmark agent for this worker exists and is configured for
-    vLLM endpoint. Each worker owns a unique agent_id + workspace_dir."""
-    with _worker_lock:
-        if worker_idx in _worker_agents:
-            return _worker_agents[worker_idx]
+def _next_seq() -> int:
+    global _rollout_seq
+    with _seq_lock:
+        seq = _rollout_seq
+        _rollout_seq += 1
+    return seq
 
-        from lib_agent import ensure_agent_exists
-        # Keep agent IDs short. OpenClaw normalizes/truncates long IDs, and
-        # transcript lookup depends on the final store directory name.
-        suffix = _short_agent_suffix().lower()
-        agent_id = f"{suffix}-w{worker_idx}"
 
-        # Each worker gets its own workspace path under the same run_id.
-        run_root = Path(os.environ.get("PINCHBENCH_RUN_ROOT", "/tmp/pinchbench"))
-        workspace_dir = Path(
-            run_root / _ROLLOUT_RUN_ID / f"worker_{worker_idx}" / "agent_workspace"
-        )
-        workspace_dir.mkdir(parents=True, exist_ok=True)
-        ensure_agent_exists(
-            agent_id=agent_id,
-            model_id=f"custom/{model}",
-            workspace_dir=workspace_dir,
-            base_url=vllm_base_url,
-            api_key="dummy",
-        )
-        _worker_agents[worker_idx] = agent_id
-        return agent_id
+def _create_agent(model: str, vllm_base_url: str, worker_idx: int) -> str:
+    """Create a FRESH benchmark agent for a single rollout.
+
+    The agent_id is kept short (OpenClaw truncates long IDs, which breaks
+    transcript lookup). A per-rollout sequence keeps each id unique without
+    growing unbounded: <suffix[:12]>-w{worker}r{seq:03d}.
+    """
+    from lib_agent import ensure_agent_exists
+
+    base = _short_agent_suffix().lower()[:12]
+    agent_id = f"{base}-w{worker_idx}r{_next_seq():03d}"
+
+    run_root = Path(os.environ.get("PINCHBENCH_RUN_ROOT", "/tmp/pinchbench"))
+    workspace_dir = run_root / _ROLLOUT_RUN_ID / agent_id / "agent_workspace"
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    ensure_agent_exists(
+        agent_id=agent_id,
+        model_id=f"custom/{model}",
+        workspace_dir=workspace_dir,
+        base_url=vllm_base_url,
+        api_key="dummy",
+    )
+    return agent_id
 
 
 def run_single_rollout(
@@ -111,7 +116,7 @@ def run_single_rollout(
     """
     from lib_agent import execute_openclaw_task
 
-    agent_id = _ensure_agent(model, vllm_base_url, worker_idx)
+    agent_id = _create_agent(model, vllm_base_url, worker_idx)
     # Per-rollout run_id so transcript file names don't collide between
     # concurrent workers handling the same task.
     run_id = f"{task.task_id}_w{worker_idx}_{int(time.time() * 1000)}"
@@ -512,10 +517,10 @@ def main():
                 )
         else:
             # Parallel path. Each future is a (task, resp_idx) pair; the
-            # ThreadPoolExecutor maps each future to a worker thread, and
-            # _ensure_agent caches one (agent_id, workspace_dir) pair per
-            # worker_idx so the agents are reused across futures by the
-            # same worker.
+            # ThreadPoolExecutor maps each future to a worker thread. Each
+            # rollout creates its OWN fresh agent (see _create_agent), so
+            # concurrent workers never share an agent and a wedged rollout
+            # cannot poison others.
             #
             # We assign worker_idx = thread index by hashing thread name —
             # ThreadPoolExecutor names threads predictably as
