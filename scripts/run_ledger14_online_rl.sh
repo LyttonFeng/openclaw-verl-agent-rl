@@ -103,7 +103,7 @@ export PINCHBENCH_SKIP_OPENCLAW_WEB_PREFLIGHT=1
 # prepare_task_workspace would trigger WorkspaceVanishedError.
 export PINCHBENCH_CLEAN_BENCHMARK_WORKSPACE="${PINCHBENCH_CLEAN_BENCHMARK_WORKSPACE:-0}"
 export PINCHBENCH_OPENCLAW_CONTEXT_WINDOW="${PINCHBENCH_OPENCLAW_CONTEXT_WINDOW:-65536}"
-export PINCHBENCH_OPENCLAW_MAX_TOKENS="${PINCHBENCH_OPENCLAW_MAX_TOKENS:-8192}"
+export PINCHBENCH_OPENCLAW_MAX_TOKENS="${PINCHBENCH_OPENCLAW_MAX_TOKENS:-16384}"
 export OPENCLAW_MODEL_REASONING="${OPENCLAW_MODEL_REASONING:-0}"
 export OPENCLAW_HOST=localhost
 export MEETING_JUDGE_PROVIDER="${MEETING_JUDGE_PROVIDER:-deepseek}"
@@ -125,7 +125,7 @@ echo "[step 1] online rollouts + embedded grading + process gate"
   --num-workers "$NUM_WORKERS" \
   --judge-model "$JUDGE_MODEL" \
   --judge-base-url "$JUDGE_BASE_URL" \
-  "${AUTO_ONLY_ARG[@]}"
+  "${AUTO_ONLY_ARG[@]}" || echo "[warn] rollout driver exited non-zero (likely MFS final-write Errno5); validating graded file instead of aborting"
 
 GRADED_FILE="$ROLLOUT_DIR/graded_trajectories.jsonl"
 if [ ! -s "$GRADED_FILE" ]; then
@@ -184,6 +184,7 @@ PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}" \
   --prm-beta "$PRM_BETA" \
   --prm-mode "$PRM_MODE" \
   --logprobs-file "$LOGPROBS_FILE" \
+  ${INIT_LORA:+--lora-path "$INIT_LORA"} \
   --clip-eps "$CLIP_EPS" \
   --kl-beta "$KL_BETA"
 

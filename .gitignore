@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+/results/
+*.log
+/data/train/_smoke1_split.json

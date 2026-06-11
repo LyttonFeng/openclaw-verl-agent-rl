@@ -280,9 +280,8 @@ def train_grpo_step(
         logger.info(f"  Creating new LoRA (rank={lora_rank})")
         lora_config = LoraConfig(
             r=lora_rank,
-            lora_alpha=32,
-            target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                            "gate_proj", "up_proj", "down_proj"],
+            lora_alpha=2 * lora_rank,
+            target_modules="all-linear",
             lora_dropout=0.0,
             bias="none",
             task_type="CAUSAL_LM",
