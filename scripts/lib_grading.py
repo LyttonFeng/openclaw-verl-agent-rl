@@ -579,8 +579,11 @@ def _build_judge_prompt(task: Task, transcript_summary: str, rubric: str, worksp
         f"{workspace_section}"
         "## Grading Rubric\n"
         f"{rubric}\n\n"
-        "Score each criterion from 0.0 to 1.0.\n"
-        'The "total" field must also be between 0.0 and 1.0, and it must be the arithmetic mean of the criterion scores, not their sum.\n\n'
+        "Score each criterion as EXACTLY one of three discrete values: 0.0 (not met), "
+        "0.5 (partially met), or 1.0 (fully met). Do NOT output any other value "
+        "(no 0.3, 0.7, 0.8, 0.95, etc.) — only 0.0, 0.5, or 1.0. This keeps scoring "
+        "consistent and reproducible.\n"
+        'The "total" field must be the arithmetic mean of the criterion scores (it may be any value 0.0-1.0), not their sum.\n\n'
         "Respond with ONLY this JSON structure (no markdown, no code fences, no extra text):\n"
         '{"scores": {"criterion_name": 0.0}, "total": 0.0, "notes": "brief justification"}'
     )

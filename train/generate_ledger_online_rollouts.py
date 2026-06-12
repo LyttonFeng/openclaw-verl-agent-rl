@@ -112,7 +112,7 @@ def load_tasks(path: Path) -> list[LedgerTask]:
                 expected_output_file=item["expected_output_file"],
                 grading_weights=dict(grading.get("weights") or {"automated": 0.6, "llm_judge": 0.4}),
                 grade_function=str(grading.get("grade_function") or ""),
-                llm_rubric=list(grading.get("llm_rubric") or []),
+                llm_rubric=grading.get("llm_rubric") or [],
                 reward_contract=dict(item.get("reward_contract") or {}),
                 rl_grouping=dict(item.get("rl_grouping") or {}),
                 source=str(item.get("source") or "claw_data_agent_tasks"),
@@ -249,13 +249,16 @@ def run_llm_judge(task: LedgerTask, workspace_path: Path, transcript: list[Any])
         logger.warning("DEEPSEEK_API_KEY is missing; judge_score=0")
         return 0.0
 
-    rubric_lines: list[str] = []
-    for item in task.llm_rubric:
-        name = item.get("name", "criterion")
-        weight = item.get("weight", "")
-        anchors = item.get("anchors", {})
-        rubric_lines.append(f"- {name} (weight={weight}): {json.dumps(anchors, ensure_ascii=False)}")
-    rubric = "\n".join(rubric_lines)
+    if isinstance(task.llm_rubric, str):
+        rubric = task.llm_rubric  # markdown rubric string (Val3) — use eval's rubric verbatim
+    else:
+        rubric_lines: list[str] = []
+        for item in task.llm_rubric:
+            name = item.get("name", "criterion")
+            weight = item.get("weight", "")
+            anchors = item.get("anchors", {})
+            rubric_lines.append(f"- {name} (weight={weight}): {json.dumps(anchors, ensure_ascii=False)}")
+        rubric = "\n".join(rubric_lines)
 
     judge_prompt = (
         f"## Task\n{task.prompt}\n\n"
@@ -263,8 +266,11 @@ def run_llm_judge(task: LedgerTask, workspace_path: Path, transcript: list[Any])
         f"## Agent Transcript\n{_summarize_transcript(transcript)}\n\n"
         f"## Workspace Files Created\n{_read_workspace_files(str(workspace_path))}\n\n"
         f"## Grading Rubric\n{rubric}\n\n"
-        "Score the output. Respond with ONLY JSON:\n"
-        '{"scores": {"criterion_name": float_0_to_1}, "total": float_0_to_1, "notes": "brief"}'
+        "Score each criterion as EXACTLY one of: 0.0 (not met), 0.5 (partially met), "
+        "or 1.0 (fully met). Do NOT use any other value (no 0.3, 0.7, 0.8, 0.95) — only "
+        "0.0/0.5/1.0, for consistent reproducible scoring. The total is the mean of the criteria.\n"
+        "Respond with ONLY JSON:\n"
+        '{"scores": {"criterion_name": 0.0}, "total": 0.0, "notes": "brief"}'
     )
     endpoint = f"{base_url.rstrip('/')}/chat/completions"
     payload = json.dumps(
@@ -281,23 +287,33 @@ def run_llm_judge(task: LedgerTask, workspace_path: Path, transcript: list[Any])
                 {"role": "user", "content": judge_prompt},
             ],
             "temperature": 0.0,
-            "max_tokens": 2048,
+            "max_tokens": 8192,
         }
     ).encode("utf-8")
-    req = urllib.request.Request(
-        endpoint,
-        data=payload,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=300) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        text = data["choices"][0]["message"]["content"]
-        return max(0.0, min(1.0, float(_parse_judge_score(text))))
-    except Exception as exc:
-        logger.warning("Judge failed for %s: %s", task.task_id, exc)
+    # Reward judge must match the eval judge: deepseek-v4 reasoning models are
+    # non-deterministic even at temp 0 and often leave `content` empty (answer in
+    # reasoning_content). Read the fallback + ensemble PINCHBENCH_JUDGE_ENSEMBLE
+    # calls and average so the GRPO reward is not poisoned by single-call noise.
+    n_ensemble = max(1, int(os.environ.get("PINCHBENCH_JUDGE_ENSEMBLE", "1")))
+    scores: list[float] = []
+    for _ in range(n_ensemble):
+        try:
+            req = urllib.request.Request(
+                endpoint,
+                data=payload,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=300) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            msg = data["choices"][0]["message"] or {}
+            text = msg.get("content") or msg.get("reasoning_content") or ""
+            scores.append(max(0.0, min(1.0, float(_parse_judge_score(text)))))
+        except Exception as exc:
+            logger.warning("Judge attempt failed for %s: %s", task.task_id, exc)
+    if not scores:
         return 0.0
+    return sum(scores) / len(scores)
 
 
 def passes_process_gate(task: LedgerTask, workspace_path: Path, breakdown: dict[str, float]) -> tuple[bool, list[str]]:

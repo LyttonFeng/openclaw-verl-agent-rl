@@ -10,7 +10,14 @@ Env:
   PORT         (default 8021)
   SERVED_NAME  (default qwen35-4b)
 """
-import os, json, time, threading, uuid
+import os, json, time, threading, uuid, sys
+# Redirect ALL output to a file, never the (foreground-ssh) stdout pipe. If the
+# hosting ssh drops, prints to a broken pipe would raise BrokenPipeError inside
+# request handlers and break generation -> empty responses. Writing to a file
+# makes the shim survive ssh drops regardless of launch method.
+_shim_log = open(os.environ.get("SHIM_LOG", "/tmp/shim_stdout.log"), "a", buffering=1)
+sys.stdout = _shim_log
+sys.stderr = _shim_log
 import torch
 from types import SimpleNamespace
 from fastapi import FastAPI, Request
@@ -87,9 +94,16 @@ def _generate(messages, tools, temperature, max_tokens, top_p):
         gen_kwargs.update(temperature=None, top_p=None, top_k=None)
     with GEN_LOCK, torch.no_grad():
         out = model.generate(input_ids, attention_mask=attn, **gen_kwargs)
-    new_ids = out[0][prompt_len:]
+        new_ids = out[0][prompt_len:].clone()
+        n_new = int(new_ids.shape[0])
+        del out, input_ids
+        if attn is not None:
+            del attn
+        # Release reserved KV/activation cache so a long generation (e.g. a
+        # 4k-token report) does not pin ~60GB and OOM later long-context turns.
+        torch.cuda.empty_cache()
     text = tok.decode(new_ids, skip_special_tokens=True)
-    return text, prompt_len, int(new_ids.shape[0])
+    return text, prompt_len, n_new
 
 
 def _build_message(model_output, tools):
@@ -119,13 +133,24 @@ async def chat(request: Request):
     body = await request.json()
     messages = body["messages"]
     tools = body.get("tools")
-    temperature = body.get("temperature", 0.0)
+    print("[REQ] stream=%s temp=%s maxtok=%s nmsgs=%s tools=%s roles=%s" % (
+        body.get("stream"), body.get("temperature"), body.get("max_tokens"),
+        len(messages), len(tools or []), [m.get("role") for m in messages][-3:]), flush=True)
+    temperature = body.get("temperature")
+    if temperature is None:
+        # OpenClaw does not reliably propagate PINCHBENCH_MODEL_TEMPERATURE into the
+        # request, so control sampling at the shim: rollout launches with
+        # SHIM_DEFAULT_TEMP=1.0 (sample for GRPO diversity), eval with 0 (greedy).
+        temperature = float(os.environ.get("SHIM_DEFAULT_TEMP", "0"))
     max_tokens = int(body.get("max_tokens") or body.get("max_completion_tokens") or 8192)
     top_p = body.get("top_p")
     stream = bool(body.get("stream"))
 
     text, prompt_len, completion_len = _generate(messages, tools, temperature, max_tokens, top_p)
     message, finish_reason = _build_message(text, tools)
+    print("[RESP] finish=%s content_len=%s tool_calls=%s gen_tok=%s text_head=%r" % (
+        finish_reason, len(message.get("content") or ""), len(message.get("tool_calls") or []),
+        completion_len, (text or "")[:80]), flush=True)
     cid = "chatcmpl-" + uuid.uuid4().hex[:24]
     created = int(time.time())
     usage = {"prompt_tokens": prompt_len, "completion_tokens": completion_len,

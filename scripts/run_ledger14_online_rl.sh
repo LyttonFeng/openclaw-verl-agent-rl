@@ -182,8 +182,9 @@ PY
 
 echo
 if [ "$STOP_VLLM_BEFORE_TRAIN" = "1" ]; then
-  echo "[gpu] stopping vLLM before logprob/train to free single-GPU memory"
+  echo "[gpu] stopping vLLM/shim before logprob/train to free single-GPU memory"
   pkill -f "vllm.entrypoints.openai.api_server" 2>/dev/null || true
+  pkill -f "tf_shim" 2>/dev/null || true
   sleep 8
 fi
 
