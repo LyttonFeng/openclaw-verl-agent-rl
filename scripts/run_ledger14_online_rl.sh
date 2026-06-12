@@ -37,9 +37,14 @@ if [ -d /workspace/qwen_models/qwen3-4b ] && [ "${MODEL_PATH:-}" = "" ]; then MO
 
 N_RESPONSES="${N_RESPONSES:-4}"
 NUM_WORKERS="${NUM_WORKERS:-4}"
-JUDGE_MODEL="${JUDGE_MODEL:-deepseek-chat}"
+JUDGE_MODEL="${JUDGE_MODEL:-deepseek-v4-flash}"
 JUDGE_BASE_URL="${JUDGE_BASE_URL:-https://api.deepseek.com/v1}"
 AUTO_ONLY="${AUTO_ONLY:-0}"
+# Reward accuracy: judge each rollout N times and average to suppress the
+# judge's per-call non-determinism (flash ~0.05 noise/call even at temp 0).
+# Noisy reward poisons GRPO gradients, so we ensemble the terminal reward.
+JUDGE_ENSEMBLE="${JUDGE_ENSEMBLE:-3}"
+export PINCHBENCH_JUDGE_ENSEMBLE="$JUDGE_ENSEMBLE"
 
 LR="${LR:-1e-6}"
 LORA_RANK="${LORA_RANK:-16}"
@@ -81,7 +86,7 @@ echo "  Served model: $SERVED_MODEL"
 echo "  Model path:   $MODEL_PATH"
 echo "  Tasks file:   $TASKS_FILE"
 echo "  Rollouts:     $N_RESPONSES per task, workers=$NUM_WORKERS"
-echo "  Judge:        $JUDGE_MODEL @ $JUDGE_BASE_URL (AUTO_ONLY=$AUTO_ONLY)"
+echo "  Judge:        $JUDGE_MODEL @ $JUDGE_BASE_URL (AUTO_ONLY=$AUTO_ONLY, ENSEMBLE=$JUDGE_ENSEMBLE)"
 echo "  Train GPU(s): $TRAIN_CUDA_VISIBLE_DEVICES"
 echo "  OpenClaw home:$OPENCLAW_HOME"
 echo "  Run root:     $PINCHBENCH_RUN_ROOT"
@@ -128,6 +133,32 @@ echo "[step 1] online rollouts + embedded grading + process gate"
   "${AUTO_ONLY_ARG[@]}" || echo "[warn] rollout driver exited non-zero (likely MFS final-write Errno5); validating graded file instead of aborting"
 
 GRADED_FILE="$ROLLOUT_DIR/graded_trajectories.jsonl"
+
+# ---- filter empty trajectories before train (no signal) ----
+"$PYTHON_BIN" - "$GRADED_FILE" <<'PYF'
+import json, sys
+from collections import defaultdict
+p = sys.argv[1]
+rows = [json.loads(l) for l in open(p) if l.strip()]
+g = defaultdict(list)
+for r in rows:
+    g[r["task_id"]].append(r)
+kept = []
+dropped_empty = 0
+dropped_groups = 0
+for t, rs in g.items():
+    nz = [r for r in rs if len((r.get("response") or "")) > 0]
+    dropped_empty += len(rs) - len(nz)
+    sc = [float(r.get("score", 0)) for r in nz]
+    if len(nz) >= 2 and (max(sc) - min(sc)) > 0.02:
+        kept.extend(nz)
+    else:
+        dropped_groups += 1
+with open(p, "w") as f:
+    for r in kept:
+        f.write(json.dumps(r) + "\n")
+print("[filter] empty-trajectory: %d -> %d rows (dropped %d empty, %d dead groups)" % (len(rows), len(kept), dropped_empty, dropped_groups))
+PYF
 if [ ! -s "$GRADED_FILE" ]; then
   echo "ERROR: rollout file missing or empty: $GRADED_FILE"
   exit 1

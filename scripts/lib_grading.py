@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 # API judge (default): DeepSeek OpenAI-compatible API — stable JSON with response_format.
-DEFAULT_JUDGE_MODEL = "deepseek-chat"
+DEFAULT_JUDGE_MODEL = "deepseek-v4-flash"
 DEFAULT_JUDGE_BASE_URL = "https://api.deepseek.com/v1"
 # When falling back to OpenClaw-embedded judge (no DEEPSEEK_API_KEY), use a capable cloud model id.
 DEFAULT_JUDGE_MODEL_OPENCLAW_FALLBACK = "openrouter/anthropic/claude-opus-4.5"
@@ -274,7 +274,34 @@ def _grade_automated(task: Task, execution_result: Dict[str, Any], verbose: bool
     )
 
 
-def _grade_llm_judge(
+def _grade_llm_judge(**kwargs) -> GradeResult:
+    """Ensemble wrapper around the single-call judge.
+
+    Reasoning / MoE judge models (deepseek-v4-flash/pro) are NOT deterministic
+    even at temperature 0 (server-side expert routing + batch-dependent fp), so a
+    single call carries ~0.05-0.08 noise that can exceed the signal we measure.
+    Set PINCHBENCH_JUDGE_ENSEMBLE=N to judge the same report N times and average
+    the score, shrinking that noise by ~sqrt(N). Default 1 = unchanged behaviour.
+    """
+    n = int(os.environ.get("PINCHBENCH_JUDGE_ENSEMBLE", "1"))
+    if n <= 1:
+        return _grade_llm_judge_single(**kwargs)
+    results = [_grade_llm_judge_single(**kwargs) for _ in range(n)]
+    succeeded = [r for r in results if r.breakdown]
+    use = succeeded or results
+    avg_score = sum(r.score for r in use) / len(use)
+    task = kwargs.get("task")
+    return GradeResult(
+        task_id=getattr(task, "task_id", ""),
+        score=avg_score,
+        max_score=1.0,
+        grading_type="llm_judge",
+        breakdown=dict(use[-1].breakdown),
+        notes=f"[ensemble n={len(use)}/{n} scores={[round(r.score, 3) for r in use]}]",
+    )
+
+
+def _grade_llm_judge_single(
     *,
     task: Task,
     execution_result: Dict[str, Any],

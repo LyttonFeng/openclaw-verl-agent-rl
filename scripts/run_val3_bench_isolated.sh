@@ -18,7 +18,12 @@ MODEL="${MODEL:-Qwen3-4B-base}"
 BASE_URL="${BASE_URL:-http://127.0.0.1:8021/v1}"
 RUNS="${RUNS:-3}"
 TIMEOUT_MULTIPLIER="${TIMEOUT_MULTIPLIER:-3}"
-JUDGE_MODEL="${JUDGE_MODEL:-deepseek-v4-pro}"
+JUDGE_MODEL="${JUDGE_MODEL:-deepseek-v4-flash}"
+# Judge ensemble: average N judge calls/report to suppress non-determinism.
+# MUST match the training reward judge (run_ledger14_online_rl.sh) — same model,
+# same ensemble — or the model is optimized and measured by different yardsticks.
+JUDGE_ENSEMBLE="${JUDGE_ENSEMBLE:-3}"
+export PINCHBENCH_JUDGE_ENSEMBLE="$JUDGE_ENSEMBLE"
 TASKS_DIR="${TASKS_DIR:-$REPO_ROOT/data/eval/val5}"
 SKILL_DIR="${PINCHBENCH_SKILL_DIR:-$REPO_ROOT/data/eval}"
 VAL3_TASKS="${VAL3_TASKS:-task_meeting_advisory_stakeholders,task_meeting_gov_speaker_summary,task_meeting_tech_action_items}"

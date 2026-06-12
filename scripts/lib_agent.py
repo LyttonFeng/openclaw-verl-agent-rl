@@ -2018,7 +2018,7 @@ def _judge_via_openai_compat(
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.0,
-        "max_tokens": 2048,
+        "max_tokens": 8192,
     }
     if response_json:
         body["response_format"] = {"type": "json_object"}
@@ -2052,7 +2052,10 @@ def _judge_via_openai_compat(
     choices = data.get("choices", [])
     if not choices:
         return {"status": "error", "text": "", "error": "No choices in response"}
-    text = choices[0].get("message", {}).get("content", "")
+    msg = choices[0].get("message", {}) or {}
+    text = msg.get("content") or ""
+    if not text.strip():
+        text = msg.get("reasoning_content") or ""
     return {"status": "success", "text": text}
 
 
