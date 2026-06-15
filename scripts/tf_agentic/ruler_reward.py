@@ -29,6 +29,7 @@ RDIR = os.environ.get("ROLLOUTS_DIR", os.path.expanduser("~/r1_rollouts"))
 MAXREP = 6000
 SHUFFLES4 = [[0, 1, 2, 3], [2, 0, 3, 1], [3, 1, 0, 2]]  # deterministic perms of K=4
 
+# Generic fallback rubric (RULER-style) — used ONLY when a task has no hand-written llm_rubric.
 RUBRIC = (
     "- A report that fully and ACCURATELY fulfills the task scores highest.\n"
     "- GROUNDING is paramount: every item/claim must be supported by the source meeting transcript. "
@@ -38,13 +39,42 @@ RUBRIC = (
     "- Reward completeness of genuinely-grounded items, correct owners/deadlines where stated, and clear structure.\n"
     "- A concise, fully-grounded report MUST score higher than a longer report that adds duplicates or ungrounded items."
 )
-SYS_LIST = (
-    "All of the reports below were written for the SAME task. Consider each and assign it a score "
-    "between 0 and 1 for how well it fulfills the task, judging them relative to each other.\n\n"
-    "Grading standards:\n" + RUBRIC +
-    '\n\nReturn STRICT JSON only: {"scores":[{"id":1,"score":0.0,"reason":"<short>"}, ...]} with one '
-    "entry for EVERY report id."
-)
+
+
+def normalize_rubric(rub):
+    """Turn a task llm_rubric (markdown str OR list of {name,weight,anchors}) into a text block.
+    Returns the generic RUBRIC when rub is empty/None."""
+    if not rub:
+        return RUBRIC
+    if isinstance(rub, str):
+        return rub.strip()
+    lines = []
+    for c in rub:
+        if not isinstance(c, dict):
+            continue
+        nm = c.get("name", "criterion"); w = c.get("weight", "")
+        lines.append(f"### {nm}" + (f" (weight {w})" if w != "" else ""))
+        anchors = c.get("anchors", {}) or {}
+        for k in ("1.0", "0.5", "0", "0.0"):
+            if k in anchors:
+                lines.append(f"- Score {k}: {anchors[k]}")
+    return "\n".join(lines) if lines else RUBRIC
+
+
+def _sys_list(rubric_text, has_rubric=True):
+    # Anti-hacking overlay that NEVER conflicts with completeness:
+    overlay = ("\n\nIn addition, penalize content that is hallucinated or NOT grounded in the source "
+               "transcript, and penalize DUPLICATE entries (the same item repeated). Do not reward length "
+               "for its own sake.")
+    # The "concise must beat longer" preference lives only in the generic fallback rubric,
+    # so it does not fight a task rubric that legitimately rewards comprehensiveness.
+    return (
+        "All of the reports below were written for the SAME task. Consider each and assign it a score "
+        "between 0 and 1 for how well it fulfills the task, judging them relative to each other.\n\n"
+        "Grading standards (apply these criteria faithfully):\n" + rubric_text + overlay +
+        '\n\nReturn STRICT JSON only: {"scores":[{"id":1,"score":0.0,"reason":"<short>"}, ...]} with one '
+        "entry for EVERY report id."
+    )
 
 
 def groups():
@@ -67,22 +97,32 @@ def deliverables(files):
     return task, out
 
 
-def listwise_once(member, task, items, order):
+def listwise_once(member, task, items, order, rubric=None, reference=None):
+    rubric_text = normalize_rubric(rubric)  # task llm_rubric if given, else generic RUBRIC
+    sys_p = _sys_list(rubric_text, has_rubric=bool(rubric))
     parts = [f'<report id="{pos+1}">\n{items[idx]["dlv"]}\n</report>' for pos, idx in enumerate(order)]
-    user = f"<task>\n{(task or '')[:5000]}\n</task>\n\nReports:\n\n" + "\n\n".join(parts)
-    obj = C._call(member, [{"role": "system", "content": SYS_LIST}, {"role": "user", "content": user}],
+    # 放法B: inject a base-model reference for CALIBRATION only. Do NOT score it; it just
+    # anchors the judge's scale ("how do these compare to a known baseline answer").
+    ref_block = ""
+    if reference:
+        ref_block = ("<reference_baseline>\nThe following is a baseline answer for THIS task. Do NOT "
+                     "score it. Use it only to calibrate your scale: a report clearly better than this "
+                     "baseline should score higher, one clearly worse should score lower.\n"
+                     + str(reference)[:MAXREP] + "\n</reference_baseline>\n\n")
+    user = f"<task>\n{(task or '')[:5000]}\n</task>\n\n{ref_block}Reports to score:\n\n" + "\n\n".join(parts)
+    obj = C._call(member, [{"role": "system", "content": sys_p}, {"role": "user", "content": user}],
                   max_tokens=1500)
     pos_sc = {int(e["id"]): float(e["score"]) for e in obj.get("scores", [])}
     return {idx: pos_sc.get(pos + 1) for pos, idx in enumerate(order)}  # item_idx -> score
 
 
-def listwise_group(task, items, members, shuffles, pool=6):
+def listwise_group(task, items, members, shuffles, pool=6, rubric=None, reference=None):
     jobs = [(m, si) for m in members for si in range(len(shuffles))]
 
     def run(job):
         m, si = job
         try:
-            return (m, listwise_once(m, task, items, shuffles[si]))
+            return (m, listwise_once(m, task, items, shuffles[si], rubric=rubric, reference=reference))
         except Exception as e:
             print(f"    [{m}] shuffle{si} ERR {repr(e)[:80]}", flush=True)
             return (m, None)

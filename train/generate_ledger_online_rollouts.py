@@ -165,7 +165,7 @@ def run_single_rollout(
             agent_id=agent_id,
             model_id=f"custom/{model}",
             run_id=run_id,
-            timeout_multiplier=2.0,
+            timeout_multiplier=float(os.environ.get("ROLLOUT_TIMEOUT_MULT","4.0")),
             skill_dir=REPO_ROOT,
         )
         return {

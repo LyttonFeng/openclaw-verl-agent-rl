@@ -8,8 +8,8 @@ source ~/.pinchbench_env 2>/dev/null || true
 source /root/openclaw-venv/bin/activate
 cd /workspace/openclaw-naive-meeting-analysis-github
 
-RUN=/tmp/nma_round1/committee_w1
-GRADED=$RUN/graded_committee.jsonl
+RUN="${RUN_DIR:-/tmp/nma_round1/committee_w1}"
+GRADED=$RUN/"${GRADED_NAME:-graded_committee.jsonl}"
 MODEL_PATH=/tmp/qwen3.5-4b
 CKPT=$RUN/checkpoint
 LOGPROBS=$RUN/rollout_logprobs.jsonl
@@ -42,16 +42,23 @@ echo "[train] kill shim/vllm to free GPU..."
 pkill -9 -f "tf_shim|vllm|benchmark.py" 2>/dev/null || true
 sleep 6
 
-echo "[train] step 2: logprobs (recompute for committee-graded set)"
+# INIT_LORA: continue-train from an existing adapter (on-policy iteration). Empty -> cold start.
+# When set, old-policy logprobs MUST also be computed WITH that adapter (correct PPO ratio).
+INIT="${INIT_LORA:-}"
+[ -n "$INIT" ] && echo "[train] continue-train from $INIT (on-policy)" || echo "[train] cold start from base"
+
+echo "[train] step 2: logprobs (old policy${INIT:+ = init LoRA})"
 CUDA_VISIBLE_DEVICES=0 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
 python train/compute_rollout_logprobs.py \
   --graded-file "$GRADED" --model-path "$MODEL_PATH" --output "$LOGPROBS" \
+  ${INIT:+--lora-path "$INIT"} \
   --max-seq-length 32768 --dtype bf16 --max-memory-per-gpu 75GiB || { echo "LOGPROBS FAILED"; exit 1; }
 
-echo "[train] step 3: GRPO (cold start, LR 2.5e-5, committee reward)"
+echo "[train] step 3: GRPO (LR 2.5e-5, committee/blend reward)"
 CUDA_VISIBLE_DEVICES=0 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
 python -u train/train_meeting_grpo_step.py \
   --graded-file "$GRADED" --model-path "$MODEL_PATH" --output-dir "$CKPT" \
+  ${INIT:+--lora-path "$INIT"} \
   --lr 2.5e-5 --lora-rank 32 --grad-accum-steps 2 --max-seq-length 32768 \
   --prm-alpha 1.0 --prm-beta 0.0 --prm-mode additive \
   --logprobs-file "$LOGPROBS" --clip-eps 0.2 --kl-beta 0.05
