@@ -4,10 +4,13 @@
 #
 # Recipe from the 2026-06-15 temp=0.3 ablation:
 #   pure committee reward (AUTO_W=0) + llm_rubric + base@0.3 ref.
-#   DELIBERATION OFF by default. The ablation found NO measurable quality benefit
-#   (w5-clean ≈ w6); the only evidence we have is "no effect", so don't carry an
-#   unproven knob by default. Its effect on training reward-VARIANCE was never
-#   measured — if a variance test later shows it helps, re-enable with DELIBERATE=1.
+#   DELIBERATION ON by default (evidence-based as of 2026-06-16). The 9-pair eval
+#   found no FINAL-QUALITY difference (w5-clean ≈ w6), BUT a reward-variance test
+#   (re-scoring the same rollout groups with delib 0 vs 1) showed it measurably
+#   improves the TRAINING SIGNAL: it corrects a systematic judge outlier (minimax
+#   was ~0.3-0.4 too harsh; deliberation converges per-item cross-judge range from
+#   ~0.4 to ~0.1) and elevates the genuinely-best rollout -> cleaner, more
+#   reproducible GRPO advantage. Disable (DELIBERATE=0) only to save API calls.
 # Generalises run_onpolicy.sh so each new round just continue-trains from the
 # previous round's adapter on FRESH on-policy rollouts.
 #
@@ -43,7 +46,7 @@ cd "$REPO"
 RUN_NAME="${RUN_NAME:-committee_w7}"
 INIT_ADAPTER="${INIT_ADAPTER:-/workspace/saved_adapters/committee_w6/checkpoint/lora_adapter}"
 AUTO_W="${AUTO_W:-0.0}"                                       # pure committee (automated is a weak proxy)
-export DELIBERATE="${DELIBERATE:-0}"                          # OFF: no measured quality benefit; re-enable (=1) only if a reward-variance test shows it helps
+export DELIBERATE="${DELIBERATE:-1}"                          # ON (evidence-based): variance test 2026-06-16 showed it de-biases judges (per-item cross-judge range ~0.4 -> ~0.1, corrects minimax harsh outlier) + sharpens the correct ranking -> cleaner, more reproducible GRPO signal
 LR="${LR:-2.0e-5}"; export LR                                 # lowered (continue-train already deep)
 BASE_REF="${BASE_REF:-/workspace/saved_adapters/base_ref_temp03.jsonl}"  # base@0.3 anchor
 TASKS="${TASKS:-$REPO/data/meeting_analysis_val3_slim_train/val3_plus6_train.json}"

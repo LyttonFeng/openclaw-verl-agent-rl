@@ -26,10 +26,13 @@ Same w5 adapter → gov 8:1 (flake eval) vs 6:1 (clean eval): verdicts wobble; t
   (p=.039) then 6:1 (p=.125) — verdicts wobble at 6:1–8:1; only w3 9:0 (p=.004) is solid.
 - **AUTO_W is not the lever** — gov favored across 0.0–0.7. (Earlier temp=0 "w3 worst" was a
   base-nondeterminism confound; always anchor one canonical base.)
-- **Deliberation: OFF by default ("lever" claim retracted).** After a clean w5 rerun, w5-clean ≈ w6
-  (advisory 5:4 vs 6:2 both tie; tech automated identical; MEETING 80.1 vs 79.7) — the only evidence
-  is "no quality effect", so don't carry an unproven knob. Its effect on training reward-VARIANCE was
-  never measured; re-enable (DELIBERATE=1) only if a variance test shows it helps.
+- **Deliberation: ON by default (evidence-based, 2026-06-16).** Two-axis story: (a) FINAL policy
+  quality — the 9-pair eval showed w5-clean ≈ w6 (no detectable delta); (b) TRAINING SIGNAL quality —
+  a reward-variance test (re-scoring the same rollout groups with delib 0 vs 1) showed deliberation
+  de-biases the committee: minimax was a systematic harsh outlier (~0.3-0.4 low), and after seeing
+  peers it converges — per-item cross-judge range drops ~0.4 → ~0.1 — while the genuinely-best rollout
+  gets correctly elevated (advisory resp1 0.71→0.83). So the reward is less judge-arbitrary and more
+  reproducible. Keep ON; it is NOT a final-quality lever but it demonstrably cleans the GRPO signal.
 - **No single "best" config.** w5-clean / w4 / w6 are ≈ equivalent (gov favored, advisory/tech
   tie). Continue the next round from any (w6 default, deliberation harmless) — the choice is not
   load-bearing. advisory & tech are GENUINE ties; do not chase them.
@@ -40,7 +43,7 @@ Same w5 adapter → gov 8:1 (flake eval) vs 6:1 (clean eval): verdicts wobble; t
 |---|---|---|
 | INIT_ADAPTER | committee_w6 ckpt | continue-train from the winner |
 | AUTO_W | 0.0 | pure committee (automated is a weak proxy) |
-| DELIBERATE | 0 (OFF) | no measured quality benefit (w5-clean ≈ w6); re-enable only if a reward-variance test shows it helps |
+| DELIBERATE | 1 (ON) | evidence-based: variance test shows it de-biases judges (cross-judge range ~0.4→~0.1, fixes minimax harsh outlier) + sharpens correct ranking → cleaner GRPO signal. (No FINAL-quality delta in the tiny eval, but the training signal is measurably better.) |
 | reward | RULER listwise + llm_rubric + base-ref (放法B) | grounding, anti-hack |
 | BASE_REF | base_ref_temp03.jsonl | base@0.3 calibration anchor (not scored) |
 | LR | 2.0e-5 (lowered from 2.5e-5) | already ≥2 continue-trains deep; avoid drift |
