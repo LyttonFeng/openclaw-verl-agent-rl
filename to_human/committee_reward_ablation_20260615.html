@@ -39,7 +39,7 @@
 <div class="key">
 <b>一句话结论：能（有限度）。</b> committee-reward 把 qwen3.5-4b 在委员会口径上训到<b>胜 base（gov）</b>、advisory/tech 持平 ——
 而这个真实增益<b>对规则型 automated grader 完全隐形、甚至反向</b>。<b>但只有大比分（w3 gov 9:0）真可信</b>，6:1~8:1 跨 eval 会抖动。
-<b>AUTO_W 和 deliberation 都不是质量杠杆</b>（deliberation 干净重跑证明无可见质量收益 —— 但它降 reward 方差、<b>默认仍开启作为稳定性保险</b>）；真正缺的是"能制造可辨差异"的更难任务。
+<b>AUTO_W 和 deliberation 都不是质量杠杆</b>（deliberation 干净重跑证明无可见质量收益 → <b>默认关闭</b>；对 reward 方差的作用未测，有降再开回来）；真正缺的是"能制造可辨差异"的更难任务。
 </div>
 
 <h2>完整 ablation（全部 vs 同一 canonical base@0.3）</h2>
@@ -107,7 +107,7 @@
 
 <h2>结论与下一步</h2>
 <div class="key">
-<b>无单一"最佳"配置：</b>w5-clean / w4 / w6 约等价（gov 偏胜、advisory/tech 平）。下一轮从任一 committee 训练的 adapter 续训即可（默认 w6）；<b>deliberation 默认保持开启 —— 作为降 reward 方差的稳定性保险，非已证实的质量杠杆</b>。<br><br>
+<b>无单一"最佳"配置：</b>w5-clean / w4 / w6 约等价（gov 偏胜、advisory/tech 平）。下一轮从任一 committee 训练的 adapter 续训即可（默认 w6）；<b>deliberation 默认关闭 —— 质量上无实测收益；对 reward 方差的作用未测，若实测有降再开回来</b>。<br><br>
 <b>下一步候选：</b>① <s>补跑干净 w5</s>（已做，反而证明 deliberation 无质量增益）；② 真正要进步：<b>换 base 会明显做错的更难任务</b>，制造"人和委员会都看得出"的可辨差异（advisory/tech 现在卡在不可辨 tie 区）；③ 把 automated 降到软门(floor/gate)而非 co-driver；④ 关键节点人工抽检（抓明显注水/幻觉，不仲裁细微 tie）。
 </div>
 

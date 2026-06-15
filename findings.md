@@ -52,9 +52,9 @@ does judge **deliberation** help?
   FLAKE. After the clean rerun: w5-clean vs w6 are statistically indistinguishable — advisory
   5:4 vs 6:2 (both ties), tech auto IDENTICAL (owners 0.67, attribution 0.50 both; the "w5
   attribution crashed to 0.17" was the flake run), MEETING 80.1 vs 79.7. So NOT a proven quality
-  lever. BUT the ablation only measured final policy QUALITY, never training reward-variance —
-  which is exactly where converging judge disagreement should help. DECISION: keep deliberation ON
-  by default as cheap (8 triggers) stability insurance; just don't market it as a quality lever.
+  lever. DECISION: deliberation OFF by default — the only evidence is "no quality effect", so don't
+  carry an unproven knob. Its effect on training reward-VARIANCE was never measured; re-enable
+  (DELIBERATE=1) only if a cheap variance test (re-score same rollouts w/ and w/o delib) shows it helps.
 - **advisory & tech = genuine ties.** A human practitioner confirms they can spot OBVIOUS
   differences but cannot adjudicate these — when both human and committee can't tell two reports
   apart, tie IS the answer, not a judge failure. The marginal 6:2 "lora-favored" reads are noise in
