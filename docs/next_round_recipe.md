@@ -26,9 +26,11 @@ Same w5 adapter → gov 8:1 (flake eval) vs 6:1 (clean eval): verdicts wobble; t
   (p=.039) then 6:1 (p=.125) — verdicts wobble at 6:1–8:1; only w3 9:0 (p=.004) is solid.
 - **AUTO_W is not the lever** — gov favored across 0.0–0.7. (Earlier temp=0 "w3 worst" was a
   base-nondeterminism confound; always anchor one canonical base.)
-- **Deliberation: NO robust effect (earlier "lever" claim RETRACTED).** It was driven by a w5
-  flake run. After a clean w5 rerun, w5-clean ≈ w6 (advisory 5:4 vs 6:2 both tie; tech automated
-  identical; MEETING 80.1 vs 79.7). Keep deliberation only because it is cheap and harmless.
+- **Deliberation: no QUALITY benefit, but KEPT ON for stability.** Earlier "lever" claim retracted
+  — after a clean w5 rerun, w5-clean ≈ w6 (advisory 5:4 vs 6:2 both tie; tech automated identical;
+  MEETING 80.1 vs 79.7), so it is NOT a proven quality lever. BUT the ablation only measured final
+  policy quality, never training reward-variance — which is exactly where converging judge
+  disagreement should help. Kept ON by default as cheap (8 triggers) stability insurance.
 - **No single "best" config.** w5-clean / w4 / w6 are ≈ equivalent (gov favored, advisory/tech
   tie). Continue the next round from any (w6 default, deliberation harmless) — the choice is not
   load-bearing. advisory & tech are GENUINE ties; do not chase them.
@@ -39,7 +41,7 @@ Same w5 adapter → gov 8:1 (flake eval) vs 6:1 (clean eval): verdicts wobble; t
 |---|---|---|
 | INIT_ADAPTER | committee_w6 ckpt | continue-train from the winner |
 | AUTO_W | 0.0 | pure committee (automated is a weak proxy) |
-| DELIBERATE | 0 (OFF) | no measured benefit on this task set; enable only for real-difference regimes |
+| DELIBERATE | 1 (ON) | stability insurance (lower reward variance); NOT a proven quality lever (w5-clean ≈ w6) but cheap + harmless |
 | reward | RULER listwise + llm_rubric + base-ref (放法B) | grounding, anti-hack |
 | BASE_REF | base_ref_temp03.jsonl | base@0.3 calibration anchor (not scored) |
 | LR | 2.0e-5 (lowered from 2.5e-5) | already ≥2 continue-trains deep; avoid drift |
