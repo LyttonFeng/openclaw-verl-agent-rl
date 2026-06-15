@@ -59,7 +59,7 @@ CUDA_VISIBLE_DEVICES=0 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
 python -u train/train_meeting_grpo_step.py \
   --graded-file "$GRADED" --model-path "$MODEL_PATH" --output-dir "$CKPT" \
   ${INIT:+--lora-path "$INIT"} \
-  --lr 2.5e-5 --lora-rank 32 --grad-accum-steps 2 --max-seq-length 32768 \
+  --lr ${LR:-2.5e-5} --lora-rank 32 --grad-accum-steps 2 --max-seq-length 32768 \
   --prm-alpha 1.0 --prm-beta 0.0 --prm-mode additive \
   --logprobs-file "$LOGPROBS" --clip-eps 0.2 --kl-beta 0.05
 echo "RETRAIN_COMMITTEE_DONE ckpt=$CKPT/lora_adapter"

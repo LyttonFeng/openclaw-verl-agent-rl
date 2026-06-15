@@ -97,12 +97,16 @@ def deliverables(files):
     return task, out
 
 
-def listwise_once(member, task, items, order, rubric=None, reference=None):
+# deliberation: round-2 only when judges disagree a lot on an item (max cross-judge gap > this)
+DELIBERATE = os.environ.get("DELIBERATE", "0").strip().lower() in {"1", "true", "yes"}
+DELIB_THRESH = float(os.environ.get("DELIB_THRESH", "0.25"))
+
+
+def listwise_once(member, task, items, order, rubric=None, reference=None, peer_note=""):
     rubric_text = normalize_rubric(rubric)  # task llm_rubric if given, else generic RUBRIC
     sys_p = _sys_list(rubric_text, has_rubric=bool(rubric))
     parts = [f'<report id="{pos+1}">\n{items[idx]["dlv"]}\n</report>' for pos, idx in enumerate(order)]
-    # 放法B: inject a base-model reference for CALIBRATION only. Do NOT score it; it just
-    # anchors the judge's scale ("how do these compare to a known baseline answer").
+    # 放法B: inject a base-model reference for CALIBRATION only (not scored).
     ref_block = ""
     if reference:
         ref_block = ("<reference_baseline>\nThe following is a baseline answer for THIS task. Do NOT "
@@ -110,34 +114,71 @@ def listwise_once(member, task, items, order, rubric=None, reference=None):
                      "baseline should score higher, one clearly worse should score lower.\n"
                      + str(reference)[:MAXREP] + "\n</reference_baseline>\n\n")
     user = f"<task>\n{(task or '')[:5000]}\n</task>\n\n{ref_block}Reports to score:\n\n" + "\n\n".join(parts)
+    if peer_note:
+        user += "\n\n" + peer_note
     obj = C._call(member, [{"role": "system", "content": sys_p}, {"role": "user", "content": user}],
                   max_tokens=1500)
-    pos_sc = {int(e["id"]): float(e["score"]) for e in obj.get("scores", [])}
-    return {idx: pos_sc.get(pos + 1) for pos, idx in enumerate(order)}  # item_idx -> score
+    sc, rs = {}, {}
+    for e in obj.get("scores", []):
+        p = int(e["id"]) - 1
+        if 0 <= p < len(order):
+            sc[order[p]] = float(e["score"]); rs[order[p]] = str(e.get("reason", ""))[:140]
+    return sc, rs  # item_idx -> score, item_idx -> reason
 
 
 def listwise_group(task, items, members, shuffles, pool=6, rubric=None, reference=None):
+    K = len(items)
     jobs = [(m, si) for m in members for si in range(len(shuffles))]
 
     def run(job):
         m, si = job
         try:
-            return (m, listwise_once(m, task, items, shuffles[si], rubric=rubric, reference=reference))
+            sc, rs = listwise_once(m, task, items, shuffles[si], rubric=rubric, reference=reference)
+            return (m, sc, rs)
         except Exception as e:
             print(f"    [{m}] shuffle{si} ERR {repr(e)[:80]}", flush=True)
-            return (m, None)
+            return (m, None, None)
 
     with ThreadPoolExecutor(max_workers=pool) as ex:
         res = list(ex.map(run, jobs))
-    # per-judge mean over shuffles, then panel mean
-    K = len(items)
     by_judge = {m: {i: [] for i in range(K)} for m in members}
-    for m, sc in res:
+    reason1 = {m: {} for m in members}
+    for m, sc, rs in res:
         if sc:
             for i in range(K):
                 if sc.get(i) is not None:
                     by_judge[m][i].append(sc[i])
+            for i, r in (rs or {}).items():
+                reason1[m].setdefault(i, r)
     judge_mean = {m: {i: (mean(by_judge[m][i]) if by_judge[m][i] else None) for i in range(K)} for m in members}
+
+    # --- deliberation round-2 (only if judges disagree a lot on some item) ---
+    if DELIBERATE:
+        disagree = max((max(v for v in (judge_mean[m][i] for m in members) if v is not None)
+                        - min(v for v in (judge_mean[m][i] for m in members) if v is not None))
+                       for i in range(K) if any(judge_mean[m][i] is not None for m in members))
+        if disagree > DELIB_THRESH:
+            ident = list(range(K))
+            def delib(m):
+                peer = "Other expert evaluators scored these reports (report id : score) — reconsider yours in light of theirs, then give your FINAL scores:\n"
+                for pm in members:
+                    if pm == m:
+                        continue
+                    peer += "  " + pm + ": " + ", ".join(f"report{i+1}={judge_mean[pm][i]:.2f}" for i in range(K) if judge_mean[pm][i] is not None) + "\n"
+                try:
+                    sc, _ = listwise_once(m, task, items, ident, rubric=rubric, reference=reference, peer_note=peer)
+                    return (m, sc)
+                except Exception as e:
+                    print(f"    [{m}] delib ERR {repr(e)[:80]}", flush=True); return (m, None)
+            with ThreadPoolExecutor(max_workers=pool) as ex:
+                d = list(ex.map(delib, list(members)))
+            for m, sc in d:
+                if sc:
+                    for i in range(K):
+                        if sc.get(i) is not None:
+                            judge_mean[m][i] = sc[i]  # override with round-2
+            print(f"    [deliberation] triggered (disagree={disagree:.2f}>{DELIB_THRESH})", flush=True)
+
     reward = {}
     for i in range(K):
         vals = [judge_mean[m][i] for m in members if judge_mean[m][i] is not None]

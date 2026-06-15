@@ -133,7 +133,7 @@ def committee_task(tid, mode_a="base", mode_b="lora", deliberate=True, pool=6):
     else:
         pairs = [(i, j) for i in range(3) for j in range(3)]  # 3x3 = 9
 
-    members = list(MEMBERS)
+    members = [m for m in os.environ["JUDGE_MEMBERS"].split(",") if m in MEMBERS] if os.environ.get("JUDGE_MEMBERS") else list(MEMBERS)
     jobs = [(m, pi) for pi in range(len(pairs)) for m in members]
 
     def run_one(job):

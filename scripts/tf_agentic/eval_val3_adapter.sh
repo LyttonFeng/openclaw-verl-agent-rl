@@ -15,7 +15,7 @@ rm -f /tmp/shim_eval_${MODE}.log
 
 LORA_ENV=""
 [ "$MODE" = "lora" ] && LORA_ENV="LORA_ADAPTER=$ADAPTER"
-env PORT=8021 SHIM_DEFAULT_TEMP=0 SHIM_LOG=/tmp/shim_eval_${MODE}.log $LORA_ENV \
+env PORT=8021 SHIM_DEFAULT_TEMP=${EVAL_TEMP:-0} SHIM_LOG=/tmp/shim_eval_${MODE}.log $LORA_ENV \
   python -u /tmp/tf_shim.py &
 SHIM_PID=$!
 for i in $(seq 1 90); do
@@ -33,7 +33,7 @@ JUDGE_MODEL=deepseek-v4-flash \
 JUDGE_ENSEMBLE="${JUDGE_ENSEMBLE:-3}" \
 TASKS_DIR=/tmp/meeting_analysis_tasks_skilltest \
 OUTPUT_DIR=/tmp/eval_val3_${MODE} \
-PINCHBENCH_MODEL_TEMPERATURE=0 \
+PINCHBENCH_MODEL_TEMPERATURE=${EVAL_TEMP:-0} \
 bash scripts/run_val3_bench_isolated.sh
 RC=$?
 pkill -9 -f tf_shim 2>/dev/null || true
