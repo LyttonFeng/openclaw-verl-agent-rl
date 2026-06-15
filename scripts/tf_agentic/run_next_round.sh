@@ -2,8 +2,11 @@
 # ============================================================================
 # run_next_round.sh — canonical "continue from the best LoRA" on-policy round.
 #
-# Validated recipe = committee_w6 (the 2026-06-15 temp=0.3 ablation winner):
-#   pure committee reward (AUTO_W=0) + deliberation + llm_rubric + base@0.3 ref.
+# Recipe from the 2026-06-15 temp=0.3 ablation:
+#   pure committee reward (AUTO_W=0) + llm_rubric + base@0.3 ref.
+#   DELIBERATION OFF by default — after a clean w5 rerun it showed NO measurable
+#   benefit (the earlier "w6>w5" was a flake artifact). Enable (DELIBERATE=1) only
+#   in a genuine real-difference regime where an outlier judge needs correcting.
 # Generalises run_onpolicy.sh so each new round just continue-trains from the
 # previous round's adapter on FRESH on-policy rollouts.
 #
@@ -38,9 +41,9 @@ cd "$REPO"
 # ---- knobs (defaults = the w6 winning recipe) ----
 RUN_NAME="${RUN_NAME:-committee_w7}"
 INIT_ADAPTER="${INIT_ADAPTER:-/workspace/saved_adapters/committee_w6/checkpoint/lora_adapter}"
-AUTO_W="${AUTO_W:-0.0}"                                       # w6 = pure committee
-export DELIBERATE="${DELIBERATE:-1}"                          # w6 = deliberation ON
-LR="${LR:-2.0e-5}"; export LR                                 # lowered (w6 used 2.5e-5)
+AUTO_W="${AUTO_W:-0.0}"                                       # pure committee (automated is a weak proxy)
+export DELIBERATE="${DELIBERATE:-0}"                          # OFF by default (no measured benefit; enable only for real-difference regimes)
+LR="${LR:-2.0e-5}"; export LR                                 # lowered (continue-train already deep)
 BASE_REF="${BASE_REF:-/workspace/saved_adapters/base_ref_temp03.jsonl}"  # base@0.3 anchor
 TASKS="${TASKS:-$REPO/data/meeting_analysis_val3_slim_train/val3_plus6_train.json}"
 HOLDOUT_JUDGE="${HOLDOUT_JUDGE:-minimax-M3}"                  # guardrail (2): validate with this member held out of nothing? see note

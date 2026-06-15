@@ -9,23 +9,29 @@ not be dropped. Driver: `scripts/tf_agentic/run_next_round.sh` (run on the pod).
 | var | AUTO_W | delib | advisory | gov | tech | MEETING%(auto/hyb) |
 |---|---|---|---|---|---|---|
 | base | — | — | anchor | anchor | anchor | 79.5 |
-| w5 | 0.0 | no | tie~base 5:3* | **WIN 8:1 p=.039** | tie~base 5:2 | 67.9 |
-| **w6** | **0.0** | **yes** | tie~lora **6:2** | **WIN 7:1 p=.070** | tie~base 6:3 | 79.7 |
-| w4 | 0.2 | no | tie~base 5:3 | **WIN 7:1 p=.070** | tie~base 5:4 | 79.3 |
-| w2 | 0.5 | no | tie~lora 5:2 | tie 4:4 | tie~base 5:3 | **81.3** |
-| w3 | 0.7 | no | tie~lora 6:2 | **WIN 9:0 p=.004** | tie 4:4 | 74.7 |
+| w5(flake) | 0.0 | no | tie 5:3* | WIN 8:1 p=.039 | tie 5:2 | 67.9 |
+| w5-clean | 0.0 | no | tie 5:4 | tie 6:1 p=.125 | tie 4:3 | 80.1 |
+| w6 | 0.0 | yes | tie 6:2 | WIN 7:1 p=.070 | tie 6:3 | 79.7 |
+| w4 | 0.2 | no | tie 5:3 | WIN 7:1 p=.070 | tie 5:4 | 79.3 |
+| w2 | 0.5 | no | tie 5:2 | tie 4:4 | tie 5:3 | **81.3** |
+| w3 | 0.7 | no | tie 6:2 | **WIN 9:0 p=.004** | tie 4:4 | 74.7 |
 
-\* w5 advisory dragged by a policy read-loop→timeout→empty run (not harness).
+\* w5(flake) had a policy read-loop→timeout→empty run; w5-clean is the clean rerun.
+Same w5 adapter → gov 8:1 (flake eval) vs 6:1 (clean eval): verdicts wobble; trust only big margins.
 
-- **Committee-reward beats base on gov (4/5 loras), and the win is INVISIBLE to the
-  automated grader** (gov auto/hyb flat ~.85/.74 = base across all). Automated is a weak,
-  even adversarial proxy — w2 has the *highest* automated (81.3%) but is the *weakest* on
-  committee (gov tie). Do not optimize automated.
-- **AUTO_W is not the lever** — the gov win is robust across 0.0–0.7. (The earlier temp=0
-  "w3 worst" was a base-nondeterminism confound; always anchor one canonical base.)
-- **Deliberation is the lever** — w6 vs w5 (same data/init, only delib differs): preserves
-  advisory (clean 6:2 vs flake-tie) and tech accuracy (owner-attribution 0.50 vs 0.17 crash).
-- **Best = w6 (AUTO_W=0 + deliberation).** Start the next round from it.
+- **Committee-reward beats base on gov, INVISIBLE to the automated grader** (gov auto/hyb flat
+  ~.85/.74 = base). Automated is a weak, even adversarial proxy — w2 has the *highest* automated
+  (81.3%) but is the *weakest* on committee (gov tie). Do not optimize automated.
+  CAVEAT: only LARGE margins are trustworthy. The same w5 adapter judged twice gave gov 8:1
+  (p=.039) then 6:1 (p=.125) — verdicts wobble at 6:1–8:1; only w3 9:0 (p=.004) is solid.
+- **AUTO_W is not the lever** — gov favored across 0.0–0.7. (Earlier temp=0 "w3 worst" was a
+  base-nondeterminism confound; always anchor one canonical base.)
+- **Deliberation: NO robust effect (earlier "lever" claim RETRACTED).** It was driven by a w5
+  flake run. After a clean w5 rerun, w5-clean ≈ w6 (advisory 5:4 vs 6:2 both tie; tech automated
+  identical; MEETING 80.1 vs 79.7). Keep deliberation only because it is cheap and harmless.
+- **No single "best" config.** w5-clean / w4 / w6 are ≈ equivalent (gov favored, advisory/tech
+  tie). Continue the next round from any (w6 default, deliberation harmless) — the choice is not
+  load-bearing. advisory & tech are GENUINE ties; do not chase them.
 
 ## The recipe (defaults in run_next_round.sh)
 
@@ -33,7 +39,7 @@ not be dropped. Driver: `scripts/tf_agentic/run_next_round.sh` (run on the pod).
 |---|---|---|
 | INIT_ADAPTER | committee_w6 ckpt | continue-train from the winner |
 | AUTO_W | 0.0 | pure committee (automated is a weak proxy) |
-| DELIBERATE | 1 | the validated stabilizer |
+| DELIBERATE | 0 (OFF) | no measured benefit on this task set; enable only for real-difference regimes |
 | reward | RULER listwise + llm_rubric + base-ref (放法B) | grounding, anti-hack |
 | BASE_REF | base_ref_temp03.jsonl | base@0.3 calibration anchor (not scored) |
 | LR | 2.0e-5 (lowered from 2.5e-5) | already ≥2 continue-trains deep; avoid drift |
