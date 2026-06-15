@@ -25,40 +25,44 @@ does judge **deliberation** help?
 | var | AUTO_W | delib | advisory committee [auto/hyb] | gov committee [auto/hyb] | tech committee [auto/hyb] | MEET% |
 |---|---|---|---|---|---|---|
 | base | — | — | anchor [.96/.93] | anchor [.85/.74] | anchor [.80/.72] | 79.5 |
-| w5 | 0.0 | no | tie~base 5:3 [.67/.60]* | **WIN 8:1 p=.039** [.85/.74] | tie~base 5:2 [.83/.70] | 67.9 |
-| w6 | 0.0 | yes | tie~lora **6:2** [.96/.90] | **WIN 7:1 p=.070** [.89/.74] | tie~base 6:3 [.87/.75] | 79.7 |
-| w4 | 0.2 | no | tie~base 5:3 [.94/.94] | **WIN 7:1 p=.070** [.83/.70] | tie~base 5:4 [.87/.73] | 79.3 |
+| w5(flake) | 0.0 | no | tie~base 5:3 [.67/.60]* | WIN 8:1 p=.039 [.85/.74] | tie~base 5:2 [.83/.70] | 67.9 |
+| **w5-clean** | 0.0 | no | tie 5:4 [.92/.84] | tie 6:1 p=.125 [.85/.85] | tie 4:3 [.83/.71] | 80.1 |
+| w6 | 0.0 | yes | tie~lora 6:2 [.96/.90] | WIN 7:1 p=.070 [.89/.74] | tie~base 6:3 [.87/.75] | 79.7 |
+| w4 | 0.2 | no | tie~base 5:3 [.94/.94] | WIN 7:1 p=.070 [.83/.70] | tie~base 5:4 [.87/.73] | 79.3 |
 | w2 | 0.5 | no | tie~lora 5:2 [1.0/.87] | tie 4:4 [.93/.86] | tie~base 5:3 [.83/.71] | **81.3** |
-| w3 | 0.7 | no | tie~lora **6:2** [.81/.79] | **WIN 9:0 p=.004** [.87/.73] | tie 4:4 [.83/.72] | 74.7 |
+| w3 | 0.7 | no | tie~lora 6:2 [.81/.79] | **WIN 9:0 p=.004** [.87/.73] | tie 4:4 [.83/.72] | 74.7 |
 
-*w5 advisory dragged by 1 policy-failure run (read-loop → timeout → empty deliverable; root cause = policy, not harness).
+*w5(flake) advisory had 1 policy-failure run (read-loop→timeout→empty). w5-clean = clean rerun
+(no flake); USE w5-clean for all deliberation comparisons.
 
-## Patterns and insights (CONFIRMED by the full @0.3 ablation)
-- **CORE RESULT — committee-reward RL beats base on gov, INVISIBLY to automated.** 4/5 loras win
-  gov significantly (w3 9:0 p=.004, w5 8:1 p=.039, w4/w6 7:1 p=.070), yet gov auto/hyb is FLAT
-  (~.85/.74, identical to base) across ALL of them. The automated grader cannot see the gov
-  quality gain the committee clearly detects. This is the central proof-of-thesis.
-- **The decoupling is INVERTED at the top (w2 paradox).** w2 has the HIGHEST automated (gov
-  .93/.86, MEETING 81.3%, only variant beating base) but is the WEAKEST on committee (gov tie
-  4:4, all ties). w3 has among the LOWEST automated (74.7%) but the STRONGEST committee (gov 9:0).
-  → Optimizing the automated/hybrid signal produces reports that look best to rules but are NOT
-  better to the committee. Chasing automated is actively counterproductive for real quality.
-- **AUTO_W (H1) NOT supported once base is anchored.** Within the controlled set (w3/w4/w5/w6,
-  same data+init), the gov WIN is robust across AUTO_W 0.0→0.7 — AUTO_W is not the lever. The
-  earlier temp=0 "w3 worst / advisory 9:0 loss" was a base-nondeterminism confound; vs the fixed
-  canonical base, w3 advisory is lora-favored 6:2. (Validates the canonical-base protocol.)
-- **Deliberation (H2) IS the real stabilizer — KEEP IT.** w6 vs w5 (controlled, only delib
-  differs): advisory w6 clean 6:2 vs w5 flake-tie; tech accuracy w6 preserved (owner-attribution
-  0.50, completeness/context 0.75) vs w5 CRASHED (attribution 0.17); gov both WIN. Deliberation
-  prevents the committee reward from trading grounding/accuracy for coverage.
-- **tech: committee-tie everywhere, but it MOVED (not a ceiling).** base tech ~0.72 has ~28%
-  headroom. RL raised coverage (owners_identified 0.17→0.67) but, except under w6, traded away
-  accuracy (w4 attribution 0.50→0.25; w5 →0.17). Only w6 (pure committee + delib) raised coverage
-  without wrecking accuracy. Net committee tie = the coverage-vs-grounding conflict on tech.
+## Patterns and insights (full @0.3 ablation, CORRECTED after w5 clean rerun)
+- **CORE RESULT (robust) — committee-reward beats base on gov, INVISIBLY to automated.** Loras win
+  (or favor) gov on committee while gov auto/hyb stays FLAT (~.85/.74 = base). The automated grader
+  cannot see the gov quality gain the committee detects. This is the central proof-of-thesis.
+  CAVEAT: only LARGE margins are trustworthy — **the same w5 adapter judged twice gave gov 8:1
+  (p=.039, sig) then 6:1 (p=.125, n.s.)**. Verdicts wobble across reruns at 6:1–8:1; only w3 9:0
+  (p=.004) is solid. Trust margin, not the p<.10 boundary.
+- **w2 paradox (robust).** w2 has the HIGHEST automated (MEETING 81.3%, only variant beating base)
+  but is the WEAKEST on committee (gov tie 4:4). w3 has near-lowest automated (74.7%) but strongest
+  committee (gov 9:0). Optimizing automated produces reports that look best to rules, not to the
+  committee. Chasing automated is counterproductive for real quality.
+- **AUTO_W (H1) NOT the lever.** gov favored across AUTO_W 0.0→0.7. (Earlier temp=0 "w3 worst" was a
+  base-nondeterminism confound — validates the canonical-base protocol.)
+- **Deliberation (H2) — RETRACTED. No robust effect.** Earlier "w6 > w5" was driven by the w5
+  FLAKE. After the clean rerun: w5-clean vs w6 are statistically indistinguishable — advisory
+  5:4 vs 6:2 (both ties), tech auto IDENTICAL (owners 0.67, attribution 0.50 both; the "w5
+  attribution crashed to 0.17" was the flake run), MEETING 80.1 vs 79.7. Deliberation neither
+  clearly helps nor hurts. Keep it only because it's cheap and harmless, NOT as "the lever."
+- **advisory & tech = genuine ties.** A human practitioner confirms they can spot OBVIOUS
+  differences but cannot adjudicate these — when both human and committee can't tell two reports
+  apart, tie IS the answer, not a judge failure. The marginal 6:2 "lora-favored" reads are noise in
+  a region of genuine indistinguishability; do not chase them.
 
-## Best model & answer
-- **Best config: w6 (AUTO_W=0 + deliberation).** gov WIN + advisory clean 6:2 lora + tech
-  accuracy preserved + automated ≈ base (79.7). Most balanced net-positive, no significant loss.
+## Best model & answer (corrected)
+- **No single config is robustly "best."** w5-clean / w4 / w6 are all ≈ equivalent: gov favored,
+  advisory/tech tie. w3 has the single most solid result (gov 9:0) but lowest automated. For the
+  next round, continue from any committee-trained adapter (w6 by default — cheap, deliberation
+  harmless); the choice is not load-bearing.
 - **Research question — answered YES.** Committee-reward RL trains qwen3.5-4b to beat its base on
   agentic meeting analysis (significant gov win, advisory non-worse, tech tie), and the gain is
   invisible to (even inverted by) the automated grader — validating the committee as the

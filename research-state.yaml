@@ -34,12 +34,13 @@ variants:  # committee verdict (adv/gov/tech) vs base@0.3 + automated MEETING%
   w2:    {auto_w: 0.5, delib: false, committee: "adv tie / gov TIE 4:4 / tech tie", meeting_pct: 81.3, note: "PARADOX: highest automated, weakest committee"}
   w3:    {auto_w: 0.7, delib: false, committee: "adv 6:2 lora / gov WIN 9:0 p.004 / tech tie", meeting_pct: 74.7}
 
-conclusions:
-  - "committee-reward RL beats base on gov significantly (4/5 loras); gain INVISIBLE to automated (gov auto/hyb flat ~.85/.74 = base)."
-  - "w2 paradox: highest automated (81.3%) = weakest committee (all ties). Chasing automated is counterproductive for real quality."
-  - "AUTO_W (H1) NOT supported once base anchored — gov WIN robust across 0.0-0.7. Lever is deliberation, not AUTO_W."
-  - "Deliberation (H2) confirmed: w6 vs w5 — preserves advisory (6:2 vs flake-tie) and tech accuracy (attribution .50 vs .17). KEEP IT."
-  - "BEST = w6 (AUTO_W=0 + deliberation)."
+conclusions:  # CORRECTED after w5 clean rerun (the flake had biased the deliberation claim)
+  - "ROBUST: committee-reward beats base on gov, INVISIBLE to automated (gov auto/hyb flat ~.85/.74=base). But only LARGE margins trustworthy: same w5 adapter gave gov 8:1 p.039 then 6:1 p.125 across reruns; only w3 9:0 p.004 is solid."
+  - "w2 paradox (robust): highest automated (81.3%) = weakest committee (gov tie). Chasing automated is counterproductive."
+  - "AUTO_W (H1) NOT the lever — gov favored across 0.0-0.7."
+  - "Deliberation (H2) RETRACTED: w5-clean ≈ w6 (advisory 5:4 vs 6:2 both tie; tech auto identical; the 'w5 attribution 0.17 crash' was the flake). No robust effect; keep only as cheap/harmless."
+  - "advisory & tech = GENUINE ties (human can spot obvious diffs but not adjudicate these). Do not chase marginal 6:2."
+  - "No single 'best' config: w5-clean/w4/w6 ≈ equivalent. Next-round init choice not load-bearing."
 
 current_focus: >
   Ablation table complete + synthesized (findings.md, to_human/committee_reward_ablation_20260615.html).

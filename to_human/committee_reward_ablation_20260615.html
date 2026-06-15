@@ -72,14 +72,22 @@
 <b>刷 automated 产出的是"规则眼里最好、委员会眼里没更好"的报告 —— 对真实质量是反效果。</b>
 </div>
 
-<h2>发现 3 — deliberation 是真正的稳定器（w6 vs w5，只差 delib）</h2>
+<h2>发现 3 — deliberation：无 robust 效果（"杠杆"结论已撤回）</h2>
+<div class="callout">
+<b>更正：</b>之前"w6&gt;w5、deliberation 是稳定器"的结论是被 w5 一份 <b>flake 空报告</b>带偏的。<b>w5 干净重跑后，w5-clean ≈ w6，统计上无法区分。</b>
+</div>
 <table>
-<tr><th>维度（受控对照）</th><th>w5 (AUTO_W=0, 无 delib)</th><th>w6 (AUTO_W=0, +delib)</th></tr>
-<tr><td class="var">advisory 委员会</td><td class="tiebase">平~base 5:3（被 flake 污染）</td><td class="tielora">干净 6:2 偏 lora</td></tr>
-<tr><td class="var">tech owner-attribution 准确(LLM)</td><td class="tiebase">0.17（比 base 0.50 还崩）</td><td class="tielora">0.50（守住）+ completeness/context 升到 0.75</td></tr>
-<tr><td class="var">gov 委员会</td><td class="win">赢 8:1</td><td class="win">赢 7:1</td></tr>
+<tr><th>维度（受控对照，只差 delib）</th><th>w5-clean (无 delib)</th><th>w6 (+delib)</th></tr>
+<tr><td class="var">advisory 委员会</td><td class="tie">平 5:4</td><td class="tie">平 6:2</td></tr>
+<tr><td class="var">tech owner-attribution(auto)</td><td class="tie">0.50</td><td class="tie">0.50（完全一样）</td></tr>
+<tr><td class="var">tech owners_identified(auto)</td><td class="tie">0.67</td><td class="tie">0.67（完全一样）</td></tr>
+<tr><td class="var">gov 委员会</td><td class="tie">平 6:1 (p=.125)</td><td class="win">赢 7:1 (p=.070)</td></tr>
+<tr><td class="var">MEETING%</td><td class="tie">80.1</td><td class="tie">79.7</td></tr>
 </table>
-<p class="small">deliberation = 仅在判官分歧 &gt;0.25 的组追加一轮"互看后重评"，削掉离群误判，给 GRPO 更稳的相对 advantage。w6 训练全程触发 8 次（全在 advisory）。它阻止了委员会奖励"用 grounding/准确率换覆盖"。</p>
+<p class="small">所谓"w5 tech attribution 崩到 0.17"来自 flake 那次跑；clean 版是 0.50，和 w6 一样。deliberation 既不明显帮也不害 —— 留着只因便宜无害，<b>不是杠杆</b>。机制本身（分歧&gt;0.25 的组追加一轮互看重评）没问题，只是在这批任务上没产生可辨增益。</p>
+<div class="callout">
+<b>committee verdict 跨 eval 会抖：</b>同一个 w5 adapter 判同一 base，flake 那次 gov <b>8:1 (p=.039 显著)</b>、clean 这次 gov <b>6:1 (p=.125 不显著)</b>。6:1/7:1/8:1 都会跨次跳 —— <b>只有大比分（w3 9:0 p=.004）可信。</b>
+</div>
 
 <h2>发现 4 — AUTO_W 不是杠杆；tech 有空间但只有 w6 动对方向</h2>
 <ul>
