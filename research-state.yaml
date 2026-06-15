@@ -1,0 +1,60 @@
+project: committee-reward-agentic-rl
+question: >
+  Can a stable, heterogeneous LLM "committee" reward (RULER-style relative scoring)
+  train qwen3.5-4b to beat its own base on agentic meeting-analysis tasks (Val3:
+  advisory / gov / tech), where the automated rule-based grader is a weak, gameable
+  proxy? Specifically: what AUTO_W blend weight is right, and does judge deliberation help?
+
+status: outer-loop-synthesized (full @0.3 ablation complete; not yet concluded — clean-w5 + push-advisory open)
+created: 2026-06-15
+
+evaluation:
+  protocol: temp=0.3 RUNS=3 per model; committee judge = 3 heterogeneous judges
+    (ds-v4-flash / qwen3-max / MiniMax-M3) x 2-order consistency x deliberation;
+    3 base runs x 3 lora runs = 9 genuine cross pairs; sign-test on non-tie pairs.
+  canonical_base: base@0.3 (MEETING 79.5%; advisory 0.93 / gov 0.738 / tech 0.716).
+    Anchored so every lora is judged vs the SAME base (cross-eval nondeterminism is a real confound).
+  primary_metric: committee verdict (win/tie/loss per task) vs base. automated is secondary (gameable).
+
+hypotheses:
+  H1_auto_w_low:
+    statement: Lower AUTO_W (committee-dominant) beats higher AUTO_W, because automated
+      rewards verbosity/coverage and committee rewards grounding/quality; they conflict at the top.
+    status: supported (w2=0.5 beat w3=0.7 in prior temp=0 runs; re-testing @0.3)
+  H2_deliberation:
+    statement: Judge deliberation (round-2 on disagreement) improves the reward signal,
+      especially recovering advisory completeness.
+    status: testing (w6 = deliberation; first @0.3 result = gov sig-win, advisory 6:2 favored)
+
+variants:  # committee verdict (adv/gov/tech) vs base@0.3 + automated MEETING%
+  base:  {auto_w: n/a, note: canonical anchor, meeting_pct: 79.5}
+  w5:    {auto_w: 0.0, delib: false, committee: "adv tie / gov WIN 8:1 p.039 / tech tie", meeting_pct: 67.9, note: "advisory flake run"}
+  w6:    {auto_w: 0.0, delib: true,  committee: "adv 6:2 lora / gov WIN 7:1 p.070 / tech tie", meeting_pct: 79.7, note: "BEST balanced; tech accuracy preserved"}
+  w4:    {auto_w: 0.2, delib: false, committee: "adv tie / gov WIN 7:1 p.070 / tech tie", meeting_pct: 79.3}
+  w2:    {auto_w: 0.5, delib: false, committee: "adv tie / gov TIE 4:4 / tech tie", meeting_pct: 81.3, note: "PARADOX: highest automated, weakest committee"}
+  w3:    {auto_w: 0.7, delib: false, committee: "adv 6:2 lora / gov WIN 9:0 p.004 / tech tie", meeting_pct: 74.7}
+
+conclusions:
+  - "committee-reward RL beats base on gov significantly (4/5 loras); gain INVISIBLE to automated (gov auto/hyb flat ~.85/.74 = base)."
+  - "w2 paradox: highest automated (81.3%) = weakest committee (all ties). Chasing automated is counterproductive for real quality."
+  - "AUTO_W (H1) NOT supported once base anchored — gov WIN robust across 0.0-0.7. Lever is deliberation, not AUTO_W."
+  - "Deliberation (H2) confirmed: w6 vs w5 — preserves advisory (6:2 vs flake-tie) and tech accuracy (attribution .50 vs .17). KEEP IT."
+  - "BEST = w6 (AUTO_W=0 + deliberation)."
+
+current_focus: >
+  Ablation table complete + synthesized (findings.md, to_human/committee_reward_ablation_20260615.html).
+  Open: (1) clean-rerun w5 advisory to firm up the deliberation comparison; (2) continue on-policy
+  from w6 to push advisory to significance; (3) harder tech tasks to create headroom.
+
+artifacts:
+  adapters: pod /workspace/saved_adapters/{round1e_val3plus6,committee_w1,committee_blend_w1,onpolicy_w2_fixed,committee_w3,committee_w4,committee_w5,committee_w6}
+  base_ref_for_training: pod /workspace/saved_adapters/base_ref_temp03.jsonl (updated to base@0.3)
+  eval_harness: pod /tmp/eval_val3_adapter.sh (EVAL_TEMP, RUNS envs)
+  judge: mac ~/eval_val3_transcripts/committee_judge.py + ruler_reward.py
+  verdicts: mac /tmp/verdict_w6.log (done), verdict_w5/w4/w3/w2.log (pending)
+
+next_actions:
+  - judge w5 vs base@0.3 (9 pairs), save verdict_w5.log
+  - eval+judge w4, w3, w2 @0.3
+  - outer-loop: AUTO_W conclusion + deliberation verdict; HTML report to_human/
+  - optional: base@0 vs base@0.3 head-to-head (does temp-0.3 sampling change base quality?)

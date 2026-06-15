@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Committee-Reward RL Ablation — qwen3.5-4b (2026-06-15)</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; max-width: 1100px;
+         margin: 0 auto; padding: 32px 24px; color: #1a1a1a; line-height: 1.55; background:#fbfbfa; }
+  h1 { font-size: 26px; margin-bottom: 4px; }
+  h2 { font-size: 20px; margin-top: 34px; border-bottom: 2px solid #e3e3e0; padding-bottom: 6px; }
+  .sub { color:#666; font-size:14px; margin-top:0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 13.5px; }
+  th, td { border: 1px solid #ddd; padding: 7px 9px; text-align: center; }
+  th { background: #2d2d2d; color: #fff; font-weight: 600; }
+  td.var { font-weight: 700; text-align:left; }
+  tr.base td { background:#f0f0ee; font-style: italic; }
+  .win { background:#d7f0d8; font-weight:700; color:#15692a; }
+  .tielora { background:#eef7ea; }
+  .tiebase { background:#fdeedd; }
+  .tie { background:#f4f4f2; color:#888; }
+  .best td { box-shadow: inset 0 0 0 2px #2a7d33; }
+  .auto { color:#999; font-size:11.5px; }
+  .callout { background:#fff8e6; border-left:4px solid #e0a800; padding:12px 16px; margin:16px 0; border-radius:4px; }
+  .key { background:#eaf3fb; border-left:4px solid #2b6cb0; padding:12px 16px; margin:16px 0; border-radius:4px; }
+  .bars { margin:8px 0; }
+  .bar-row { display:flex; align-items:center; margin:3px 0; font-size:13px; }
+  .bar-label { width:130px; }
+  .bar { height:18px; background:#2b6cb0; border-radius:3px; margin-right:8px; }
+  .bar.auto { background:#c9c9c9; }
+  code { background:#eee; padding:1px 5px; border-radius:3px; font-size:12.5px; }
+  .small { font-size:12.5px; color:#666; }
+</style>
+</head>
+<body>
+
+<h1>Committee-Reward RL：qwen3.5-4b 能否在"委员会"口径上净胜 base？</h1>
+<p class="sub">Agentic meeting-analysis (Val3: advisory / gov / tech) · temp=0.3 RUNS=3 · 9-pair 异构委员会 · 2026-06-15</p>
+
+<div class="key">
+<b>一句话结论：能。</b> committee-reward 把 qwen3.5-4b 训到委员会口径<b>显著胜 base（gov）</b>、advisory 不输、tech 持平 ——
+而这个真实增益<b>对规则型 automated grader 完全隐形、甚至反向</b>。决定性杠杆是<b>判官 deliberation</b>，不是 AUTO_W 混合权重。
+</div>
+
+<h2>完整 ablation（全部 vs 同一 canonical base@0.3）</h2>
+<p class="small">每格：<b>委员会判定</b>（9 对 = base 3 run × lora 3 run，异构 3 判官 × 双序一致 × deliberation，sign-test）；
+方括号内 <span class="auto">[automated / hybrid]</span> 为 benchmark 自带规则+LLM 分。</p>
+<table>
+<tr><th>变体</th><th>AUTO_W</th><th>delib</th><th>advisory</th><th>gov</th><th>tech</th><th>MEETING%<br>(hybrid)</th></tr>
+<tr class="base"><td class="var">base</td><td>—</td><td>—</td><td>锚 <span class="auto">[.96/.93]</span></td><td>锚 <span class="auto">[.85/.74]</span></td><td>锚 <span class="auto">[.80/.72]</span></td><td>79.5</td></tr>
+<tr><td class="var">w5</td><td>0.0</td><td>no</td><td class="tiebase">平~base 5:3 <span class="auto">[.67/.60]*</span></td><td class="win">赢 8:1 p=.039 <span class="auto">[.85/.74]</span></td><td class="tiebase">平~base 5:2 <span class="auto">[.83/.70]</span></td><td>67.9</td></tr>
+<tr class="best"><td class="var">w6 ★</td><td>0.0</td><td>yes</td><td class="tielora">平~lora 6:2 <span class="auto">[.96/.90]</span></td><td class="win">赢 7:1 p=.070 <span class="auto">[.89/.74]</span></td><td class="tiebase">平~base 6:3 <span class="auto">[.87/.75]</span></td><td>79.7</td></tr>
+<tr><td class="var">w4</td><td>0.2</td><td>no</td><td class="tiebase">平~base 5:3 <span class="auto">[.94/.94]</span></td><td class="win">赢 7:1 p=.070 <span class="auto">[.83/.70]</span></td><td class="tiebase">平~base 5:4 <span class="auto">[.87/.73]</span></td><td>79.3</td></tr>
+<tr><td class="var">w2</td><td>0.5</td><td>no</td><td class="tielora">平~lora 5:2 <span class="auto">[1.0/.87]</span></td><td class="tie">平 4:4 <span class="auto">[.93/.86]</span></td><td class="tiebase">平~base 5:3 <span class="auto">[.83/.71]</span></td><td><b>81.3</b></td></tr>
+<tr><td class="var">w3</td><td>0.7</td><td>no</td><td class="tielora">平~lora 6:2 <span class="auto">[.81/.79]</span></td><td class="win">赢 9:0 p=.004 <span class="auto">[.87/.73]</span></td><td class="tie">平 4:4 <span class="auto">[.83/.72]</span></td><td>74.7</td></tr>
+</table>
+<p class="small">★ = 最佳均衡配置。* w5 advisory 被一份 policy 失败的空报告拖低（读循环→超时→空交付，根因是 policy 非 harness）。</p>
+
+<h2>发现 1 — gov：委员会看见的大胜，automated 完全看不见</h2>
+<div class="callout">
+4/5 个 lora 在 gov 上<b>委员会显著胜 base</b>（w3 9:0、w5 8:1、w4/w6 7:1），但它们的 gov
+<b>automated/hybrid 全员死平在 .85/.74（与 base 一模一样）</b>。规则 grader 对这次真实质量提升<b>完全失明</b>。
+</div>
+<div class="bars">
+<div class="bar-row"><span class="bar-label">委员会 gov 胜场(/9)</span><div class="bar" style="width:300px"></div>w3=9 · w5=8 · w4=w6=7</div>
+<div class="bar-row"><span class="bar-label">automated gov (hyb)</span><div class="bar auto" style="width:222px"></div>全员 ≈ 0.74（含 base）—— 一条平线</div>
+</div>
+
+<h2>发现 2 — w2 悖论：automated 最高 = 委员会最弱（解耦甚至反向）</h2>
+<div class="callout">
+<b>w2</b>：automated 全场最高（gov .93/.86，MEETING <b>81.3%</b>，唯一超 base）→ 委员会<b>最弱</b>（gov 平 4:4，全平）。<br>
+<b>w3</b>：automated 偏低（74.7%）→ 委员会<b>最强</b>（gov 9:0）。<br>
+<b>刷 automated 产出的是"规则眼里最好、委员会眼里没更好"的报告 —— 对真实质量是反效果。</b>
+</div>
+
+<h2>发现 3 — deliberation 是真正的稳定器（w6 vs w5，只差 delib）</h2>
+<table>
+<tr><th>维度（受控对照）</th><th>w5 (AUTO_W=0, 无 delib)</th><th>w6 (AUTO_W=0, +delib)</th></tr>
+<tr><td class="var">advisory 委员会</td><td class="tiebase">平~base 5:3（被 flake 污染）</td><td class="tielora">干净 6:2 偏 lora</td></tr>
+<tr><td class="var">tech owner-attribution 准确(LLM)</td><td class="tiebase">0.17（比 base 0.50 还崩）</td><td class="tielora">0.50（守住）+ completeness/context 升到 0.75</td></tr>
+<tr><td class="var">gov 委员会</td><td class="win">赢 8:1</td><td class="win">赢 7:1</td></tr>
+</table>
+<p class="small">deliberation = 仅在判官分歧 &gt;0.25 的组追加一轮"互看后重评"，削掉离群误判，给 GRPO 更稳的相对 advantage。w6 训练全程触发 8 次（全在 advisory）。它阻止了委员会奖励"用 grounding/准确率换覆盖"。</p>
+
+<h2>发现 4 — AUTO_W 不是杠杆；tech 有空间但只有 w6 动对方向</h2>
+<ul>
+<li><b>AUTO_W：</b>受控组 w3/w4/w5/w6（同数据+init）里 gov 胜在 0.0→0.7 全程成立 → AUTO_W 非关键。早先 temp=0 "w3 最差" 是 base 非确定性 confound，锚定 base 后 w3 advisory 反而 6:2 偏 lora（佐证 canonical-base 协议的必要性）。</li>
+<li><b>tech：</b>base ~0.72 有约 28% 空间，不是天花板。RL 都把覆盖抬上去（owners 0.17→0.67），但除 w6 外都用准确率换覆盖（w4 attribution 0.50→0.25、w5→0.17）。只有 w6 覆盖+准确双不输。净委员会平 = 覆盖 vs grounding 冲突在 tech 重演。</li>
+</ul>
+
+<h2>方法学要点</h2>
+<ul class="small">
+<li><b>canonical base 锚定：</b>temp=0 在不同 eval 调用间会产出不同的确定性轨迹（agentic 多轮非确定性）→ base 不唯一是真 confound。固定一份 base@0.3，所有 lora 对同一 base 判。</li>
+<li><b>temp=0.3 为的是 eval 有效性而非提质：</b>同一次调用内 3 run md5 互异（实测每个变体 3/3），才凑得出 9 个真对、看得到质量分布。</li>
+<li><b>9-pair 委员会：</b>ds-v4-flash / qwen3-max / MiniMax-M3 异构面板 × 双序一致性（翻序即判平，去位置偏置）× 分歧组 deliberation × sign-test；base-vs-base null 校准 ≈ 全平。</li>
+<li><b>训练链路：</b>vLLM 0.22 在 qwen3.5 上 online-LoRA 是 no-op → 训练与推理都走 transformers+PEFT shim；reward = RULER 式相对委员会 listwise，blend automated + llm_rubric + base-ref（放法B 仅校准）。</li>
+</ul>
+
+<h2>结论与下一步</h2>
+<div class="key">
+<b>最佳模型 = w6（AUTO_W=0 + deliberation）：</b>gov 显著赢 + advisory 干净 6:2 + tech 准确率不塌 + automated≈base。<br><br>
+<b>下一步候选：</b>① 补跑一份干净 w5 advisory，彻底坐实 deliberation 增益；② 从 w6 继续 on-policy 训练，攻 advisory 至显著；③ 换 base 会做错的更难 tech 任务，制造 headroom 让 tech 真动；④ 把 automated 降到软门(floor/gate)而非 co-driver。
+</div>
+
+<p class="small" style="margin-top:30px;color:#aaa">verdicts: /tmp/verdict_w{2,3,4,5,6}.log · scores: /tmp/w*_03_scores.json · master: /tmp/master_results.json · findings.md @ repo root</p>
+
+</body>
+</html>
