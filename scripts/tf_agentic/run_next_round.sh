@@ -3,12 +3,11 @@
 # run_next_round.sh — canonical "continue from the best LoRA" on-policy round.
 #
 # Recipe from the 2026-06-15 temp=0.3 ablation:
-#   pure committee reward (AUTO_W=0) + llm_rubric + base@0.3 ref + deliberation ON.
-#   DELIBERATION kept ON as cheap STABILITY insurance (converges judge disagreement
-#   -> lower reward variance -> steadier GRPO advantage). NOTE: the ablation found no
-#   measurable QUALITY benefit (w5-clean ≈ w6) — do NOT claim it as a quality lever —
-#   but it was never tested on reward-variance/training-stability, which is where it
-#   should help. Cheap + harmless (8 triggers in w6), so keep it on.
+#   pure committee reward (AUTO_W=0) + llm_rubric + base@0.3 ref.
+#   DELIBERATION OFF by default. The ablation found NO measurable quality benefit
+#   (w5-clean ≈ w6); the only evidence we have is "no effect", so don't carry an
+#   unproven knob by default. Its effect on training reward-VARIANCE was never
+#   measured — if a variance test later shows it helps, re-enable with DELIBERATE=1.
 # Generalises run_onpolicy.sh so each new round just continue-trains from the
 # previous round's adapter on FRESH on-policy rollouts.
 #
@@ -44,7 +43,7 @@ cd "$REPO"
 RUN_NAME="${RUN_NAME:-committee_w7}"
 INIT_ADAPTER="${INIT_ADAPTER:-/workspace/saved_adapters/committee_w6/checkpoint/lora_adapter}"
 AUTO_W="${AUTO_W:-0.0}"                                       # pure committee (automated is a weak proxy)
-export DELIBERATE="${DELIBERATE:-1}"                          # ON: stability insurance (lower reward variance); not a proven quality lever
+export DELIBERATE="${DELIBERATE:-0}"                          # OFF: no measured quality benefit; re-enable (=1) only if a reward-variance test shows it helps
 LR="${LR:-2.0e-5}"; export LR                                 # lowered (continue-train already deep)
 BASE_REF="${BASE_REF:-/workspace/saved_adapters/base_ref_temp03.jsonl}"  # base@0.3 anchor
 TASKS="${TASKS:-$REPO/data/meeting_analysis_val3_slim_train/val3_plus6_train.json}"
