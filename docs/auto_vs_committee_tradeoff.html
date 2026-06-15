@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh"><head><meta charset="utf-8">
+<title>Hybrid reward 权衡:automated↑ vs committee↓</title>
+<style>
+ body{font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:1080px;margin:24px auto;padding:0 18px;color:#1b1b1b;line-height:1.5}
+ h1{font-size:21px} h2{font-size:16px;margin-top:26px;border-left:4px solid #c0392b;padding-left:8px}
+ .sub{color:#666;font-size:13px;margin-top:-6px}
+ table{border-collapse:collapse;width:100%;margin:10px 0;font-size:13px}
+ th,td{border:1px solid #ddd;padding:7px 9px;text-align:center} th{background:#f4f4f4}
+ td.task{text-align:left;font-weight:600;background:#fafafa}
+ .win{background:#d5f5e3;color:#1e7e34;font-weight:700} .loss{background:#fadbd8;color:#c0392b;font-weight:700}
+ .tie{background:#fef9e7;color:#9a7d0a} .pend{background:#eee;color:#999}
+ .bar{height:15px;background:#4e79c7;border-radius:3px;display:inline-block;vertical-align:middle}
+ .barbg{background:#eef;display:inline-block;width:130px;border-radius:3px;vertical-align:middle;margin-right:6px}
+ .card{border:1px solid #ddd;border-radius:8px;padding:14px 16px;margin:8px 0;background:#fcfcfc}
+ .k{display:inline-block;background:#34495e;color:#fff;border-radius:4px;padding:1px 7px;font-size:12px}
+ .note{background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:10px 12px;font-size:13px}
+ .big{font-size:15px;font-weight:700}
+ small{color:#777}
+</style></head><body>
+
+<h1>Hybrid reward 权衡:AUTO_W↑ → automated↑ 但 committee↓</h1>
+<p class="sub">qwen3.5-4b · meeting-analysis · 主口径=committee(相对质量 pairwise),automated 为弱指标(覆盖)参考 · 2026-06-15</p>
+
+<div class="note"><b>核心问题(待裁决):</b> hybrid reward = <span class="k">AUTO_W·automated + (1−AUTO_W)·committee</span> 里的 AUTO_W 怎么设?
+下面用同 rollout、同 init、<b>只差 AUTO_W</b> 的两个模型(w2=0.5 / w3=0.7)在 <b>advisory</b>(最有争议的任务)上的对照说明权衡。</div>
+
+<h2>三个模型对比(advisory,受控对照 — base 是对比靶子)</h2>
+<div class="card" style="border-color:#888;background:#f3f3f3">
+<span class="big">base &nbsp;<span class="k" style="background:#7f8c8d">qwen3.5-4b 无 adapter</span> &nbsp;对比靶子</span><br>
+&bull; automated(覆盖,弱指标): <span class="barbg"><span class="bar" style="width:130px;background:#7f8c8d"></span></span> <b>1.000</b> <small>← 最高,但全靠"写满 20K/9 项全覆盖"刷出来</small><br>
+&bull; <b>committee(质量,主口径): 基准线</b> &nbsp;<small>下面 lora 的 WIN/TIE/LOSS 都是相对它判的</small>
+</div>
+<div class="card">
+<span class="big">committee_w2 &nbsp;<span class="k">AUTO_W=0.5</span> &nbsp;均衡</span><br>
+&bull; automated(覆盖,弱指标): <span class="barbg"><span class="bar" style="width:101px"></span></span> <b>0.778</b> <small>(base=1.0)</small><br>
+&bull; <b>committee(质量,主口径)vs base: <span class="tie">TIE / 无显著差异</span></b> &nbsp;<small>pairwise base 3 / lora 2 / tie 4,sign-p=1.0</small>
+</div>
+<div class="card">
+<span class="big">committee_w3 &nbsp;<span class="k">AUTO_W=0.7</span> &nbsp;偏 automated</span><br>
+&bull; automated(覆盖,弱指标): <span class="barbg"><span class="bar" style="width:108px"></span></span> <b>0.833</b> ↑ <small>(比 w2 高,刷上去了)</small><br>
+&bull; <b>committee(质量,主口径)vs base: <span class="loss">base &gt; lora 显著(退步)</span></b> &nbsp;<small>pairwise base 9 / lora 0 / tie 0,sign-p=0.004</small>
+</div>
+<div class="note"><b>结论:AUTO_W 0.5→0.7 把 automated 刷高了(0.778→0.833),但 committee 质量从"打平"崩成"base 全胜(9/0)"。</b>
+追弱指标(覆盖/长度)直接牺牲了真质量——委员会一眼看穿"更长更全但更机械/注水"。<b>automated 与 committee 在高 AUTO_W 区是反向的。</b></div>
+
+<h2>全轮 committee 打分结论(pairwise vs base,主口径)</h2>
+<p class="sub">单元格=委员会判定(WIN=lora胜 / TIE=平 / LOSS=base胜),括号内 base/lora/tie 票(共9对)+ sign-p</p>
+<table>
+<tr><th>round</th><th>AUTO_W / policy</th><th>advisory</th><th>gov</th><th>tech</th></tr>
+<tr><td class="task">committee_w1</td><td>0.0 / off-policy</td>
+  <td class="loss">LOSS<br><small>b7/l0 p=.016</small></td>
+  <td class="tie">TIE<br><small>l3/t6 p=.25</small></td>
+  <td class="win">WIN<br><small>l7/b0 p=.016</small></td></tr>
+<tr><td class="task">committee_blend</td><td>0.5 / off-policy (+rubric)</td>
+  <td class="loss">LOSS<br><small>b7/l0 p=.016</small></td>
+  <td class="tie">TIE<br><small>l1/t8 p=1.0</small></td>
+  <td class="win">WIN<br><small>l5/t4 p=.062</small></td></tr>
+<tr style="outline:2px solid #1e7e34"><td class="task">committee_w2 ★</td><td>0.5 / <b>ON-policy</b></td>
+  <td class="tie">TIE<br><small>b3/l2/t4 p=1.0</small></td>
+  <td class="win">WIN<br><small>l6/b0 p=.031</small></td>
+  <td class="tie">TIE(lora偏)<br><small>l4/b1/t4 p=.375</small></td></tr>
+<tr><td class="task">committee_w3</td><td>0.7 / ON-policy</td>
+  <td class="loss">LOSS<br><small>b9/l0 p=.004</small></td>
+  <td class="pend">pending</td>
+  <td class="pend">pending</td></tr>
+</table>
+
+<h2>automated(弱指标,参考)</h2>
+<table>
+<tr><th>round</th><th>advisory</th><th>gov</th><th>tech</th><th>OVERALL</th></tr>
+<tr><td class="task">base</td><td>1.000</td><td>0.889</td><td>0.833</td><td><b>0.907</b></td></tr>
+<tr><td class="task">committee_w2 (0.5)</td><td>0.778</td><td>0.889</td><td>0.889</td><td>0.852 (−.056)</td></tr>
+<tr><td class="task">committee_w3 (0.7)</td><td><b>0.833</b>↑</td><td class="pend">pend</td><td class="pend">pend</td><td class="pend">pend</td></tr>
+</table>
+
+<h2>裁决要点</h2>
+<ul>
+<li><b>是 on-policy 修好了 committee,不是 AUTO_W。</b> w1/blend(off-policy)advisory 都 LOSS;w2(on-policy,同 AUTO_W=0.5)advisory 升到 TIE、gov WIN。</li>
+<li><b>AUTO_W 往上(0.7)在 committee 上 backfire。</b> 该往下(更偏 committee)而非往上。</li>
+<li><b>committee_w2(AUTO_W=0.5,on-policy)是当前最佳:committee 口径无败绩(gov 赢 / advisory·tech 平)。</b></li>
+<li>开放问题给你裁决:AUTO_W 设 <b>0.5</b>(保持)还是更低(0.3 / 纯 committee)?automated 还要不要进 reward,还是只当事后体检?</li>
+</ul>
+<p><small>committee=pairwise 异构委员会(ds-flash/qwen-max/minimax-M3,顺序一致性+null校准);temp=0 eval(单确定产出,9对=同一比较重复采样,方向可信、p 偏乐观)。w3 gov/tech eval 跑完补。</small></p>
+</body></html>

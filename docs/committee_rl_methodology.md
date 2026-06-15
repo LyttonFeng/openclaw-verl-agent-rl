@@ -95,12 +95,17 @@ committee score are **complementary and check each other**:
 - committee alone → rewards conciseness/quality → over-shortens tasks that need completeness (advisory).
 
 **Final GRPO reward = `AUTO_W·automated + (1-AUTO_W)·committee`** (ADDITIVE — multiplicative rejected:
-too harsh, non-standard, couples component weights). `AUTO_W` env-tunable: 0.5 default; raise toward 0.7
-to push coverage (e.g., recover advisory completeness), lower to favor relative quality.
-`inject_committee_reward.py` computes committee (rubric+ref) then blends with the row's `automated_score`
-and writes it as the GRPO `score`. GRPO normalizes within group so a component flat within a group
-contributes ~0 — the blend self-balances (committee drives tech where automated is flat; automated
-drives advisory where it varies).
+too harsh, non-standard, couples component weights). `inject_committee_reward.py` computes committee
+(rubric+ref) then blends with the row's `automated_score` and writes it as the GRPO `score`.
+
+**⚠️ automated ↔ committee CONFLICT (empirically established, see committee_reward_ablation.md):** the two
+signals conflict on the coverage/verbosity axis. automated = presence/coverage (length-friendly, blind to
+padding/duplication/shallow quality); committee = quality/grounding (penalizes padding). They AGREE at the
+floor (grounded report vs empty/hallucinated) but CONFLICT at the top (max coverage ≠ max quality).
+Proof: AUTO_W 0.5→0.7 (committee_w2→w3) made BOTH committee AND automated WORSE — pushing advisory coverage
+dragged gov/tech quality down. **Therefore keep AUTO_W LOW (≤0.3) or use automated as a soft FLOOR/gate, not
+a high-weight co-equal term; committee is the primary driver of quality.** AUTO_W=0.5 (committee_w2) is the
+best balance found; 0.7 is a dead end.
 
 ---
 

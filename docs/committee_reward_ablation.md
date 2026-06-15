@@ -92,6 +92,48 @@ training can't exceed what it samples → can't reach base's 20K coverage.
 **Next lever (committee_w3):** raise blend AUTO_W 0.5→0.7 (automated rewards coverage) to push advisory
 completeness. Cheap test = re-inject existing on-policy rollouts at AUTO_W=0.7 + retrain (no new rollout).
 
+### committee_w3 (AUTO_W=0.7) RESULT — 2026-06-15: AUTO_W↑ backfired on ALL columns
+
+Same on-policy rollouts + init (committee_blend) as w2; only AUTO_W 0.5→0.7. Eval verified (shim env
+LORA_ADAPTER=committee_w3, fresh transcripts).
+
+| metric | base | committee_w2 (0.5) | committee_w3 (0.7) |
+|---|---|---|---|
+| **committee** (pairwise vs base) | — | advisory TIE / gov **WIN**(l6/0,p.031) / tech tie ⇒ **1W 0L 2T** | advisory **LOSS**(b9/0,p.004) / gov tie / tech tie ⇒ **0W 1L 2T** |
+| **automated** OVERALL | 0.907 | 0.852 (−.056) | **0.796 (−.111)** |
+| automated adv/gov/tech | 1.0/.889/.833 | .778/.889/.889 | .833 / **.833↓** / **.722↓** |
+| hybrid (flash, noisy) | ~0.82–0.85 | 0.761 | 0.778 |
+
+**AUTO_W 0.5→0.7 is strictly WORSE on the two reliable columns:** committee (1W→0W, 0L→1L) AND automated
+(−.056→−.111). Counterintuitively, favoring automated gave WORSE automated overall — advisory auto rose
+(.778→.833) but gov (.889→.833) and tech (.889→.722) fell more: over-optimizing coverage on advisory
+dragged gov/tech quality (and their automated) down.
+
+### KEY FINDING — automated ↔ committee CONFLICT (affects all future reward-weight choices)
+
+automated and committee **conflict on the coverage/verbosity axis**:
+- **automated = presence/coverage** — regex/entity/section hits; length-friendly; CANNOT see padding,
+  duplication, mechanical/shallow quality. "Mentioned it" ⇒ credit.
+- **committee = quality/grounding** — penalizes verbosity/padding/hallucination; rewards nuance + grounding.
+- **Agree at the floor** (wrote a grounded report ⇒ both high; empty/hallucinated ⇒ both low).
+- **Conflict at the top** (max coverage ≠ max quality).
+
+Evidence (advisory, 3 models — auto vs committee run INVERSE):
+auto order base(1.0) > w3(.833) > w2(.778); committee order base≈w2 > w3. The LOWEST-auto model (w2)
+has the BEST committee; the higher-auto w3 is worst on committee. Plus round-1e tech hack (auto .944
+but committee base-sweeps).
+
+**Implication for the hybrid weight:** raising AUTO_W makes automated FIGHT committee (the quality signal).
+So **automated should be a FLOOR/gate (ensure report exists + covers required entities), NOT a high-weight
+co-equal term; committee is the primary driver; keep AUTO_W LOW (≤0.3) or convert automated to a soft gate.**
+
+### Conclusion (committee = the meaningful metric; automated is a weak, gameable coverage proxy)
+
+**committee_w2 (AUTO_W=0.5, on-policy) is the best lora to date:** committee net-positive vs base (gov WIN,
+no committee losses); closest to base on automated. on-policy (not AUTO_W) is what fixed the advisory
+committee loss. AUTO_W=0.7 is a dead end. Next: try AUTO_W≈0.3 / committee-primary (on-policy) to push
+advisory from TIE→WIN without hurting gov/tech.
+
 **Lesson (process):** check `timed_out` + automated-on-written-reports IMMEDIATELY after rollout; a
 written report with auto=0 is almost always a harness (timeout/sync/path) artifact, not a model failure.
 
