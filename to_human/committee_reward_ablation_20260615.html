@@ -39,7 +39,7 @@
 <div class="key">
 <b>一句话结论：能（有限度）。</b> committee-reward 把 qwen3.5-4b 在委员会口径上训到<b>胜 base（gov）</b>、advisory/tech 持平 ——
 而这个真实增益<b>对规则型 automated grader 完全隐形、甚至反向</b>。<b>但只有大比分（w3 gov 9:0）真可信</b>，6:1~8:1 跨 eval 会抖动。
-<b>AUTO_W 和 deliberation 都不是质量杠杆</b>（deliberation 干净重跑证明无可见质量收益 → <b>默认关闭</b>；对 reward 方差的作用未测，有降再开回来）；真正缺的是"能制造可辨差异"的更难任务。
+<b>AUTO_W 不是杠杆；deliberation 不是"最终质量"杠杆，但变量测试证明它去判官偏差、净化 reward 信号 → 默认开启（证据驱动）</b>。真正缺的是"能制造可辨差异"的更难任务。
 </div>
 
 <h2>完整 ablation（全部 vs 同一 canonical base@0.3）</h2>
@@ -86,7 +86,10 @@
 <tr><td class="var">gov 委员会</td><td class="tie">平 6:1 (p=.125)</td><td class="win">赢 7:1 (p=.070)</td></tr>
 <tr><td class="var">MEETING%</td><td class="tie">80.1</td><td class="tie">79.7</td></tr>
 </table>
-<p class="small">所谓"w5 tech attribution 崩到 0.17"来自 flake 那次跑；clean 版是 0.50，和 w6 一样。deliberation 既不明显帮也不害 —— 留着只因便宜无害，<b>不是杠杆</b>。机制本身（分歧&gt;0.25 的组追加一轮互看重评）没问题，只是在这批任务上没产生可辨增益。</p>
+<p class="small">所谓"w5 tech attribution 崩到 0.17"来自 flake 那次跑；clean 版是 0.50，和 w6 一样。<b>最终策略质量上 deliberation 无可见差异。</b></p>
+<div class="callout">
+<b>但变量测试(2026-06-16)用数据翻案 —— deliberation 在"训练信号"这条轴上确实有用:</b>对同批 advisory/tech rollout 组 delib 0 vs 1 重打分,minimax 本是系统性严判离群点(每条比 ds/qwen 低 0.3-0.4),互看后收敛 → <b>每条 rollout 的判官分歧从 ~0.4 塌到 ~0.1</b>,且真正最佳样本被正确抬升(advisory resp1 0.71→0.83)。reward 不再被单一判官绑架、跨次更可复现。<b>结论:deliberation 不是"最终质量"杠杆,但是实测有效的"reward 信号净化器" → 默认开启(证据驱动)。</b>
+</div>
 <div class="callout">
 <b>committee verdict 跨 eval 会抖：</b>同一个 w5 adapter 判同一 base，flake 那次 gov <b>8:1 (p=.039 显著)</b>、clean 这次 gov <b>6:1 (p=.125 不显著)</b>。6:1/7:1/8:1 都会跨次跳 —— <b>只有大比分（w3 9:0 p=.004）可信。</b>
 </div>
