@@ -50,14 +50,30 @@ RUN_NAME=committee_w7 bash scripts/tf_agentic/run_next_round.sh   # uses all def
    regenerate K=4 rollouts per task. **Never reuse a prior round's graded_trajectories** — that
    is off-policy and makes "continue from w6" meaningless. (Note: w6 itself reused w2's rollouts;
    the next round fixes that.)
-2. **Judge-overfit guard.** After training + eval, validate the new adapter with a **held-out
-   judge** (a committee member excluded from the reward) via `JUDGE_MEMBERS`. The committee can be
-   reward-hacked exactly like automated was (round-1e); if the committee win vanishes under a
-   held-out judge, suspect overfitting. Also human-spot-check 1–2 reports per round.
-   ```bash
-   EVAL_TEMP=0.3 RUNS=3 bash scripts/tf_agentic/eval_val3_adapter.sh lora <new_ckpt>
-   JUDGE_MEMBERS=qwen-max,minimax-M3 python3 scripts/tf_agentic/committee_judge.py   # ds-flash held out
-   ```
+2. **Judge-overfit guard.** The committee can be reward-hacked exactly like automated was
+   (round-1e). Division of labor for catching it:
+   - **Automated, every round (the agent runs it):** held-out-judge validation — re-judge with a
+     committee member excluded, via `JUDGE_MEMBERS`. If the committee win vanishes under the
+     held-out judge, suspect overfitting.
+     ```bash
+     EVAL_TEMP=0.3 RUNS=3 bash scripts/tf_agentic/eval_val3_adapter.sh lora <new_ckpt>
+     JUDGE_MEMBERS=qwen-max,minimax-M3 python3 scripts/tf_agentic/committee_judge.py   # ds-flash held out
+     ```
+   - **Agent LLM spot-read, every round:** the agent reads 1–2 deliverables vs the transcript and
+     flags obvious hacking (padding / hallucination / verbose empty prose), raising it to the human.
+   - **Human spot-check, periodic (NOT the agent) — scoped to OBVIOUS failures only:** the agent and
+     all committee judges are LLMs and may SHARE blind spots, so a human eyeballs 1–2 reports at key
+     moments (a "too good" result, or every 2–3 rounds). IMPORTANT — the human's job is to catch
+     *obvious* hacking (padding, hallucination, off-topic, empty verbose prose), which humans spot
+     reliably. The human does NOT adjudicate subtle ties: if a human also can't tell two reports
+     apart, that IS the answer — treat it as a genuine no-difference, not a judge failure.
+
+   **Interpreting verdicts (consequence of the above):** trust only LARGE-margin committee wins
+   (gov 7:1 / 8:1 / 9:0 — clear to humans and LLMs alike). Marginal "tie~lora 6:2" is WEAK evidence
+   — likely noise in a region of genuine indistinguishability; do not over-interpret or chase it.
+   Where differences are not human-discernible, more committee training risks fitting judge quirks,
+   not real quality. To get real, checkable gains, create CLEAR differences: use harder task variants
+   that base visibly fails, so good-vs-bad is obvious to humans and judges.
 3. **Timeout fix + healthcheck.** `ROLLOUT_TIMEOUT_MULT=4.0` (advisory is a 71K-char doc) and
    `rollout_healthcheck.py` stop the round BEFORE training if rollouts are all-timeout / no-write /
    written-but-auto=0. The policy read-loop failure (model re-reads a long doc forever, never
