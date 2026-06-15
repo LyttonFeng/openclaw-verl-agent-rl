@@ -27,3 +27,15 @@
 - Empty-report root cause = policy read-loop→timeout, NOT harness.
 - Synthesis → findings.md updated; to_human/committee_reward_ablation_20260615.html built + opened.
 - Open: clean-rerun w5 advisory; continue on-policy from w6 to push advisory to significance.
+
+## 2026-06-16 — Deliberation OFF; tech-hard probe = informative negative
+- Decision churn resolved: deliberation DEFAULT OFF (only evidence is "no quality effect";
+  re-enable only if a reward-variance test shows it helps). All artifacts + GitHub naive_ppo
+  branch corrected.
+- Consolidated next-round recipe + 3 guardrails to GitHub (run_next_round.sh, next_round_recipe.md).
+- **tech-hard probe (negative, informative):** short synthetic transcript with implicit owners /
+  retraction / revised deadline / distractor names → base@0 got 6/6 RIGHT + excluded the retracted
+  item. Reasoning tricks on short input do NOT create a base gap. base's real failures are
+  long-doc/agentic-retrieval. STRATEGIC FORK (awaiting user): (1) build long-doc variant to hit the
+  real failure region (confounds with read-loop), or (2) reconsider whether "harder tasks" is the
+  right direction given base reasons well (the advisory/tech tie may be a real shared ceiling).

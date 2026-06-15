@@ -91,6 +91,22 @@ does judge **deliberation** help?
   pod-self-contained scripts (exec >log 2>&1), monitor ARTIFACT files via short independent ssh.
 - **vLLM 0.22 online LoRA is a no-op on qwen3.5** → both train & infer use transformers+PEFT shim.
 
+## Probe (2026-06-16): "reasoning-hard" ≠ base-failure — base is more capable than the eval implied
+Built a SHORT synthetic tech transcript with deliberately hard features (implicit owners via
+"I'll take that"/"our designer", a RETRACTED item "scratch dark mode", a REVISED deadline
+Friday→Wednesday, distractor near-names Jon/John + Sara/Sarah). Ran base@temp0 single-turn.
+**base got 6/6 action items + owners + revised deadline RIGHT and correctly EXCLUDED the
+retracted item.** (My auto-grader reported 1/6 — that was a multi-line-format bug, not base failing.)
+- **Implication:** base's reasoning on clean short input is strong. The real-eval failures
+  (tech owners_identified 0.17, the read-loop→timeout empty report) come from the LONG-DOC +
+  AGENTIC regime (retrieval/coverage collapse over 71K chars), NOT from reasoning difficulty.
+- **So "make tasks harder" via reasoning tricks on short transcripts does NOT create a base gap.**
+  The only demonstrated base-failure lever is length/agentic-retrieval — which confounds with the
+  read-loop/harness-length problem (the messy region).
+- **Also reframes the advisory/tech TIE:** base reasons well, so the tie may be a genuine
+  quality ceiling reached by both, not base weakness. Whether "harder tasks" is even the right
+  direction is now an open strategic question (see below).
+
 ## Open questions
 - Which AUTO_W is best @0.3 once w5/w4/w3/w2 are judged? (expect low / committee-dominant)
 - Does deliberation (w6) beat its no-deliberation twin (w5, same AUTO_W=0) net across tasks?
