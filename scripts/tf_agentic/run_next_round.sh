@@ -51,6 +51,7 @@ export DELIBERATE="${DELIBERATE:-1}"                          # ON (evidence-bas
 LR="${LR:-2.0e-5}"; export LR                                 # lowered (continue-train already deep)
 BASE_REF="${BASE_REF:-/workspace/saved_adapters/base_ref_temp03.jsonl}"  # base@0.3 anchor
 TASKS="${TASKS:-$REPO/data/meeting_analysis_val3_slim_train/val3_plus6_train.json}"
+HEALTH="${TASK_HEALTH:-/workspace/saved_adapters/task_health.json}"   # persistent per-task health (adaptive skip + reprobe)
 HOLDOUT_JUDGE="${HOLDOUT_JUDGE:-minimax-M3}"                  # guardrail (2): validate with this member held out of nothing? see note
 
 RUN=/tmp/nma_round1/$RUN_NAME
@@ -74,15 +75,25 @@ done
 grep -q "shim] ready" "$RUN/shim.log" 2>/dev/null || { echo "SHIM_NOT_READY"; tail -15 "$RUN/shim.log"; exit 1; }
 grep "lora=" "$RUN/shim.log" | tail -1
 
+echo "[next-round] B0: adaptive task selection (landmine-proof: skip all-dead>=2 rounds, force re-probe every 3, loud-logged)"
+ACTIVE_TASKS=$RUN/active_tasks.json; SKIP_LIST=$RUN/skipped_tasks.json
+python3 "$REPO/scripts/tf_agentic/select_active_tasks.py" --tasks-file "$TASKS" \
+  --out-file "$ACTIVE_TASKS" --skip-out "$SKIP_LIST" --health "$HEALTH" \
+  --dead-threshold 2 --reprobe-every 3 || { echo "[warn] task-select failed; using full task set"; cp "$TASKS" "$ACTIVE_TASKS"; echo "[]" > "$SKIP_LIST"; }
+
 echo "[next-round] B: FRESH rollouts K=4 + flash grade (for automated_score)"
 PINCHBENCH_JUDGE_ENSEMBLE=1 python -u train/generate_ledger_online_rollouts.py \
-  --tasks-file "$TASKS" --vllm-base-url http://127.0.0.1:8021/v1 --model qwen35-4b \
+  --tasks-file "$ACTIVE_TASKS" --vllm-base-url http://127.0.0.1:8021/v1 --model qwen35-4b \
   --output-dir "$ROLLOUT_DIR" --n-responses 4 --num-workers 1 \
   --judge-model deepseek-v4-flash --judge-base-url https://api.deepseek.com/v1 \
   || echo "[warn] rollout driver non-zero (validating file instead)"
 pkill -9 -f tf_shim 2>/dev/null || true; sleep 5
 [ -s "$ROLLOUT_DIR/graded_trajectories.jsonl" ] || { echo "NO_ROLLOUTS"; exit 1; }
 echo "[next-round] rollouts: $(wc -l < $ROLLOUT_DIR/graded_trajectories.jsonl) rows"
+
+echo "[next-round] B1: update per-task health (adaptive skip memory; single writer)"
+python3 "$REPO/scripts/tf_agentic/update_task_health.py" --graded "$ROLLOUT_DIR/graded_trajectories.jsonl" \
+  --skip-list "$SKIP_LIST" --health "$HEALTH" || echo "[warn] task-health update failed (non-fatal)"
 
 echo "[next-round] B2: rollout health check — guardrail (3) (stop before training on garbage)"
 python3 "$REPO/scripts/tf_agentic/rollout_healthcheck.py" "$ROLLOUT_DIR/graded_trajectories.jsonl" \

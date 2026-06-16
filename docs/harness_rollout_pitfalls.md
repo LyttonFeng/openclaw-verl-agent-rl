@@ -28,13 +28,17 @@ silently poison the GRPO signal** (empties inject noisy 0-scores), so guard agai
   margin, fails the doomed long-docs fast. The actual long-doc fix is structural (see below), not timeout:
   (a) larger effective context window; (b) pre-chunk / map-reduce the transcript; (c) partial-credit
   reward so an incomplete long-doc rollout still gives a gradient instead of a 0.
-  **Do NOT "skip" perpetually-dead long-doc groups (e.g. speaker_nasa) via an exclusion list.** That is
-  a landmine: a silent permanent exclusion that — if the memory/list isn't diligently maintained — means
-  the ultra-long tasks are NEVER trained again, and biases the training set toward what the model already
-  does (inflated metrics, hidden weakness). Instead KEEP every task in the set (so it is re-attempted and
-  self-documents each round) and convert the wasted time into signal via **partial-credit reward** (score
-  by completion fraction even on a timeout) or a bigger effective context window. The long-doc time is not
-  "waste to skip" — it's "signal we currently throw away by scoring timeouts as 0." Fix the scoring, not the task list.
+  **Skipping perpetually-dead long-doc groups is OK — but ONLY via an adaptive, self-documenting,
+  re-probing mechanism, never a static hand-maintained list.** A static exclusion list is a landmine:
+  silent permanent exclusion that, if the list rots, means the ultra-long tasks are NEVER trained again
+  and biases the set toward what the model already does (inflated metrics, hidden weakness).
+  IMPLEMENTED (`select_active_tasks.py` + `update_task_health.py`, wired into run_next_round.sh):
+  a task is skipped ONLY after it is all-dead for ≥2 consecutive ATTEMPTED rounds (data-driven, not
+  hand-picked), is force RE-PROBED every 3 rounds (so a later fix auto-detects viability and it
+  re-enters training — nothing is permanent), and every skip/re-probe is loudly logged. Health lives in
+  `/workspace/saved_adapters/task_health.json`. This cuts the wasted ~72min/round on doomed groups
+  WITHOUT the landmine. (The deeper fix to actually TRAIN long docs is still a bigger context window;
+  the timeout cap can't fix a context wall.)
 
 ## Cause 3 (LATENT) — inconsistent transcript filename across tasks
 - The 9 training tasks used THREE different transcript `dest` filenames:
