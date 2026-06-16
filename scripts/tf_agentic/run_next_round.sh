@@ -39,6 +39,9 @@ unset OPENCLAW_HOST ECS_HOST OPENCLAW_REMOTE_ACTIVATE_CMD
 export PINCHBENCH_FORCE_LOCAL_OPENCLAW=1
 export ROLLOUT_TIMEOUT_MULT="${ROLLOUT_TIMEOUT_MULT:-4.0}"   # 180x4=720s. DATA-DRIVEN: all SUCCESSFUL rollouts finish <=593s (w2 max 593, w7 max 479); long 71K docs are context-bound (96% ctx) and NEVER complete, so a higher cap only wastes ~370s/doomed-rollout. 720s covers every completable rollout + fails the doomed long-docs fast. (Raising the cap does NOT fix the context wall.)
 ROLLOUT_TEMP="${ROLLOUT_TEMP:-0.7}"                          # rollout sampling temp. temp=1.0 caused ~25% premature-termination (agent reads then ends WITHOUT writing the deliverable). 0.7 keeps diversity, far fewer empties.
+SHIM_SCRIPT="${SHIM_SCRIPT:-/workspace/openclaw-naive-meeting-analysis-github/scripts/tf_agentic/tf_shim_batched.py}"  # micro-batching shim. A/B validated 2026-06-16: workers=2 → 0 empty + ~33% faster than serial; workers=4 corrupted 3/4 rollouts. Set /tmp/tf_shim.py + NUM_WORKERS=1 for serial.
+NUM_WORKERS="${NUM_WORKERS:-2}"                              # concurrent rollouts (2 validated clean+faster; do NOT raise to 4 — batched generate corrupts outputs)
+SHIM_MAX_BATCH="${SHIM_MAX_BATCH:-2}"                        # micro-batch window for tf_shim_batched
 
 REPO=/workspace/openclaw-naive-meeting-analysis-github
 cd "$REPO"
@@ -59,13 +62,13 @@ ROLLOUT_DIR=$RUN/rollouts
 mkdir -p "$RUN/checkpoint" "$ROLLOUT_DIR"
 exec >"$RUN/run.log" 2>&1                                     # log survives ssh drops
 
-echo "[next-round] RUN=$RUN_NAME INIT=$INIT_ADAPTER AUTO_W=$AUTO_W DELIBERATE=$DELIBERATE LR=$LR ROLLOUT_TEMP=$ROLLOUT_TEMP TIMEOUT_MULT=$ROLLOUT_TIMEOUT_MULT"
+echo "[next-round] RUN=$RUN_NAME INIT=$INIT_ADAPTER AUTO_W=$AUTO_W DELIBERATE=$DELIBERATE LR=$LR ROLLOUT_TEMP=$ROLLOUT_TEMP TIMEOUT_MULT=$ROLLOUT_TIMEOUT_MULT SHIM=$(basename $SHIM_SCRIPT) WORKERS=$NUM_WORKERS"
 [ -e "$INIT_ADAPTER/adapter_model.safetensors" ] || { echo "INIT_ADAPTER missing: $INIT_ADAPTER"; exit 1; }
 
 echo "[next-round] A: shim serves INIT adapter @ temp=1.0 (fresh on-policy) — guardrail (1)"
 pkill -9 -f "tf_shim|benchmark.py" 2>/dev/null || true
 sleep 3; rm -f "$RUN/shim.log"
-PORT=8021 SHIM_DEFAULT_TEMP=$ROLLOUT_TEMP SHIM_LOG=$RUN/shim.log LORA_ADAPTER=$INIT_ADAPTER python -u /tmp/tf_shim.py &
+PORT=8021 SHIM_DEFAULT_TEMP=$ROLLOUT_TEMP SHIM_MAX_BATCH=$SHIM_MAX_BATCH SHIM_LOG=$RUN/shim.log LORA_ADAPTER=$INIT_ADAPTER python -u "$SHIM_SCRIPT" &
 SHIM=$!
 for i in $(seq 1 90); do
   grep -q "shim] ready" "$RUN/shim.log" 2>/dev/null && break
@@ -84,7 +87,7 @@ python3 "$REPO/scripts/tf_agentic/select_active_tasks.py" --tasks-file "$TASKS" 
 echo "[next-round] B: FRESH rollouts K=4 + flash grade (for automated_score)"
 PINCHBENCH_JUDGE_ENSEMBLE=1 python -u train/generate_ledger_online_rollouts.py \
   --tasks-file "$ACTIVE_TASKS" --vllm-base-url http://127.0.0.1:8021/v1 --model qwen35-4b \
-  --output-dir "$ROLLOUT_DIR" --n-responses 4 --num-workers 1 \
+  --output-dir "$ROLLOUT_DIR" --n-responses 4 --num-workers $NUM_WORKERS \
   --judge-model deepseek-v4-flash --judge-base-url https://api.deepseek.com/v1 \
   || echo "[warn] rollout driver non-zero (validating file instead)"
 pkill -9 -f tf_shim 2>/dev/null || true; sleep 5
