@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>Committee-Reward RL + mem0 Experiential Memory — qwen3.5-4b (2026-06-16)</title>
+<title>Committee-Reward RL + mem0 Experiential Memory — qwen3.5-4b (2026-06-17)</title>
 <style>
   body { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; max-width: 1100px;
          margin: 0 auto; padding: 32px 24px; color: #1a1a1a; line-height: 1.55; background:#fbfbfa; }
@@ -90,7 +90,7 @@
 </table>
 <p class="small">所谓"w5 tech attribution 崩到 0.17"来自 flake 那次跑；clean 版是 0.50，和 w6 一样。<b>最终策略质量上 deliberation 无可见差异。</b></p>
 <div class="callout">
-<b>但变量测试(2026-06-16)用数据翻案 —— deliberation 在"训练信号"这条轴上确实有用:</b>对同批 advisory/tech rollout 组 delib 0 vs 1 重打分,minimax 本是系统性严判离群点(每条比 ds/qwen 低 0.3-0.4),互看后收敛 → <b>每条 rollout 的判官分歧从 ~0.4 塌到 ~0.1</b>,且真正最佳样本被正确抬升(advisory resp1 0.71→0.83)。reward 不再被单一判官绑架、跨次更可复现。<b>结论:deliberation 不是"最终质量"杠杆,但是实测有效的"reward 信号净化器" → 默认开启(证据驱动)。</b>
+<b>但变量测试(2026-06-17)用数据翻案 —— deliberation 在"训练信号"这条轴上确实有用:</b>对同批 advisory/tech rollout 组 delib 0 vs 1 重打分,minimax 本是系统性严判离群点(每条比 ds/qwen 低 0.3-0.4),互看后收敛 → <b>每条 rollout 的判官分歧从 ~0.4 塌到 ~0.1</b>,且真正最佳样本被正确抬升(advisory resp1 0.71→0.83)。reward 不再被单一判官绑架、跨次更可复现。<b>结论:deliberation 不是"最终质量"杠杆,但是实测有效的"reward 信号净化器" → 默认开启(证据驱动)。</b>
 </div>
 <div class="callout">
 <b>committee verdict 跨 eval 会抖：</b>同一个 w5 adapter 判同一 base，flake 那次 gov <b>8:1 (p=.039 显著)</b>、clean 这次 gov <b>6:1 (p=.125 不显著)</b>。6:1/7:1/8:1 都会跨次跳 —— <b>只有大比分（w3 9:0 p=.004）可信。</b>
@@ -117,7 +117,22 @@
 <div class="callout">
 <b>核心洞见:</b>① <b>一旦有 mem0(hint),叠加 RL 无可测增益 —— base+mem0 ≈ w7+mem0。零训练经验记忆 ≈ 昂贵的 RL+记忆。</b>
 ② <b>mem0 能动 RL 推不动的维度</b>:advisory 的 reward 方差≈0(std 0.059)→ RL 无梯度;但 hint 直接改 prompt、不需梯度 → 记忆在"无梯度"维度反而有效。两杠杆在这套任务上很大程度冗余,记忆更省更强。
-③ 进行中:<b>w8-mem0</b> —— 把 hint 注入训练 rollout 跑 RL,验证能否恢复 advisory 的 reward 方差 + 把"跟 hint 做"蒸馏进权重。
+③ <b>已完成 → 见发现 6</b>:w8-mem0 把 hint 注入训练 rollout 跑 RL,结论是 hint-rollout <b>无法</b>把 mem0 的增益蒸馏进权重。
+</div>
+
+<h2>发现 6 — mem0 × 多轮 RL:hint-rollout 无法蒸馏进权重(用户托付实验的完整结论)</h2>
+<div class="key">
+用户假设:把 hint 注入<b>训练 rollout</b> → 产出质量多样性 → 恢复 advisory 的 reward 方差(w7 仅 0.059)→ 给 GRPO 梯度 → 推动 advisory;并测训练能否把"跟 hint 做"<b>蒸馏进权重</b>(不带 hint 评测也变好)。<b>两问的答案都是干净的 NO</b>,而且机理清晰。
+</div>
+<table>
+<tr><th>测点</th><th>结果</th><th>含义</th></tr>
+<tr><td class="var">组内 reward 方差<br>(仅完成样本)</td><td>advisory 0.055 / gov 0.057 / tech 0.085</td><td>≈ w7 的 0.059 —— <b>方差没回来</b></td></tr>
+<tr><td class="var">K=8 决定性复测</td><td>advisory <b>8 个只 1 个完成 / 4 个超时</b>;gov std 0.095(6完成);tech std 0.160(7完成)</td><td>advisory <b>训练实例</b>本身是长文档超时(1/8 能产出)——双重不可训</td></tr>
+<tr><td class="var">蒸馏测(w8-mem0<br><b>不带 hint</b> vs base@0.3)</td><td>advisory 平 5:4(p1.0);<b>gov 赢 8:1(p.039)</b>;tech 平 5:3:1(p.73);automated 82.5%≈w7</td><td>除 gov(RL 本就能训的维度)外,<b>没蒸馏出任何新东西</b></td></tr>
+</table>
+<div class="callout">
+<b>机理(论文级):</b> ① 好的 how-to hint 让所有 rollout <b>收敛到同一种做法</b> → <b>压缩</b>组内方差,恰好是 GRPO 最不需要的;<b>让 mem0 有用的那个性质(收敛指引)正好抹掉了 RL 依赖的方差</b>。② advisory 的不可训是<b>双重</b>的:完成时方差低 + 训练实例长到几乎不产出(1/8);而它的<b>评测实例能完成</b>(所以 base+mem0 在评测里能赢 advisory)—— RL 永远看不到干净的 advisory rollout,推理却看得到。<br>
+<b>统一结论:</b> committee-RL 是(只对 gov 的)<b>权重杠杆</b>;mem0 是(对 advisory/tech 的)<b>推理时杠杆</b>;二者<b>无法</b>经这条 on-policy RL 路径合并 —— 互补,但不可叠加蒸馏。红线全程守住。
 </div>
 
 <h2>方法学要点</h2>
@@ -134,7 +149,7 @@
 <b>下一步候选：</b>① <s>补跑干净 w5</s>（已做，反而证明 deliberation 无质量增益）；② 真正要进步：<b>换 base 会明显做错的更难任务</b>，制造"人和委员会都看得出"的可辨差异（advisory/tech 现在卡在不可辨 tie 区）；③ 把 automated 降到软门(floor/gate)而非 co-driver；④ 关键节点人工抽检（抓明显注水/幻觉，不仲裁细微 tie）。
 </div>
 
-<p class="small" style="margin-top:30px;color:#aaa">verdicts: /tmp/verdict_w{2,3,4,5,6}.log · scores: /tmp/w*_03_scores.json · master: /tmp/master_results.json · findings.md @ repo root</p>
+<p class="small" style="margin-top:30px;color:#aaa">verdicts: /tmp/verdict_w{2,3,4,5,6}.log + verdict_w8mem0_nohint.log · w8-mem0 adapter: pod /workspace/saved_adapters/committee_w8_mem0 · findings.md @ repo root</p>
 
 </body>
 </html>
