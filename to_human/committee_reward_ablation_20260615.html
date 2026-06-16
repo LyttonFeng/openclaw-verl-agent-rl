@@ -54,7 +54,9 @@
 <tr><td class="var">w4</td><td>0.2</td><td>no</td><td class="tiebase">平 5:3 <span class="auto">[.94/.94]</span></td><td class="win">赢 7:1 p=.070 <span class="auto">[.83/.70]</span></td><td class="tiebase">平 5:4 <span class="auto">[.87/.73]</span></td><td>79.3</td></tr>
 <tr><td class="var">w2</td><td>0.5</td><td>no</td><td class="tielora">平 5:2 <span class="auto">[1.0/.87]</span></td><td class="tie">平 4:4 <span class="auto">[.93/.86]</span></td><td class="tiebase">平 5:3 <span class="auto">[.83/.71]</span></td><td><b>81.3</b></td></tr>
 <tr><td class="var">w3</td><td>0.7</td><td>no</td><td class="tielora">平 6:2 <span class="auto">[.81/.79]</span></td><td class="win">赢 9:0 p=.004 <span class="auto">[.87/.73]</span></td><td class="tie">平 4:4 <span class="auto">[.83/.72]</span></td><td>74.7</td></tr>
+<tr class="best"><td class="var">w7 ★</td><td>0.0</td><td>yes</td><td class="tie">平 5:4 <span class="auto">[.92/.89]</span></td><td class="win">赢 8:0 p=.008 <span class="auto">[?/.81]</span></td><td class="tielora">平 5:3 <span class="auto">[?/.79]</span></td><td><b>82.9</b></td></tr>
 </table>
+<p class="small">★ w7 = harness 修复后(temp 0.7 + 文件名归一,7/9 组干净)从 w6 续训的第一轮 —— <b>gov 显著巩固到 8:0(p=.008,强于 w6),automated 82.9% 全场最高,tech 从 base 倾向漂到 lora 倾向,advisory 仍触顶平。核心结论在干净数据上复现+加强。</b></p>
 <p class="small">* w5(flake) advisory 有一份 policy 失败空报告（读循环→超时→空交付，根因 policy 非 harness）；<b>w5-clean</b> 是干净重跑。同一 w5 adapter：gov 8:1（flake eval）vs 6:1（clean eval）→ verdict 跨次抖动，只信大比分。无单一"最佳"配置：w5-clean/w4/w6 约等价。</p>
 
 <h2>发现 1 — gov：委员会看见的大胜，automated 完全看不见</h2>
