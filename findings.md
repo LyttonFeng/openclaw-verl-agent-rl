@@ -77,6 +77,24 @@ Continue-trained from committee_w6, AUTO_W=0, deliberation ON, base@0.3 ref, LR 
   on-policy rounds consolidates gov but does not break the advisory/tech ceiling — that needs the
   harder-task / bigger-context work, still open.**
 
+## mem0 experiential-memory as a harness baseline (2026-06-16) — STRONG positive, esp. on the RL-stuck dims
+Bold idea (user): instead of (or before) RL, give the agent GENERALIZABLE how-to HINTS distilled from
+its own trajectories, retrieved + injected at task time. Red line (held): only general method hints,
+NO task-specific answers/entities — extracted with a strict prompt, infer=False verbatim store, scrubbed,
+human-reviewed (caught + genericized a "sharing vs relocation" content leak the auto-scrub missed).
+- Pipeline: mem0 (deepseek-v4-pro extractor + local fastembed + faiss) stores 6 reviewed hints;
+  SEMANTIC retrieval (no task-type filter → generalizes to unseen tasks) injects top-3 into the prompt.
+  (First bug: tips as a "## " subheader were truncated by the prompt extractor; fixed to in-body bold.
+  Verified the tip text reaches the agent's prompt.)
+- **base+mem0 (NO training, just injected hints) vs base@0.3:** advisory 7:2 lora-favored (p=.18),
+  **gov WIN 7:1 (p=.070)**, tech 7:2 lora-favored (p=.18); automated MEETING 86.2% (advisory 0.966) —
+  HIGHEST of every variant. Committee prefers the longer/more-thorough reports 7:2 (so NOT padding).
+- **Key: mem0 moves advisory AND tech in the lora direction (7:2 each) — the two dims RL could NOT move
+  (flat reward gradient). Experiential memory restores quality where RL had no signal, training-free.**
+  vs w7 (RL): advisory tie 5:4 / gov WIN 8:0 / tech tie 5:3. So mem0 ≈ comparable on gov, BETTER-trending on advisory/tech.
+- (advisory/tech 7:2 are p=.18, not formally significant, but a clearer lean than w7's ties.) w7+mem0
+  (stacking RL adapter + memory) eval running to complete the base / base+mem0 / w7 / w7+mem0 table.
+
 ## Best model & answer (corrected)
 - **No single config is robustly "best."** w5-clean / w4 / w6 are all ≈ equivalent: gov favored,
   advisory/tech tie. w3 has the single most solid result (gov 9:0) but lowest automated. For the
