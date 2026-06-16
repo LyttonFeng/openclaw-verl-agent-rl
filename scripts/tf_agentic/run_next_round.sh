@@ -37,7 +37,8 @@ source ~/.pinchbench_env 2>/dev/null || true
 source /root/openclaw-venv/bin/activate
 unset OPENCLAW_HOST ECS_HOST OPENCLAW_REMOTE_ACTIVATE_CMD
 export PINCHBENCH_FORCE_LOCAL_OPENCLAW=1
-export ROLLOUT_TIMEOUT_MULT="${ROLLOUT_TIMEOUT_MULT:-4.0}"   # guardrail (3)
+export ROLLOUT_TIMEOUT_MULT="${ROLLOUT_TIMEOUT_MULT:-6.0}"   # guardrail (3): 180x6=1080s. advisory/NASA 71K docs hit the old 720s cap (94% ctx + compaction); give headroom.
+ROLLOUT_TEMP="${ROLLOUT_TEMP:-0.7}"                          # rollout sampling temp. temp=1.0 caused ~25% premature-termination (agent reads then ends WITHOUT writing the deliverable). 0.7 keeps diversity, far fewer empties.
 
 REPO=/workspace/openclaw-naive-meeting-analysis-github
 cd "$REPO"
@@ -57,13 +58,13 @@ ROLLOUT_DIR=$RUN/rollouts
 mkdir -p "$RUN/checkpoint" "$ROLLOUT_DIR"
 exec >"$RUN/run.log" 2>&1                                     # log survives ssh drops
 
-echo "[next-round] RUN=$RUN_NAME INIT=$INIT_ADAPTER AUTO_W=$AUTO_W DELIBERATE=$DELIBERATE LR=$LR"
+echo "[next-round] RUN=$RUN_NAME INIT=$INIT_ADAPTER AUTO_W=$AUTO_W DELIBERATE=$DELIBERATE LR=$LR ROLLOUT_TEMP=$ROLLOUT_TEMP TIMEOUT_MULT=$ROLLOUT_TIMEOUT_MULT"
 [ -e "$INIT_ADAPTER/adapter_model.safetensors" ] || { echo "INIT_ADAPTER missing: $INIT_ADAPTER"; exit 1; }
 
 echo "[next-round] A: shim serves INIT adapter @ temp=1.0 (fresh on-policy) — guardrail (1)"
 pkill -9 -f "tf_shim|benchmark.py" 2>/dev/null || true
 sleep 3; rm -f "$RUN/shim.log"
-PORT=8021 SHIM_DEFAULT_TEMP=1.0 SHIM_LOG=$RUN/shim.log LORA_ADAPTER=$INIT_ADAPTER python -u /tmp/tf_shim.py &
+PORT=8021 SHIM_DEFAULT_TEMP=$ROLLOUT_TEMP SHIM_LOG=$RUN/shim.log LORA_ADAPTER=$INIT_ADAPTER python -u /tmp/tf_shim.py &
 SHIM=$!
 for i in $(seq 1 90); do
   grep -q "shim] ready" "$RUN/shim.log" 2>/dev/null && break
