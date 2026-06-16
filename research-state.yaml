@@ -50,9 +50,18 @@ conclusions:  # CORRECTED after w5 clean rerun (the flake had biased the deliber
   - "DISTILLATION TEST (w8-mem0 trained on healthy hint-rollouts, eval'd WITHOUT hints vs base@0.3): advisory TIE 5:4 (p=1.0), gov lora>base SIG 8:1 (p=0.039), tech TIE 5:3:1 (p=0.727). automated 82.5% ≈ w7. → training on hint-rollouts distills NOTHING beyond w7: advisory/tech (dims mem0 helps) stay at base; only gov (dim RL trains) holds. mem0's advisory/tech benefit is STRICTLY inference-time; on-policy RL can't bake it in (hints compress variance + advisory training instance uncompleteable). BOTH user sub-questions = clean NO. mem0×RL story COMPLETE + paper-ready."
 
 current_focus: >
-  Ablation table complete + synthesized (findings.md, to_human/committee_reward_ablation_20260615.html).
-  Open: (1) clean-rerun w5 advisory to firm up the deliberation comparison; (2) continue on-policy
-  from w6 to push advisory to significance; (3) harder tech tasks to create headroom.
+  BROADEN (2026-06-17, user-directed): actively HUNT the regime where RL beats the mem0 harness
+  baseline ("寻找 RL 的空间 —— mem 带不了它"). mem0 IS a permanent harness component (hints at BOTH
+  train and eval); the question is RL-on-mem0-harness vs base+mem0, NOT distillation-into-weights.
+  Principle — RL's space = (1) gradient exists (within-group reward variance high enough), (2) generic
+  hint underperforms (correct behavior is INSTANCE-SPECIFIC, not a one-line how-to), (3) base reachable
+  (not context-wall). Data points to TECH (variance 0.160 highest; only unique RL+mem win 9:0); advisory
+  hopeless (0.055 + uncompleteable training instance); gov redundant (both win). On CURRENT Val3 tasks
+  head-to-head w7+mem0 vs base+mem0 is all-tie → RL hasn't escaped yet → likely need task DESIGN.
+  Plan: (step1, queued bh9tjq9ey) base+mem rollout variance vs w7+mem — does gradient return from base
+  init? (step2, H-E) build a COMPLETABLE-but-instance-specific hard set (implicit owners / retractions /
+  revised deadlines / multi-statement synthesis) where a generic hint provably can't carry the answer,
+  train RL from base+mem, judge head-to-head vs base+mem. Predict RL > base+mem there.
 
 artifacts:
   adapters: pod /workspace/saved_adapters/{round1e_val3plus6,committee_w1,committee_blend_w1,onpolicy_w2_fixed,committee_w3,committee_w4,committee_w5,committee_w6}
