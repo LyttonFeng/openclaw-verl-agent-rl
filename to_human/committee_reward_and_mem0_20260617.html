@@ -129,7 +129,9 @@
 <tr><td class="var">组内 reward 方差<br>(仅完成样本)</td><td>advisory 0.055 / gov 0.057 / tech 0.085</td><td>≈ w7 的 0.059 —— <b>方差没回来</b></td></tr>
 <tr><td class="var">K=8 决定性复测</td><td>advisory <b>8 个只 1 个完成 / 4 个超时</b>;gov std 0.095(6完成);tech std 0.160(7完成)</td><td>advisory <b>训练实例</b>本身是长文档超时(1/8 能产出)——双重不可训</td></tr>
 <tr><td class="var">蒸馏测(w8-mem0<br><b>不带 hint</b> vs base@0.3)</td><td>advisory 平 5:4(p1.0);<b>gov 赢 8:1(p.039)</b>;tech 平 5:3:1(p.73);automated 82.5%≈w7</td><td>除 gov(RL 本就能训的维度)外,<b>没蒸馏出任何新东西</b></td></tr>
+<tr><td class="var">harness 测(w8-mem0<br><b>带 hint</b> automated)</td><td>MEETING <b>64.2%</b>(advisory 0/53/86,<b>1 个超时</b>;gov 48/74/78;tech 71/81/87)</td><td>被 advisory 超时拖低 —— 见下方诊断</td></tr>
 </table>
+<p class="small"><b>诊断:64.2% 不是"adapter+mem 通病"。</b> 对照 <b>w7+mem0 automated 82.4%</b>(advisory 80/92/100,<b>零超时</b>)—— w7+mem0 带 hint 的 advisory 跑得极好。w8-mem0+hint 全靠那个 advisory <b>0%(超时)</b>拖下去;而 w8-mem0 <b>不带 hint</b> 是 82.5%(正常)。推测:w8-mem0 在<b>几乎全超时的 advisory hint-rollout</b>(8 选 1 完成)上续训 → 学到更冗长/易读循环的 advisory 行为 → 带 hint 时把贴边的长文档顶过超时线。<b>进一步印证:不该在被污染的 rollout 上训(healthcheck 拦得对),连部分恢复训练都带了点副作用。</b>(也可能是 temp0.3 采样噪声;advisory K=3 复测已排队确认。)</p>
 <div class="callout">
 <b>机理(论文级):</b> ① 好的 how-to hint 让所有 rollout <b>收敛到同一种做法</b> → <b>压缩</b>组内方差,恰好是 GRPO 最不需要的;<b>让 mem0 有用的那个性质(收敛指引)正好抹掉了 RL 依赖的方差</b>。② advisory 的不可训是<b>双重</b>的:完成时方差低 + 训练实例长到几乎不产出(1/8);而它的<b>评测实例能完成</b>(所以 base+mem0 在评测里能赢 advisory)—— RL 永远看不到干净的 advisory rollout,推理却看得到。<br>
 <b>统一结论:</b> committee-RL 是(只对 gov 的)<b>权重杠杆</b>;mem0 是(对 advisory/tech 的)<b>推理时杠杆</b>;二者<b>无法</b>经这条 on-policy RL 路径合并 —— 互补,但不可叠加蒸馏。红线全程守住。
