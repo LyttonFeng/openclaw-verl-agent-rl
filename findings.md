@@ -181,8 +181,16 @@ within-group reward variance (vs w7's flat 0.059) → give GRPO a gradient → m
   depends on. → mem0's advisory/tech gains are an INFERENCE-TIME mechanism that on-policy RL cannot
   distill on this task family. Unifies the story: RL can't move advisory (flat gradient), mem0 can
   (prompt injection, no gradient), and hint-rollouts can't bridge them (hints kill the variance).
-- CAVEAT: advisory n=2 completers is thin. DECISIVE re-roll launched: Val3 triplet only, K=8, temp 0.7,
-  hint-augmented, for a robust completer-std estimate before firming the conclusion.
+- **DECISIVE K=8 triplet re-roll (firm):** advisory **1 completer / 4 timeouts of 8** (std undefined);
+  gov 6 completers std 0.095; tech 7 completers std 0.160. → advisory's untrainability is TWO-FOLD:
+  (a) low quality-variance when it completes, AND (b) the advisory TRAINING instance is a long-doc
+  timeout case that barely produces gradeable output (1/8). gov & tech DO have real variance and ARE
+  trainable. KEY: the advisory EVAL instance IS completable (base+mem0 wins advisory at eval) — so
+  on-policy RL never sees clean advisory rollouts while inference does. This fully explains the split:
+  mem0 moves advisory at inference; RL cannot, because the advisory training rollouts don't complete.
+  Hints change neither failure mode (they don't shorten the doc, they don't add variance).
+- **Implication for "training in" mem0:** to make advisory RL-trainable you'd need a COMPLETABLE
+  advisory training instance (e.g. the eval-length doc), not hints. Hints are an inference-time lever.
 
 ## Open questions
 - Which AUTO_W is best @0.3 once w5/w4/w3/w2 are judged? (expect low / committee-dominant)

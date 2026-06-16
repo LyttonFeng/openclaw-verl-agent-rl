@@ -83,3 +83,10 @@ Ran inject-only committee re-score (no training on contaminated data) → measur
 - Launched DECISIVE re-roll (Val3 triplet, K=8, temp0.7, hint-aug) to firm the thin advisory n=2.
   Did NOT blindly run rounds 2-3: round-1 measurement already answers the question; identical rounds
   would reproduce the same null (hints kill the variance every time).
+- **Firm K=8 triplet re-roll:** advisory 1 completer / 4 timeouts of 8 (untrainable — long-doc wall),
+  gov std 0.095 (6 comp), tech std 0.160 (7 comp). advisory untrainability is TWO-fold: low variance
+  + the training instance barely completes (1/8). Its EVAL instance IS completable (mem0 wins it) → RL
+  never sees clean advisory rollouts, inference does. Refines the conclusion, doesn't change it.
+- Now retraining w8-mem0 on 7 healthy groups (drop nasa) → produces adapter to answer sub-q (b):
+  does training on hint-augmented rollouts distill hint-following into weights? (eval WITHOUT hints
+  vs base). gov/tech have real gradient, advisory contributes ~nothing (2 completers).
