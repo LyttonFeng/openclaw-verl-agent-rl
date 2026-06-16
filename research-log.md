@@ -25,6 +25,18 @@
 - **H2 (deliberation) confirmed** — w6 vs w5: preserves advisory + tech accuracy. KEEP. Best = w6.
 - **tech diagnosed:** not a ceiling (~28% headroom); RL trades accuracy for coverage except under w6.
 - Empty-report root cause = policy read-loop→timeout, NOT harness.
+
+## 2026-06-16 (later) — HARNESS bug: ~25% empty rollouts pollute training (audit + fix)
+- User pushed to check the harness after w7 rollouts showed 23% empty. Audit: onpolicy_w2 (w2-w6's
+  training data) AND w7 both ~25% empty; round-1e clean. THREE causes, all fixed + documented
+  (docs/harness_rollout_pitfalls.md, memory rollout-harness-empty-pollution, GitHub c13a543):
+  (1) PRIMARY rollout temp=1.0 → agent reads then ends WITHOUT writing (tech: 3 reads/0 writes/exit0/
+  no-timeout/20K doc) → fix ROLLOUT_TEMP=0.7; (2) 71K docs overflow ctx (94%) → timeout at 720s →
+  fix TIMEOUT_MULT=6.0; (3) transcript filename inconsistent across tasks (3 variants) → normalized
+  to meeting_transcript.md. Implication: w2-w6 trained on polluted data → qualitative ablation
+  conclusions hold (relative comparison) but absolute perf understated; clean redo (w7+) worth it.
+- w7 RELAUNCHED with fixed pipeline (temp 0.7, timeout 6.0, normalized names). SELF-VALIDATION
+  running: audit first ~10 rollouts' empty rate, expect drop from 25% toward ~0.
 - Synthesis → findings.md updated; to_human/committee_reward_ablation_20260615.html built + opened.
 - Open: clean-rerun w5 advisory; continue on-policy from w6 to push advisory to significance.
 
