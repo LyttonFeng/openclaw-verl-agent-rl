@@ -162,6 +162,28 @@ retracted item.** (My auto-grader reported 1/6 — that was a multi-line-format 
   quality ceiling reached by both, not base weakness. Whether "harder tasks" is even the right
   direction is now an open strategic question (see below).
 
+## mem0-RL round 1 (2026-06-17, w8-mem0): hint rollouts do NOT restore advisory gradient
+Tested the user's core hypothesis: do hint-augmented ROLLOUTS (INIT=w7, TASKS=val3_plus6_train_mem0,
+each Val3 prompt carries 3 semantically-retrieved generalizable how-to hints) restore advisory
+within-group reward variance (vs w7's flat 0.059) → give GRPO a gradient → move advisory?
+
+- **Rollouts 36/36 but healthcheck (guardrail 3) BLOCKED training** — nasa×2 groups 3/4 no-write
+  (hints do NOT fix the 71K-doc context wall — clean NO to "would mem help nasa?"); advisory 2/4
+  empty/timeout even at temp 0.7. Did NOT train on contaminated data; ran inject-only committee
+  re-score to measure variance.
+- **Committee within-group std among NON-EMPTY completers:** advisory **0.055** (n=2: 0.54,0.65),
+  gov 0.057 (n=3), tech 0.085 (n=3) — i.e. advisory ≈ w7's 0.059, NO variance restored. Auxiliary
+  ledger groups have healthy std 0.11–0.15 (4 completers). The advisory std_all=0.300 is ARTIFICIAL
+  (2 empties@0 vs 2 completions) — empty-vs-nonempty harness noise, NOT gradeable quality diversity.
+- **Mechanistic insight (paper-worthy):** a good how-to hint makes completions CONVERGE on the same
+  approach → COMPRESSES within-group variance, the opposite of what GRPO needs. The very property
+  that makes mem0 helpful at inference (convergent guidance) removes the reward variance on-policy RL
+  depends on. → mem0's advisory/tech gains are an INFERENCE-TIME mechanism that on-policy RL cannot
+  distill on this task family. Unifies the story: RL can't move advisory (flat gradient), mem0 can
+  (prompt injection, no gradient), and hint-rollouts can't bridge them (hints kill the variance).
+- CAVEAT: advisory n=2 completers is thin. DECISIVE re-roll launched: Val3 triplet only, K=8, temp 0.7,
+  hint-augmented, for a robust completer-std estimate before firming the conclusion.
+
 ## Open questions
 - Which AUTO_W is best @0.3 once w5/w4/w3/w2 are judged? (expect low / committee-dominant)
 - Does deliberation (w6) beat its no-deliberation twin (w5, same AUTO_W=0) net across tasks?

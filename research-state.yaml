@@ -46,6 +46,7 @@ conclusions:  # CORRECTED after w5 clean rerun (the flake had biased the deliber
   - "No single 'best' config: w5-clean/w4/w6 ≈ equivalent. Next-round init choice not load-bearing."
 
   - "mem0 (training-free hint injection) base+mem0 beats base on all 3 dims (gov WIN 7:1; advisory/tech 7:2 lean); HEAD-TO-HEAD w7+mem0 ≈ base+mem0 (all tie) → memory subsumes RL on this task family; mem0 moves advisory/tech that RL could not (flat gradient). Red line held."
+  - "mem0-RL round 1 (w8-mem0): hint-augmented ROLLOUTS do NOT restore advisory gradient. Completer-only committee std: advisory 0.055 / gov 0.057 / tech 0.085 ≈ w7's flat 0.059. MECHANISM: good how-to hints make completions CONVERGE → COMPRESS within-group variance (opposite of GRPO's need) → mem0's gains are inference-time, NOT on-policy-RL-distillable here. Healthcheck blocked training (nasa context wall + advisory 2/4 empty). Decisive K=8 triplet re-roll running to firm advisory n=2."
 
 current_focus: >
   Ablation table complete + synthesized (findings.md, to_human/committee_reward_ablation_20260615.html).

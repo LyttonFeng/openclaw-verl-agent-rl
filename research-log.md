@@ -71,3 +71,15 @@ A/B on 2 tasks (4 rollouts each), tf_shim_batched (micro-batching) vs serial:
 - batched(workers=4,max_batch=8): 754s but empty=3/4 ✗ CORRUPTED (left-pad/concurrency)
 DECISION: use batched-2 (clean + ~33% faster); NEVER 4 (corrupts outputs). Wired into
 run_next_round.sh as SHIM_SCRIPT/NUM_WORKERS/SHIM_MAX_BATCH (defaults batched-2). w8-mem0 relaunched on it.
+
+## 2026-06-17 — mem0-RL round 1 (w8-mem0): core hypothesis preliminarily REFUTED
+INIT=w7, TASKS=val3_plus6_train_mem0 (hint-augmented), batched-2. Rollouts 36/36 but healthcheck
+BLOCKED training (nasa×2 3/4 no-write — context wall, hints don't help; advisory 2/4 empty/timeout).
+Ran inject-only committee re-score (no training on contaminated data) → measured within-group std.
+- **Completer-only committee std:** advisory 0.055 (n=2), gov 0.057 (n=3), tech 0.085 (n=3) ≈ w7's
+  flat 0.059. NO variance restored. advisory std_all=0.300 is artificial (empties@0 vs completions).
+- **Mechanism:** good how-to hints make completions CONVERGE → COMPRESS within-group variance, the
+  opposite of GRPO's need. mem0's gains are inference-time; on-policy RL can't distill them here.
+- Launched DECISIVE re-roll (Val3 triplet, K=8, temp0.7, hint-aug) to firm the thin advisory n=2.
+  Did NOT blindly run rounds 2-3: round-1 measurement already answers the question; identical rounds
+  would reproduce the same null (hints kill the variance every time).
