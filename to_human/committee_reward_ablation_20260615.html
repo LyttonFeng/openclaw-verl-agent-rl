@@ -102,6 +102,24 @@
 <li><b>tech：</b>base ~0.72 有约 28% 空间，不是天花板。RL 把覆盖抬上去（owners 0.17→0.67），但准确率随机起伏（w4 attribution 0.50→0.25；w5-clean 守住 0.50；w5-flake 0.17 是失败run假象）—— 没有哪个设置稳定地"覆盖+准确双赢"。净委员会平 = 覆盖 vs grounding 冲突 + tie 区不可辨。要真动 tech 得换更难任务造可辨差异。</li>
 </ul>
 
+<h2>发现 5 — mem0 经验记忆:零训练 ≈ RL(用户的大胆想法,验证为强正面)</h2>
+<div class="key">
+从轨迹蒸馏<b>通用 how-to hint(非答案)</b>存 mem0,按语义检索注入 prompt。<b>红线全程守住</b>:只存通用方法、<code>infer=False</code> 逐字存、自动 scrub + 人工核验(抓到并泛化掉一条"sharing vs relocation"内容泄露)。
+</div>
+<table>
+<tr><th>配置</th><th>advisory</th><th>gov</th><th>tech</th><th>说明</th></tr>
+<tr class="base"><td class="var">base</td><td>锚</td><td>锚</td><td>锚</td><td>—</td></tr>
+<tr class="best"><td class="var">base+mem0<br>(零训练)</td><td class="tielora">7:2 偏 (p.18)</td><td class="win">赢 7:1 (p.07)</td><td class="tielora">7:2 偏 (p.18)</td><td>automated 86.2% 全场最高</td></tr>
+<tr><td class="var">w7 (RL)</td><td class="tie">平 5:4</td><td class="win">赢 8:0 (p.008)</td><td class="tie">平 5:3</td><td>RL 单独</td></tr>
+<tr><td class="var">w7+mem0</td><td class="tie">平 5:2偏</td><td class="tie">平 6:2</td><td class="win">赢 9:0 (p.004)🆕</td><td>RL+记忆叠加</td></tr>
+</table>
+<p class="small"><b>直接对判 w7+mem0 vs base+mem0:三维全平(6:3 / 4:3 / 4:5,p≥0.5)。</b></p>
+<div class="callout">
+<b>核心洞见:</b>① <b>一旦有 mem0(hint),叠加 RL 无可测增益 —— base+mem0 ≈ w7+mem0。零训练经验记忆 ≈ 昂贵的 RL+记忆。</b>
+② <b>mem0 能动 RL 推不动的维度</b>:advisory 的 reward 方差≈0(std 0.059)→ RL 无梯度;但 hint 直接改 prompt、不需梯度 → 记忆在"无梯度"维度反而有效。两杠杆在这套任务上很大程度冗余,记忆更省更强。
+③ 进行中:<b>w8-mem0</b> —— 把 hint 注入训练 rollout 跑 RL,验证能否恢复 advisory 的 reward 方差 + 把"跟 hint 做"蒸馏进权重。
+</div>
+
 <h2>方法学要点</h2>
 <ul class="small">
 <li><b>canonical base 锚定：</b>temp=0 在不同 eval 调用间会产出不同的确定性轨迹（agentic 多轮非确定性）→ base 不唯一是真 confound。固定一份 base@0.3，所有 lora 对同一 base 判。</li>

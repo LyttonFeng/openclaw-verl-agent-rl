@@ -45,6 +45,8 @@ conclusions:  # CORRECTED after w5 clean rerun (the flake had biased the deliber
   - "advisory & tech = GENUINE ties (human can spot obvious diffs but not adjudicate these). Do not chase marginal 6:2."
   - "No single 'best' config: w5-clean/w4/w6 ≈ equivalent. Next-round init choice not load-bearing."
 
+  - "mem0 (training-free hint injection) base+mem0 beats base on all 3 dims (gov WIN 7:1; advisory/tech 7:2 lean); HEAD-TO-HEAD w7+mem0 ≈ base+mem0 (all tie) → memory subsumes RL on this task family; mem0 moves advisory/tech that RL could not (flat gradient). Red line held."
+
 current_focus: >
   Ablation table complete + synthesized (findings.md, to_human/committee_reward_ablation_20260615.html).
   Open: (1) clean-rerun w5 advisory to firm up the deliberation comparison; (2) continue on-policy
