@@ -92,8 +92,28 @@ human-reviewed (caught + genericized a "sharing vs relocation" content leak the 
 - **Key: mem0 moves advisory AND tech in the lora direction (7:2 each) — the two dims RL could NOT move
   (flat reward gradient). Experiential memory restores quality where RL had no signal, training-free.**
   vs w7 (RL): advisory tie 5:4 / gov WIN 8:0 / tech tie 5:3. So mem0 ≈ comparable on gov, BETTER-trending on advisory/tech.
-- (advisory/tech 7:2 are p=.18, not formally significant, but a clearer lean than w7's ties.) w7+mem0
-  (stacking RL adapter + memory) eval running to complete the base / base+mem0 / w7 / w7+mem0 table.
+- (advisory/tech 7:2 are p=.18, not formally significant, but a clearer lean than w7's ties.)
+
+### Full 4-way table (all vs canonical base@0.3, 9-pair committee)
+| config | advisory | gov | tech |
+|---|---|---|---|
+| base | anchor | anchor | anchor |
+| base+mem0 (no training) | 7:2 lean (p.18) | **WIN 7:1 (p.07)** | 7:2 lean (p.18) |
+| w7 (RL) | tie 5:4 | **WIN 8:0 (p.008)** | tie 5:3 |
+| w7+mem0 (RL+memory) | tie 5:2 lean | tie 6:2 | **WIN 9:0 (p.004, reproduced 2×)** |
+
+### Direct head-to-head w7+mem0 vs base+mem0 (committee): ALL THREE TIE
+advisory 6:3 / gov 4:3 / tech 4:5 — none significant (p≥0.5). **w7+mem0 ≈ base+mem0.**
+- **HEADLINE FINDING: once experiential memory (hints) is present, stacking the RL adapter adds NO
+  measurable benefit — training-free base+mem0 ≈ expensive w7(RL)+mem0 on all 3 dims.** mem0 alone
+  already wins gov (7:1) and lifts the RL-stuck advisory/tech (7:2 lean) — the very dims RL could not
+  move. So for this task family, cheap experiential memory captures most/all of what RL provides.
+- Mechanism tie-in: RL couldn't move advisory (flat reward gradient, std 0.059); memory CAN, because
+  injected method-hints change the prompt directly (no gradient needed). The two levers are largely
+  redundant here, and memory is the cheaper/stronger one. (Caveat: all head-to-head ties at 9 pairs
+  have limited power; the consistent direction + base+mem0's standalone wins make the read robust.)
+- RED LINE held throughout: only human-reviewed generalizable how-to hints, infer=False verbatim, no
+  task answers/entities; semantic retrieval (generalizes, no task-type filter); tips verified in-prompt.
 
 ## Best model & answer (corrected)
 - **No single config is robustly "best."** w5-clean / w4 / w6 are all ≈ equivalent: gov favored,
