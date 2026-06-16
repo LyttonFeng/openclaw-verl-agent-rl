@@ -192,6 +192,27 @@ within-group reward variance (vs w7's flat 0.059) → give GRPO a gradient → m
 - **Implication for "training in" mem0:** to make advisory RL-trainable you'd need a COMPLETABLE
   advisory training instance (e.g. the eval-length doc), not hints. Hints are an inference-time lever.
 
+### Distillation test (w8-mem0 trained on healthy hint-rollouts, eval'd WITHOUT hints vs base@0.3)
+Trained w8-mem0 from w7 on the 7 healthy groups (dropped dead nasa×2), eval @0.3 RUNS=3 on the
+CANONICAL (no-hint) tasks, committee-judged vs the same base@0.3 anchor (verdict_w8mem0_nohint.log):
+- **advisory: TIE 5:4 base (p=1.0)** — NO distillation.
+- **gov: lora > base SIGNIFICANT 8:1 (p=0.039)** — the pre-existing committee-reward gov win (= w7).
+- **tech: TIE 5:3:1 (p=0.727)** — NO distillation. (automated MEETING 82.5% ≈ w7's 82.9%.)
+- **Conclusion: training on hint-augmented rollouts distills NOTHING beyond w7.** advisory/tech (the
+  dims mem0 helps at inference) stay at base level; only gov (the dim RL can train) holds its win.
+  → mem0's advisory/tech benefit is STRICTLY inference-time; on-policy RL cannot bake it into weights,
+  because (i) hints compress the within-group variance GRPO needs and (ii) the advisory training
+  instance is uncompleteable. This answers both of the user's sub-questions with a clean NO.
+
+### COMPLETE mem0 × RL story (paper-ready)
+1. Committee-reward RL moves GOV (8:0 / 8:1), INVISIBLE to the automated grader (automated-blindness).
+2. mem0 inference-time hints move ADVISORY+TECH that RL cannot (base+mem0 > base all 3; head-to-head
+   w7+mem0 ≈ base+mem0 → memory subsumes RL).
+3. The two CANNOT be merged via on-policy RL on hint-augmented rollouts: hints suppress reward variance
+   and the hard instances don't complete, so training distills nothing new (w8-mem0-no-hints ≈ w7).
+   mem0 is an inference lever; committee-RL is a (gov-only) weight lever; they are complementary, not
+   composable through this RL path. Red line held throughout (only reviewed generalizable how-to hints).
+
 ## Open questions
 - Which AUTO_W is best @0.3 once w5/w4/w3/w2 are judged? (expect low / committee-dominant)
 - Does deliberation (w6) beat its no-deliberation twin (w5, same AUTO_W=0) net across tasks?

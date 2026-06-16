@@ -90,3 +90,9 @@ Ran inject-only committee re-score (no training on contaminated data) → measur
 - Now retraining w8-mem0 on 7 healthy groups (drop nasa) → produces adapter to answer sub-q (b):
   does training on hint-augmented rollouts distill hint-following into weights? (eval WITHOUT hints
   vs base). gov/tech have real gradient, advisory contributes ~nothing (2 completers).
+- **DISTILLATION VERDICT (w8-mem0 no-hint vs base@0.3, 9-pair committee):** advisory TIE 5:4 p=1.0;
+  gov lora>base SIG 8:1 p=0.039; tech TIE 5:3:1 p=0.727. automated 82.5% ≈ w7. → training on
+  hint-rollouts distills NOTHING beyond w7: advisory/tech stay at base, only gov (RL-trainable dim)
+  holds. mem0's advisory/tech benefit is STRICTLY inference-time; on-policy RL can't bake it in.
+  Both user sub-questions answered NO. mem0×RL story COMPLETE + paper-ready. (With-hint eval running
+  for the 2x2 table; expected w8-mem0+mem0 ≈ base+mem0 tie per the established w7+mem0 result.)
