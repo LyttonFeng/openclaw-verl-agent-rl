@@ -37,7 +37,7 @@ source ~/.pinchbench_env 2>/dev/null || true
 source /root/openclaw-venv/bin/activate
 unset OPENCLAW_HOST ECS_HOST OPENCLAW_REMOTE_ACTIVATE_CMD
 export PINCHBENCH_FORCE_LOCAL_OPENCLAW=1
-export ROLLOUT_TIMEOUT_MULT="${ROLLOUT_TIMEOUT_MULT:-6.0}"   # guardrail (3): 180x6=1080s. advisory/NASA 71K docs hit the old 720s cap (94% ctx + compaction); give headroom.
+export ROLLOUT_TIMEOUT_MULT="${ROLLOUT_TIMEOUT_MULT:-4.0}"   # 180x4=720s. DATA-DRIVEN: all SUCCESSFUL rollouts finish <=593s (w2 max 593, w7 max 479); long 71K docs are context-bound (96% ctx) and NEVER complete, so a higher cap only wastes ~370s/doomed-rollout. 720s covers every completable rollout + fails the doomed long-docs fast. (Raising the cap does NOT fix the context wall.)
 ROLLOUT_TEMP="${ROLLOUT_TEMP:-0.7}"                          # rollout sampling temp. temp=1.0 caused ~25% premature-termination (agent reads then ends WITHOUT writing the deliverable). 0.7 keeps diversity, far fewer empties.
 
 REPO=/workspace/openclaw-naive-meeting-analysis-github

@@ -21,8 +21,15 @@ silently poison the GRPO signal** (empties inject noisy 0-scores), so guard agai
 - advisory / NASA tasks (~71K-char transcripts) fill the context to ~94%; the LLM times out and
   the harness attempts "compaction before retry," but the old wall-clock cap (`ROLLOUT_TIMEOUT_MULT=4.0`
   → 180×4 = 720s) was too short — rollouts died at ~734s.
-- **FIX:** `ROLLOUT_TIMEOUT_MULT=${ROLLOUT_TIMEOUT_MULT:-6.0}` (180×6 = 1080s) gives the long docs
-  room to compact + finish. (Separately, this is a real base-capability limit on very long docs.)
+- **NON-FIX (corrected 2026-06-16):** raising the cap does NOT help — the 71K docs are CONTEXT-bound
+  (~96% window), not time-bound; they never complete, so a higher timeout (we tried 6.0=1080s) only
+  wastes ~370s per doomed rollout. DATA: every SUCCESSFUL rollout finishes ≤593s (w2 max 593, w7 max
+  479). **Correct timeout = `ROLLOUT_TIMEOUT_MULT=4.0` (720s)**: covers all completable rollouts +
+  margin, fails the doomed long-docs fast. The actual long-doc fix is structural (see below), not timeout:
+  (a) larger effective context window; (b) pre-chunk / map-reduce the transcript; (c) partial-credit
+  reward so an incomplete long-doc rollout still gives a gradient instead of a 0. Also: long-doc groups
+  (esp. speaker_nasa) have ALWAYS all-timed-out and been dropped (w2–w7) — consider EXCLUDING them from
+  the rollout set so the round doesn't burn ~4×12min on a perpetually-dead group.
 
 ## Cause 3 (LATENT) — inconsistent transcript filename across tasks
 - The 9 training tasks used THREE different transcript `dest` filenames:
