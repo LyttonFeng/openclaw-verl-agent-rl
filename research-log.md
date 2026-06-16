@@ -63,3 +63,11 @@
   long-doc/agentic-retrieval. STRATEGIC FORK (awaiting user): (1) build long-doc variant to hit the
   real failure region (confounds with read-loop), or (2) reconsider whether "harder tasks" is the
   right direction given base reasons well (the advisory/tech tie may be a real shared ceiling).
+
+## 2026-06-17 — concurrent rollout validated (batched shim, 2-way)
+A/B on 2 tasks (4 rollouts each), tf_shim_batched (micro-batching) vs serial:
+- serial(workers=1): 1031s, empty=0, scores [0,.74,.76,.8]
+- batched(workers=2,max_batch=2): 689s (−33%), empty=0, scores [.70,.73,.92,.97] ✓ CLEAN
+- batched(workers=4,max_batch=8): 754s but empty=3/4 ✗ CORRUPTED (left-pad/concurrency)
+DECISION: use batched-2 (clean + ~33% faster); NEVER 4 (corrupts outputs). Wired into
+run_next_round.sh as SHIM_SCRIPT/NUM_WORKERS/SHIM_MAX_BATCH (defaults batched-2). w8-mem0 relaunched on it.
