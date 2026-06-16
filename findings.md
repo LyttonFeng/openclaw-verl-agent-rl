@@ -63,6 +63,20 @@ does judge **deliberation** help?
   apart, tie IS the answer, not a judge failure. The marginal 6:2 "lora-favored" reads are noise in
   a region of genuine indistinguishability; do not chase them.
 
+## w7 (2026-06-16): clean on-policy round from w6, post-harness-fix — gov CONSOLIDATED
+First round on CLEAN rollouts (temp 0.7 + normalized filenames; 7/9 groups, NASA long-docs dropped).
+Continue-trained from committee_w6, AUTO_W=0, deliberation ON, base@0.3 ref, LR 2.0e-5. vs base@0.3:
+- **gov: WIN 8:0, p=0.008** — stronger/cleaner than w6 (7:1, p=.070). Another on-policy round on clean
+  data CONSOLIDATED the gov win (now the strongest deliberation-trained gov result; only w3's 9:0 polluted-data run was higher).
+- **tech: tie, but drifted base-leaning(w6 6:3)→lora-leaning(w7 5:3)** — slight positive, not significant.
+- **advisory: dead tie (5:4 base)** — unmoved; the genuine ceiling/tie region, consistent across ALL rounds.
+- **automated MEETING 82.9% — highest of every variant** (base 79.5, prev-best w2 81.3, w6 79.7).
+- LR 2.0e-5 was sufficient (gov significant, nothing regressed) → 2.5e-5 fallback not needed.
+- **Takeaway: the core result (committee-reward wins gov, invisible-to-automated) REPRODUCES and
+  STRENGTHENS on clean post-harness-fix data; advisory/tech remain ties (ceiling). Iterating clean
+  on-policy rounds consolidates gov but does not break the advisory/tech ceiling — that needs the
+  harder-task / bigger-context work, still open.**
+
 ## Best model & answer (corrected)
 - **No single config is robustly "best."** w5-clean / w4 / w6 are all ≈ equivalent: gov favored,
   advisory/tech tie. w3 has the single most solid result (gov 9:0) but lowest automated. For the

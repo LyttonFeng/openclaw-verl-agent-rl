@@ -37,6 +37,18 @@
   conclusions hold (relative comparison) but absolute perf understated; clean redo (w7+) worth it.
 - w7 RELAUNCHED with fixed pipeline (temp 0.7, timeout 6.0, normalized names). SELF-VALIDATION
   running: audit first ~10 rollouts' empty rate, expect drop from 25% toward ~0.
+
+## 2026-06-16 (w7 result) — clean round consolidates gov; my live-edit mistake + recovery
+- VALIDATION confirmed: temp 0.7 + filename fix → non-timeout empties 0, path-confusion 0 (clean).
+  Long-doc timeouts persist (context wall, separate). Timeout reverted 6.0→4.0 (data: successes ≤593s).
+- MISTAKE: I overwrote run_next_round.sh WHILE w7 was executing (adding adaptive-skip) → w7's bash hit
+  a syntax error at line 83 POST-rollout. Rollouts (36/36) were intact; recovered by manually running
+  committee-inject + retrain on the completed graded data (recover_w7_train.sh). Lesson: NEVER edit a
+  script while it's running. (Adaptive task-skip + reprobe committed for w8+; landmine-proof per review.)
+- **w7 RESULT (clean data, from w6, LR 2.0e-5) vs base@0.3: gov WIN 8:0 p=0.008 (consolidated, stronger
+  than w6 7:1 p=.070); tech tie drifted lora-leaning (5:3); advisory dead tie (5:4). automated 82.9%
+  (highest variant).** Core result reproduces+strengthens on clean data; advisory/tech ceiling unmoved.
+  2.5e-5 fallback NOT needed. Adapter backed up: /workspace/saved_adapters/committee_w7.
 - Synthesis → findings.md updated; to_human/committee_reward_ablation_20260615.html built + opened.
 - Open: clean-rerun w5 advisory; continue on-policy from w6 to push advisory to significance.
 

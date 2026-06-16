@@ -33,6 +33,9 @@ variants:  # committee verdict (adv/gov/tech) vs base@0.3 + automated MEETING%
   w4:    {auto_w: 0.2, delib: false, committee: "adv tie / gov WIN 7:1 p.070 / tech tie", meeting_pct: 79.3}
   w2:    {auto_w: 0.5, delib: false, committee: "adv tie / gov TIE 4:4 / tech tie", meeting_pct: 81.3, note: "PARADOX: highest automated, weakest committee"}
   w3:    {auto_w: 0.7, delib: false, committee: "adv 6:2 lora / gov WIN 9:0 p.004 / tech tie", meeting_pct: 74.7}
+  w7:    {auto_w: 0.0, delib: true, init: committee_w6, data: "fresh on-policy CLEAN (temp0.7, filenames fixed, 7/9 groups)", lr: 2.0e-5,
+          committee: "adv tie 5:4 / gov WIN 8:0 p.008 / tech tie 5:3-lora", meeting_pct: 82.9,
+          note: "first clean post-harness-fix round; CONSOLIDATED gov (stronger than w6); highest automated; advisory/tech ceiling unmoved"}
 
 conclusions:  # CORRECTED after w5 clean rerun (the flake had biased the deliberation claim)
   - "ROBUST: committee-reward beats base on gov, INVISIBLE to automated (gov auto/hyb flat ~.85/.74=base). But only LARGE margins trustworthy: same w5 adapter gave gov 8:1 p.039 then 6:1 p.125 across reruns; only w3 9:0 p.004 is solid."
