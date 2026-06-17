@@ -270,3 +270,14 @@ static forced hint cannot teach, and that creates instance-level differentiation
 the highest base+mem variance (0.13) → the dimension with the most gradient → where RL's space was.
 CAVEAT: tech p=0.070 is borderline (only large margins fully trustworthy per our standard); confirm with
 a held-out judge (guard vs committee-overfit) + ideally a rerun. advisory/gov genuine ties (ceiling).
+
+## forced-RL vs base+mem (2026-06-17): ALL TIE — gating, not gradient, was the lever
+forced-RL (cold-start from base, FORCED mem framing, same 7 groups, LR 2.5e-5) vs base+mem:
+- advisory TIE 2:5:2 (p=.45) / gov TIE 4:2:3 (p=.69) / tech TIE 3:4:2 (p=1.0).
+**forced-RL net-beats base+mem NOWHERE** — exactly like w7+mem0's all-tie ("memory subsumes RL").
+KEY CONTRAST with gated-RL (tech WIN 7:1, p=.070): forced had MORE rollout variance (tech 0.133 vs
+gated 0.110) yet did NOT win, while gated did. → **The lever is the GATING MECHANISM (policy learns
+WHEN to use memory), NOT raw gradient magnitude.** Giving the policy a choice over memory creates an
+instance-level skill the committee rewards and that a static forced hint cannot teach — and that's what
+lets RL carve out space the pure mem0 harness doesn't already occupy. This is the constructive answer to
+"how to do RL on the mem0 harness to improve": init from base + POLICY-GATED memory (not forced).
