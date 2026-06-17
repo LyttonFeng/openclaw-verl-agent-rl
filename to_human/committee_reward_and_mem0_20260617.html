@@ -120,7 +120,7 @@
 ③ <b>已完成 → 见发现 6</b>:w8-mem0 把 hint 注入训练 rollout 跑 RL,结论是 hint-rollout <b>无法</b>把 mem0 的增益蒸馏进权重。
 </div>
 
-<h2>发现 6 — mem0 × 多轮 RL:hint-rollout 无法蒸馏进权重(用户托付实验的完整结论)</h2>
+<h2>发现 6 — w8-mem0(hint 注入训练 rollout 跑 RL)结果:无法把 mem0 增益蒸馏进权重</h2>
 <div class="key">
 用户假设:把 hint 注入<b>训练 rollout</b> → 产出质量多样性 → 恢复 advisory 的 reward 方差(w7 仅 0.059)→ 给 GRPO 梯度 → 推动 advisory;并测训练能否把"跟 hint 做"<b>蒸馏进权重</b>(不带 hint 评测也变好)。<b>两问的答案都是干净的 NO</b>,而且机理清晰。
 </div>
