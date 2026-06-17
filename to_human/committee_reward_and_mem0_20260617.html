@@ -137,6 +137,23 @@
 <b>统一结论:</b> committee-RL 是(只对 gov 的)<b>权重杠杆</b>;mem0 是(对 advisory/tech 的)<b>推理时杠杆</b>;二者<b>无法</b>经这条 on-policy RL 路径合并 —— 互补,但不可叠加蒸馏。红线全程守住。
 </div>
 
+<h2>发现 7 — 突破:RL 在 mem0 harness 上<b>能</b>净胜纯记忆(gated 配方赢 tech)</h2>
+<div class="key">
+建设性目标"在 mem0 基础上做 RL 提升模型"<b>成功</b>。两个此前 w7/w8 都缺的关键要素:<b>①从 base 冷启</b>(H-A:base+mem 的 gov/tech 组内方差 ~0.13,而 w7 已饱和到 0.06 → 从 base 起步才有梯度);<b>②policy-gated memory</b>(hint 改成"可选,你自己判断用不用" → 模型学"何时用记忆",静态强制 hint 教不了)。
+</div>
+<table>
+<tr><th>头对判 vs base+mem</th><th>advisory</th><th>gov</th><th>tech</th></tr>
+<tr class="best"><td class="var">gated-RL<br>(base冷启+可选记忆)</td><td class="tie">平 4:4</td><td class="tie">平 2:3:4</td><td class="win"><b>赢 7:1 (p.070)</b> ✅</td></tr>
+<tr><td class="var">forced-RL<br>(base冷启+强制记忆)</td><td class="tie">平 2:5:2</td><td class="tie">平 4:2:3</td><td class="tie">平 3:4:2</td></tr>
+</table>
+<p class="small">hybrid:gated-RL 78.7% ≈ base+mem 80.0%(<b>tech 这个胜 automated 完全看不见</b> —— 和核心 gov 结果同款"自动评分盲区")。直接对决 gated-RL vs forced-RL:gated 三维都略领先(adv 3:1 / gov 4:3 / tech 6:3)但均不显著。</p>
+<div class="callout">
+<b>核心洞见:杠杆是 gating 机制,不是原始梯度。</b> forced-RL 的 tech rollout 方差更高(0.133 vs gated 0.110)却<b>哪都没赢</b>(和 w7+mem0 一样全平),而 gated <b>赢了 tech</b>。→ <b>让 policy 自己决定"何时用记忆"</b>制造了通用 hint 给不了的实例级技能,委员会能奖励它 —— 这才是 RL 在纯记忆已占满的地盘之外<b>挖出空间</b>的方式。<br>
+<b>这打破了"记忆 subsume RL"</b>(w7+mem0 当年三维全平):正确配方下,on-policy RL <b>第一次</b>在 mem0 harness 上净胜纯记忆。<b>配方 = base 冷启 + 可选记忆 + 丢不可完成组</b>。<br>
+<b>进行中:</b> 用 gated 配方接着 on-policy 跑 r2/r3,看 tech 胜是<b>巩固</b>还是<b>饱和</b>(从 adapter 续训会重新引入 w7 那种饱和风险)。<br>
+<span style="color:#888">caveat:tech 7:1 的 p=0.070 是边缘显著(本项目标准:只有大 margin 完全可信);真 held-out 复核需第 4 个训练没用过的 judge 模型(当前只有 3 个 key,全参与了训练)—— 留作真实数据阶段的方法学 TODO。</span>
+</div>
+
 <h2>方法学要点</h2>
 <ul class="small">
 <li><b>canonical base 锚定：</b>temp=0 在不同 eval 调用间会产出不同的确定性轨迹（agentic 多轮非确定性）→ base 不唯一是真 confound。固定一份 base@0.3，所有 lora 对同一 base 判。</li>
