@@ -50,6 +50,19 @@ conclusions:  # CORRECTED after w5 clean rerun (the flake had biased the deliber
   - "DISTILLATION TEST (w8-mem0 trained on healthy hint-rollouts, eval'd WITHOUT hints vs base@0.3): advisory TIE 5:4 (p=1.0), gov lora>base SIG 8:1 (p=0.039), tech TIE 5:3:1 (p=0.727). automated 82.5% ≈ w7. → training on hint-rollouts distills NOTHING beyond w7: advisory/tech (dims mem0 helps) stay at base; only gov (dim RL trains) holds. mem0's advisory/tech benefit is STRICTLY inference-time; on-policy RL can't bake it in (hints compress variance + advisory training instance uncompleteable). BOTH user sub-questions = clean NO. mem0×RL story COMPLETE + paper-ready."
 
 current_focus: >
+  GOAL (user, 2026-06-17, restated + "小心行事"): CONSTRUCTIVE — find HOW to do RL ON TOP OF the
+  mem0 harness so the model actually IMPROVES over base+mem0. Not "prove RL useless"; negatives only
+  rule out dead paths. Be deliberate: never touch running pod jobs, verify before each GPU action,
+  don't burn compute on experiments that don't serve "improve the model", confirm before any big
+  training round. RECIPE HYPOTHESIS (3 prerequisites, RL fails if any missing — w8-mem0 failed on #3):
+  (1) GRADIENT EXISTS: init from base+mem0 (trainable dims NOT yet saturated, unlike w7) + push
+      sampling temp to fight hint variance-compression. [testing: base+mem variance temp0.7/1.0]
+  (2) mem0 LEAVES HEADROOM: train on COMPLETABLE + INSTANCE-SPECIFIC tasks where a generic hint can't
+      carry the answer (implicit owners/retractions/revised deadlines) but a correctness reward can. [H-E #32]
+  (3) NOT POISONED: strict healthcheck (drop timeout/no-write groups) + reward only what the hint can't
+      encode. (w8-mem0 regressed advisory by continue-training on timeout-heavy advisory hint-rollouts.)
+  Gate: if base+mem has gradient -> proceed to H-E carefully; if even temp1.0 base+mem is flat -> STOP,
+  confirm direction with user before any large training. ORIGINAL BROADEN framing below still applies.
   BROADEN (2026-06-17, user-directed): actively HUNT the regime where RL beats the mem0 harness
   baseline ("寻找 RL 的空间 —— mem 带不了它"). mem0 IS a permanent harness component (hints at BOTH
   train and eval); the question is RL-on-mem0-harness vs base+mem0, NOT distillation-into-weights.
