@@ -231,3 +231,23 @@ giving the policy CHOICE adds even more variance on top of this; then a real RL 
 - Does deliberation (w6) beat its no-deliberation twin (w5, same AUTO_W=0) net across tasks?
 - Can we net-beat base on advisory at significance (currently 6:2 favored but p=0.289)?
 - Does temp=0.3 sampling change base *quality* vs greedy? (head-to-head not yet run)
+
+## H-G result (2026-06-17): policy-gated mem did NOT add variance — but improved advisory completion
+Compared base+mem FORCED vs base+mem GATED (optional framing: "you may apply/ignore these notes; judge
+relevance yourself"), both temp0.7 K=8, within-group committee std (completers):
+- advisory: forced 0.062 (4 comp, 4 timeout) | **gated 0.061 (6 comp, 1 timeout)** — same variance, but gated COMPLETES MORE
+- gov: forced **0.133** (8 comp, 0 to) | gated 0.076 (5 comp, 4 to) — gated LOWER + more timeouts
+- tech: forced **0.133** (8 comp) | gated 0.110 (8 comp) — gated slightly lower
+**SURPRISE (refutes the simple hypothesis):** giving the base policy CHOICE did NOT raise within-group
+variance — it was equal-or-lower. At the base (untrained) rollout stage, the model mostly defaults to a
+convergent behavior even when memory is optional; the quality-diverse "gating" behavior isn't there yet
+(it's what RL would have to TEACH, not something base exhibits). So gated gives RL LESS gradient than
+forced on gov/tech, not more.
+**But a real upside:** gated nearly halved advisory timeouts (1 vs 4) → 6/8 vs 4/8 completers. The optional
+framing lets the model NOT cram long hints → the advisory long-doc completes more often. This directly
+counters the w8 advisory-timeout regression. Tradeoff: gated added gov timeouts (the "briefly judge
+relevance" instruction may add reasoning overhead).
+**Implication for the recipe:** for raw GRADIENT, FORCED base+mem is the stronger training start
+(gov/tech 0.133, clean). GATED's value is completion-robustness + a gating skill that only materializes
+AFTER training — so a gated training round tests a different hypothesis (can RL learn to use memory
+selectively?) than forced (can RL exploit the gov/tech gradient mem leaves?).
