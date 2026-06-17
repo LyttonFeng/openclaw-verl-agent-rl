@@ -251,3 +251,22 @@ relevance" instruction may add reasoning overhead).
 (gov/tech 0.133, clean). GATED's value is completion-robustness + a gating skill that only materializes
 AFTER training — so a gated training round tests a different hypothesis (can RL learn to use memory
 selectively?) than forced (can RL exploit the gov/tech gradient mem leaves?).
+
+## BREAKTHROUGH (2026-06-17): gated-RL on the mem0 harness BEATS base+mem on tech
+The constructive goal — "do RL ON TOP OF the mem0 harness to IMPROVE the model" — succeeded.
+Recipe: cold-start RL from BASE (not w7) on 7 healthy groups (nasa dropped), POLICY-GATED memory
+(hints framed as optional, "you may apply/ignore — judge relevance yourself"), committee reward,
+LR 2.5e-5. Eval @0.3 with gated framing, committee head-to-head vs base+mem (forced harness baseline):
+- advisory: TIE 4:4:1 (p=1.0)
+- gov: TIE 2:3:4 (p=1.0, slight lora lean)
+- **tech: lora > base SIGNIFICANT 7:1:1 (p=0.070)** — gated-RL NET-BEATS base+mem on tech.
+hybrid: gated-RL 78.7% ≈ base+mem 80.0% (so the committee win on tech is INVISIBLE to automated — the
+same automated-blindness pattern as the core gov result).
+**Why this matters:** w7+mem0 vs base+mem0 was all-tie ("memory subsumes RL"). The GATED recipe BROKE
+that tie on tech — the first time on-policy RL net-beats the pure mem0 harness. Two ingredients made it
+work, both absent in w7/w8: (1) init from BASE (H-A: base+mem has real gradient ~0.13 on gov/tech that
+w7 had saturated to 0.06); (2) POLICY-GATED memory (the model learns WHEN to use the hint — a skill a
+static forced hint cannot teach, and that creates instance-level differentiation RL can reward). tech had
+the highest base+mem variance (0.13) → the dimension with the most gradient → where RL's space was.
+CAVEAT: tech p=0.070 is borderline (only large margins fully trustworthy per our standard); confirm with
+a held-out judge (guard vs committee-overfit) + ideally a rerun. advisory/gov genuine ties (ceiling).
