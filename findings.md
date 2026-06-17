@@ -213,6 +213,19 @@ CANONICAL (no-hint) tasks, committee-judged vs the same base@0.3 anchor (verdict
    mem0 is an inference lever; committee-RL is a (gov-only) weight lever; they are complementary, not
    composable through this RL path. Red line held throughout (only reviewed generalizable how-to hints).
 
+## H-A result (2026-06-17): the gradient IS there from base+mem — w7 was just saturated
+Measured base+mem (FORCED hint, temp0.7, K=8) within-group committee std vs w7+mem (~0.06):
+- advisory **0.062** (4/8 complete, 4 timeout) — still flat (completion-bound; init can't fix the long-doc wall)
+- **gov 0.133** (8/8 complete) — **2.3× w7's 0.057**
+- **tech 0.133** (8/8 complete) — **1.6× w7's 0.085**
+**KEY (changes the outlook, constructive):** the earlier "0.06 flat gradient" was largely a **w7-SATURATION**
+artifact, NOT purely hint variance-compression. Starting RL from **base+mem (unconverged)** gives a REAL,
+usable gradient on gov/tech (~0.13). So "RL on the mem0 harness can improve the model" is plausible on
+gov/tech — w7/w8 failed in part because they continue-trained from an already-converged w7. advisory stays
+flat because it's completion-bound (4/8 timeout) — needs a completable instance (H-E), not a better init.
+Implication for the recipe: **init from base+mem, not w7+mem.** Next: H-G (policy-gated mem) tests whether
+giving the policy CHOICE adds even more variance on top of this; then a real RL round from base+mem.
+
 ## Open questions
 - Which AUTO_W is best @0.3 once w5/w4/w3/w2 are judged? (expect low / committee-dominant)
 - Does deliberation (w6) beat its no-deliberation twin (w5, same AUTO_W=0) net across tasks?
