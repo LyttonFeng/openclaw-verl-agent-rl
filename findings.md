@@ -304,3 +304,22 @@ REPRODUCED margins are trustworthy (reaffirms the project-wide caveat). (2) best
 (significant tech win + no gov regression + cleanest). (3) iteration doesn't amplify the gain here — one good
 cold-start round captures it. For a robust magnitude estimate you'd need more eval pairs (bigger N) or a real
 held-out judge (4th model), not more training rounds.
+
+## H-E result (2026-06-18): synthetic instance-specific training does NOT transfer to real Val3
+Built a generator (LLM-render from a sampled trap-spec; ground-truth answer key) for COMPLETABLE +
+INSTANCE-SPECIFIC "action items" tasks (implicit owners, retraction, revised deadline, reassignment,
+multi-turn synthesis). Sanity gate: base = 0.68 key-correctness on held-out H-E (errs on traps → real gap).
+Trained he_r1: cold-start from base + gated mem + reward = 0.5·key-correctness + 0.5·committee, 24 tasks.
+- **Strongest gradient in the project: training-data within-group key_score std = 0.172** (18/24 groups) —
+  key-correctness on instance-specific tasks gives the clean strong gradient gov/advisory never had.
+- **BUT no transfer to real Val3.** he_r1 vs base+mem (committee pairwise): advisory TIE 3:3:3, gov TIE
+  5:2:2 (base-lean), tech TIE 6:2:1 (base-lean, p=.29). qwen-judged hybrid agrees: advisory −0.026, gov
+  −0.066, tech +0.007 (≈tie/slightly worse). he_r1 ≈ base+mem, no win, gov/tech slightly base-leaning.
+- **KEY CONTRAST:** gated_r1 (trained ON the real Val3 tech task) WON tech 7:1; he_r1 (trained on synthetic
+  H-E) ties/loses tech. → **the gated_r1 tech win is IN-DISTRIBUTION (train on the actual task), NOT a
+  transferable "instance-specific correctness" skill.** Synthetic instance-specific training did not generalize.
+- Pending: held-out H-E key check (did he_r1 learn the skill in-dist, 0.68→?) to distinguish
+  "learned-but-doesn't-transfer" vs "training-didn't-take".
+METHOD NOTE: judge stability measured — committee members deepseek-chat & qwen3-max std=0.000, minimax ~0.02
+(all stable); the noisy judge was only the eval's hybrid llm component (deepseek-v4-flash). Rule grader has
+false-negatives on present-but-differently-phrased content (criterion flips run-to-run). So trust committee.
