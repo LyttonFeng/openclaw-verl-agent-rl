@@ -333,5 +333,25 @@ FIX (red-line-safe): distilled 8 GENERIC action-item method hints from he_r1 hig
 (deepseek-chat, scrub names/dates/answers, no trap-specific solutions; human-reviewed — #4 "flag cancelled
 items" & #6 "hard vs aspirational deadlines" borderline-but-generic). Stored in a NEW collection
 `meeting_hints_he` (~/mem0_hints_he); Val3 collection left FROZEN (history comparable). New retrieval returns
-action-item hints only — mismatch resolved. Re-running base+new-mem baseline on 6 held-out H-E tasks now;
-next: re-run an H-E round (committee-only and/or key-blend) on the correctly-matched mem.
+action-item hints only — mismatch resolved.
+
+## DECISIVE NEGATIVE (2026-06-19): synthetic H-E is essentially UNRELATED to Val3 (both RL and mem fail to transfer)
+Ran the clean controlled probe the confound demanded: **pure-base vs base+new-mem on Val3**, both fresh, same
+session, temp 0.3, 3 runs/task, committee pairwise (empties filtered). The new mem = generic action-item hints
+distilled from synthetic H-E. Result — base+new-mem does NOT beat pure base on ANY Val3 task:
+- advisory: base 4 / newmem 2 (TIE, base-lean, p=.69) — action-item hints mismatched for this task
+- gov:      base 2 / newmem 1 (TIE, base-lean, p=1.0) — mismatched
+- **tech:   base 4 / newmem 5 (TIE, DEAD EVEN, p=1.0)** — and tech is where the hints ARE relevant
+So even on the matched task, the synthetic-derived mem adds nothing.
+**Triangulation (now consistent across two mechanisms):**
+- RL on synthetic H-E → no transfer to Val3 (he_r1 tied/base-lean).
+- Mem distilled from synthetic H-E → no transfer to Val3 (this test, dead tie on tech).
+- CONTRAST: mem built FROM Val3 (old, task-matched) directionally helps all 3 (~7:2); gated_r1 trained ON
+  real Val3 tech won tech 7:1.
+**CONCLUSION:** the lever that moves Val3 is IN-DISTRIBUTION signal (real Val3 data), delivered via EITHER RL or
+memory — NOT synthetic generation. Programmatically-generated "completable + instance-specific" tasks, however
+clean their gradient (he_r1 train std=0.172, the strongest in the project), do not capture Val3's real demands.
+The generic action-item hints ("listen for owners/deadlines", "group by topic") are things base already does,
+so they add no non-obvious knowledge on Val3-tech. This kills the synthetic-data-flywheel direction for Val3 and
+sharpens the paper's core claim: mem-as-harness ≈ RL *because both are vehicles for in-distribution signal*;
+neither manufactures capability from out-of-distribution synthetic data.
