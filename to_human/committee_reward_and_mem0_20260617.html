@@ -150,8 +150,18 @@
 <div class="callout">
 <b>核心洞见:杠杆是 gating 机制,不是原始梯度。</b> forced-RL 的 tech rollout 方差更高(0.133 vs gated 0.110)却<b>哪都没赢</b>(和 w7+mem0 一样全平),而 gated <b>赢了 tech</b>。→ <b>让 policy 自己决定"何时用记忆"</b>制造了通用 hint 给不了的实例级技能,委员会能奖励它 —— 这才是 RL 在纯记忆已占满的地盘之外<b>挖出空间</b>的方式。<br>
 <b>这打破了"记忆 subsume RL"</b>(w7+mem0 当年三维全平):正确配方下,on-policy RL <b>第一次</b>在 mem0 harness 上净胜纯记忆。<b>配方 = base 冷启 + 可选记忆 + 丢不可完成组</b>。<br>
-<b>进行中:</b> 用 gated 配方接着 on-policy 跑 r2/r3,看 tech 胜是<b>巩固</b>还是<b>饱和</b>(从 adapter 续训会重新引入 w7 那种饱和风险)。<br>
 <span style="color:#888">caveat:tech 7:1 的 p=0.070 是边缘显著(本项目标准:只有大 margin 完全可信);真 held-out 复核需第 4 个训练没用过的 judge 模型(当前只有 3 个 key,全参与了训练)—— 留作真实数据阶段的方法学 TODO。</span>
+</div>
+<p class="small"><b>on-policy 迭代 r1→r2→r3(vs base+mem):tech 三轮全 lora-favored,方向稳、幅度抖。</b></p>
+<table>
+<tr><th>维度</th><th>r1</th><th>r2</th><th>r3</th></tr>
+<tr><td class="var">tech</td><td class="win">赢 7:1 (.070)</td><td class="win">赢 8:1 (.039)</td><td class="tie">平 5:3 (.73)</td></tr>
+<tr><td class="var">gov</td><td class="tie">平</td><td>base 赢 7:1 (.070)</td><td class="tie">平 4:3</td></tr>
+<tr><td class="var">advisory</td><td class="tie">平</td><td class="tie">平</td><td class="tie">平</td></tr>
+</table>
+<div class="callout">
+<b>结论:迭代不放大 tech 胜 —— 单轮比分被 9-对小样本噪声主导。</b> tech 三轮都偏 gated(7:1/8:1/5:3),方向是真的;但显著性 2/3 抖动,r3 washout。<b>gov 的 r2"退化"(base 7:1)是噪声 —— r3 自己回平了</b>(无 tech-换-gov 权衡)。advisory 全程平。<br>
+<b>最佳单 checkpoint = gated_r1</b>(显著 tech 胜 + gov 不退 + 最干净);一轮好的冷启就抓住了增益,多跑不放大。要更稳的幅度,得加大 eval N 或上第 4 个 held-out judge,**不是多训轮次**。advisory 太易超时,不适合 on-policy 迭代(从训练后模型跑 4/4 全超时 → r2/r3 已剔除)。
 </div>
 
 <h2>方法学要点</h2>
