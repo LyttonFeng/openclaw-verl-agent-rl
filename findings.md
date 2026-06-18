@@ -373,3 +373,11 @@ PREDICTION / DECISION RULE:
     If TIE/base-lean -> mem doesn't generalize; FALL BACK to in-distribution (val3 3 tasks, prepared).
   - If mem helps anywhere -> launch gated RL+mem (cold-start, the tech-7:1 recipe).
 Status: held-out rollout RUNNING via tf_shim.
+
+## RESULT (2026-06-19, partial): mem does NOT transfer to held-out — it HURTS
+Held-out Tampa council, committee pairwise base vs base+mem (tf_shim, temp 0.3):
+- contact_info (only cleanly comparable, base 3 / mem 4 valid): **base 9 / mem 1 / tie 2, sign-p=0.021 → base > base+mem SIGNIFICANT.** Mem hurts even on a related held-out task ("note speaker role" hint was relevant, yet mem lost 9:1).
+- upcoming: base 4/4 finished (~290-450s); **base+mem 0/4 — ALL TIMED OUT at 734s** (mem ↑ rollout time past the 180×4 budget). Re-running at MULT 6.0 (1080s) to separate "mem runaway" from "mem just slow".
+- votes: 1/4 valid BOTH sides — task itself times out (hard/long), inconclusive.
+MECHANISM: the mem hints (advisory/gov/tech method) are mismatched to council task types (votes/upcoming/contacts); injected into a 4B model they distract (worse output) and inflate latency (timeout). So the mem encodes TASK-SPECIFIC method, NOT transferable meeting-analysis skill — consistent with H-E (in-distribution signal doesn't generalize).
+NEXT: council2 rerun (clean votes/upcoming) → complete held-out picture; then in-distribution test (does mem help on the 3 trained tasks at all?) as the user's fallback.
