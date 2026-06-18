@@ -281,3 +281,26 @@ WHEN to use memory), NOT raw gradient magnitude.** Giving the policy a choice ov
 instance-level skill the committee rewards and that a static forced hint cannot teach — and that's what
 lets RL carve out space the pure mem0 harness doesn't already occupy. This is the constructive answer to
 "how to do RL on the mem0 harness to improve": init from base + POLICY-GATED memory (not forced).
+
+## gated on-policy iteration r1→r2→r3 (2026-06-18): tech advantage is directionally robust but magnitude-noisy
+Iterated the winning gated recipe on-policy (continue-train: gated_r1→r2→r3; r2/r3 dropped advisory after
+it went 4/4 all-timeout on-policy — advisory is too context-fragile for iteration; r2 recovered on the 6
+healthy groups). committee head-to-head vs base+mem each round:
+| dim | r1 | r2 | r3 |
+|---|---|---|---|
+| tech | WIN 7:1 (p.070) | WIN 8:1 (p.039) | TIE 5:3 (p.727) |
+| gov  | TIE 2:3:4 | LOSS 1:7 (p.070) | TIE 4:3 |
+| advisory | TIE | TIE | TIE |
+**Interpretation:**
+- **tech is lora-favored in ALL 3 rounds (7:1 / 8:1 / 5:3 — always >50% gated).** The direction is robust
+  (the constructive win is real); but per-round SIGNIFICANCE wobbles (2/3 cross p<.10, r3 washes to tie).
+  On-policy iteration does NOT monotonically grow it — the magnitude is dominated by 9-pair sampling noise.
+- **gov "regression" at r2 (base 7:1) was NOISE — r3 recovered to tie.** So the feared tech-for-gov
+  specialization tradeoff did NOT hold up; no data/reward fix needed for it. gov just oscillates (low
+  variance ≈0.06 → noisy verdicts).
+- advisory tie throughout (ceiling, and not trained in r2/r3).
+**Takeaways:** (1) the gated tech advantage is real + directional but modest and sample-noisy — only large,
+REPRODUCED margins are trustworthy (reaffirms the project-wide caveat). (2) best single checkpoint = gated_r1
+(significant tech win + no gov regression + cleanest). (3) iteration doesn't amplify the gain here — one good
+cold-start round captures it. For a robust magnitude estimate you'd need more eval pairs (bigger N) or a real
+held-out judge (4th model), not more training rounds.
