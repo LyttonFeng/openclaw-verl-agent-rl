@@ -323,3 +323,15 @@ Trained he_r1: cold-start from base + gated mem + reward = 0.5·key-correctness 
 METHOD NOTE: judge stability measured — committee members deepseek-chat & qwen3-max std=0.000, minimax ~0.02
 (all stable); the noisy judge was only the eval's hybrid llm component (deepseek-v4-flash). Rule grader has
 false-negatives on present-but-differently-phrased content (criterion flips run-to-run). So trust committee.
+
+## CONFOUND found in H-E (2026-06-18): the injected mem was MISMATCHED to the task
+The mem used for H-E rollouts was the FROZEN Val3 collection (6 hints: 2 advisory, 2 gov, 2 action-item).
+Semantic retrieval (top-3) pulled mostly gov/advisory hints ("Separate speakers", "Select notable quotes",
+"substantiate stakeholders") into the action-items H-E prompts — the relevant action-item hint appeared only
+~1/3 of the time. So he_r1's "gated mem" was largely irrelevant noise — a real confound in the no-transfer result.
+FIX (red-line-safe): distilled 8 GENERIC action-item method hints from he_r1 high-key deliverables
+(deepseek-chat, scrub names/dates/answers, no trap-specific solutions; human-reviewed — #4 "flag cancelled
+items" & #6 "hard vs aspirational deadlines" borderline-but-generic). Stored in a NEW collection
+`meeting_hints_he` (~/mem0_hints_he); Val3 collection left FROZEN (history comparable). New retrieval returns
+action-item hints only — mismatch resolved. Re-running base+new-mem baseline on 6 held-out H-E tasks now;
+next: re-run an H-E round (committee-only and/or key-blend) on the correctly-matched mem.
