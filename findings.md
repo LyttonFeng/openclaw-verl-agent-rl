@@ -355,3 +355,21 @@ The generic action-item hints ("listen for owners/deadlines", "group by topic") 
 so they add no non-obvious knowledge on Val3-tech. This kills the synthetic-data-flywheel direction for Val3 and
 sharpens the paper's core claim: mem-as-harness ≈ RL *because both are vehicles for in-distribution signal*;
 neither manufactures capability from out-of-distribution synthetic data.
+
+## PROTOCOL (locked 2026-06-19, before results): clean mem-usefulness test on HELD-OUT Tampa
+Context: collaborator delivered two validated datasets (committee-only score baked in, K=8/task, spread OK):
+  - in-distribution: /root/val3_data_agent/graded_24.jsonl (the 3 Val3 tasks themselves)
+  - HELD-OUT generalization: /root/val3_holdout/graded_24.jsonl = Val5 Tampa city-council tasks
+    (council_votes / council_upcoming / council_contact_info) — DIFFERENT meetings AND different task types.
+Resolves the earlier circularity worry: held-out lets us tell "mem = transferable method" from "mem = memorize 3 tasks".
+Mem under test: meeting_hints_val3merged (9 generic per-task how-to hints distilled from the merged training
+rollouts; red-line clean: no entities/answers; old Val3 mem frozen).
+BACKEND: tf_shim (transformers) — NOT vLLM (vLLM non-think template + qwen3_coder sampling are not comparable to
+the historical chain; user-mandated). Reconstructed the held-out tasks JSON from data/train/tasks/council_*.md
+(no task-JSON existed) -> council_3_{nomem,mem}.json; source transcript verified.
+PREDICTION / DECISION RULE:
+  - PRIMARY: committee pairwise base vs base+mem on held-out council (matched, temp 0.3, n=4, tf_shim).
+    If base+mem WINS held-out (committee lean + sign-test) -> mem encodes TRANSFERABLE method (clean positive).
+    If TIE/base-lean -> mem doesn't generalize; FALL BACK to in-distribution (val3 3 tasks, prepared).
+  - If mem helps anywhere -> launch gated RL+mem (cold-start, the tech-7:1 recipe).
+Status: held-out rollout RUNNING via tf_shim.
