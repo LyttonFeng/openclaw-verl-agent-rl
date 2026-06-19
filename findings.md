@@ -446,3 +446,22 @@ PREDICTION: captree-gated RL beats base (committee pairwise) on >=1 task per rou
 r1->r2->r3; timeouts in training rollouts stay low (captree effort/termination hints).
 EVAL: per-round committee pairwise vs base (and vs base+mem); plus held-out council check on the best ckpt.
 Status: r1 cold-start RUNNING (tf_shim).
+
+## RESULT (2026-06-19): captree-gated committee-only RL (r1) REGRESSED all 3 Val3 tasks
+r1 = cold-start base + captree gated mem, committee-only (AUTO_W=0), 7 healthy groups, tf_shim, K=4, temp 0.7.
+Eval = r1+captree-mem vs base+captree-mem (committee pairwise, tf_shim temp 0.3, matched):
+- advisory: r1 0/4 valid deliverables (vs base+mem 3/4) -> REGRESSION (no-deliverable)
+- gov:      r1 0/4 valid (vs base+mem 4/4) -> REGRESSION (no-deliverable)
+- tech:     base+mem 8 / r1 2 / tie 2 (sign-p=0.109) -> base+mem BEATS r1 (even the target task regressed)
+MECHANISM: committee-only reward on this set rewarded longer/more-detailed output -> r1 learned to over-produce
+-> long tasks (advisory/gov) overrun the budget and emit NO deliverable; tech outputs also got worse. The
+captree mem's "stop early / emit deliverable" hints did NOT survive RL — RL broke deliverable_emission, the very
+capability the mem targeted. (Independently corroborated: advisory went all-dead at r2 with the r1 policy.)
+CONTRAST with the proven gated_r1 (tech 7:1): different mem (captree process vs the original content mem) +
+committee-only reward interacted badly here. Swapping the mem under the same recipe did NOT reproduce the win;
+it regressed.
+DECISION: r1 does NOT clear the bar (regressed all 3 tasks). Per the user's rule, r2/r3 NOT continued (chain
+stopped). captree-gated RL with this reward is a NEGATIVE result.
+RELIABILITY NOTE: this round cost many tf_shim failures (NASA-ledger timeout, LORA_ADAPTER env bug, advisory
+all-dead at r2, a 32-min hung LoRA shim) — tf_shim is a slow/fragile rollout backend; most wall-time went to
+harness reliability, not science.
