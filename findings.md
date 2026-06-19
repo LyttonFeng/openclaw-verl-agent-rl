@@ -410,3 +410,22 @@ This is the third independent confirmation of the project's core lesson: signal 
 mem) does not transfer; and here, even in-distribution, generic-how-to mem adds no reliable lift over base.
 WHAT COULD CHANGE IT: a shorter/more-targeted mem (cut latency), or larger-N eval on tech (the only weak
 mem-lean, 6:4) to see if a small real effect survives. Neither is a strong enough prior to spend RL on now.
+
+## RESULT (2026-06-19): capability-tree mem — fixes the harm, but still TIE in-distribution
+After diagnosing the prior mem's flaw (it targeted output_content_correctness = fix_lever WEIGHTS, the one
+capability mem CANNOT touch), rebuilt the mem from capability_tree_v2_clean.json: 4 process hints targeting the
+4 fix_lever=memory agentic capabilities (deliverable_emission 0.819, effort_calibration, tool_error_recovery,
+search_termination). Pure process, red-line trivially clean.
+IN-DIST committee pairwise (base vs base+captree-mem, tf_shim MULT6):
+- advisory: base 4 / mem 2 / tie 3 (p=.69) — TIE (base-lean)
+- gov:      base 0 / mem 4 / tie 4 (p=.125) — TIE but MEM-LEAN (never lost a pair; closest-to-significant mem
+  signal in the project) AND 0 timeouts (content-mem had gov 3/4 timeout)
+- tech:     base 4 / mem 5 / tie 0 (p=1.0) — TIE (mem-lean 5:4)
+TIMEOUT signal (the falsifiable prediction): captree mem ~1 timeout total vs content-mem's many (gov 3/4,
+held-out upcoming 4/4). CONFIRMED — effort/termination/deliverable hints cut the overwork.
+INTERPRETATION: capability-tree direction is RIGHT — it turned the content-mem's "negative/timeout" into
+"neutral-to-mildly-positive" (gov 0:4). But no SIGNIFICANT in-dist win, because base already does the 3 Val3
+tasks competently -> mem's value (failure-rescue) has little headroom in-distribution. Per the user's rule
+(RL+mem only if base+mem helps), in-dist still does not clear the bar.
+NEXT (proposed, awaiting go): test captree mem on HELD-OUT council (where base fails hard — 44-turn no-deliverable
+timeouts) — that's where failure-rescue mem should bite. Baseline to beat: content-mem there was base 9:1 (hurt).
