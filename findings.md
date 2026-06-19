@@ -392,3 +392,21 @@ AGGREGATE across decisive pairs: base 13 / mem 2. Mem wins NO held-out task.
 neutral-to-harmful (distracts the 4B model + inflates latency -> timeouts). Confirms the H-E lesson at the mem
 level: in-distribution-derived signal (RL or mem) does not transfer. Pending: in-distribution test (does the mem
 help on the 3 trained tasks at all?) -> decides whether gated RL+mem is even worth launching.
+
+## CONCLUSION (2026-06-19, overnight): the val3merged mem is NOT effective -> RL+mem NOT launched
+Mem under test = meeting_hints_val3merged (9 generic per-task how-to hints distilled from the merged training
+rollouts; red-line clean). Backend tf_shim (NOT vLLM). Committee pairwise, matched temp 0.3.
+- IN-DISTRIBUTION (the 3 trained Val3 tasks): all TIE. advisory base 6/mem 3 (p=.51), tech mem 6/base 4
+  (p=.75, weak mem-lean), gov tie (sparse, mem timed out 3/4). No significant gain anywhere.
+- HELD-OUT (Tampa council, different meetings AND task types): mem HURTS. base 13 / mem 2 across decisive
+  pairs; contact_info base 9/mem 1 (p=.021 SIGNIFICANT); upcoming base-lean; votes intractable.
+- SIDE COST: mem injection inflates rollout latency -> timeouts (held-out upcoming 4/4, in-dist gov 3/4) even
+  at MULT6/1080s. Mem's prompt overhead makes the 4B model overrun the budget on long tasks.
+DECISION: base+mem does NOT clear the "effective" bar (tie in-dist, harmful held-out). Per the user's rule
+(launch RL+mem only if base+mem helps), RL+mem is NOT warranted on this mem. No GPU training launched.
+WHY (mechanism): the mem encodes TASK-SPECIFIC method that (a) the base already largely does on the trained
+tasks (-> tie), and (b) is mismatched/distracting on unseen task types (-> hurts). Plus length->latency cost.
+This is the third independent confirmation of the project's core lesson: signal derived in-distribution (RL OR
+mem) does not transfer; and here, even in-distribution, generic-how-to mem adds no reliable lift over base.
+WHAT COULD CHANGE IT: a shorter/more-targeted mem (cut latency), or larger-N eval on tech (the only weak
+mem-lean, 6:4) to see if a small real effect survives. Neither is a strong enough prior to spend RL on now.
