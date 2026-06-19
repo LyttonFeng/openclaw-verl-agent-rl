@@ -381,3 +381,14 @@ Held-out Tampa council, committee pairwise base vs base+mem (tf_shim, temp 0.3):
 - votes: 1/4 valid BOTH sides — task itself times out (hard/long), inconclusive.
 MECHANISM: the mem hints (advisory/gov/tech method) are mismatched to council task types (votes/upcoming/contacts); injected into a 4B model they distract (worse output) and inflate latency (timeout). So the mem encodes TASK-SPECIFIC method, NOT transferable meeting-analysis skill — consistent with H-E (in-distribution signal doesn't generalize).
 NEXT: council2 rerun (clean votes/upcoming) → complete held-out picture; then in-distribution test (does mem help on the 3 trained tasks at all?) as the user's fallback.
+
+## RESULT (2026-06-19, COMPLETE held-out): mem does NOT transfer — base >= base+mem on all 3 council tasks
+Full Tampa held-out committee pairwise (tf_shim; votes/upcoming re-run at MULT6/1080s):
+- contact_info: base 9 / mem 1 / tie 2  (sign-p=0.021)  -> base SIGNIFICANTLY better
+- upcoming:     base 3 / mem 0 / tie 1  (sign-p=0.25)   -> base-leaning, mem wins 0
+- votes:        base 1 / mem 1          (sparse; base times out 4/4 even at 1080s -> task intractable for 4B here)
+AGGREGATE across decisive pairs: base 13 / mem 2. Mem wins NO held-out task.
+=> The val3-derived generic mem does NOT generalize to unseen task types (votes/upcoming/contacts); it is
+neutral-to-harmful (distracts the 4B model + inflates latency -> timeouts). Confirms the H-E lesson at the mem
+level: in-distribution-derived signal (RL or mem) does not transfer. Pending: in-distribution test (does the mem
+help on the 3 trained tasks at all?) -> decides whether gated RL+mem is even worth launching.
