@@ -429,3 +429,20 @@ tasks competently -> mem's value (failure-rescue) has little headroom in-distrib
 (RL+mem only if base+mem helps), in-dist still does not clear the bar.
 NEXT (proposed, awaiting go): test captree mem on HELD-OUT council (where base fails hard — 44-turn no-deliverable
 timeouts) — that's where failure-rescue mem should bite. Baseline to beat: content-mem there was base 9:1 (hurt).
+
+## PROTOCOL (locked 2026-06-19, before results): 3-round committee-only gated RL with CAPTREE mem
+User decision: launch the proven gated_r1 recipe (the tech-7:1 winner) but swap the content mem for the
+capability-tree mem, on-policy, 3 rounds. Config:
+- Recipe: run_base_round.sh mirror. r1 COLD-START from base; r2/r3 ON-POLICY continue (shim serves prev
+  adapter, train INIT_LORA=prev). committee-only reward (AUTO_W=0, base@0.3 ref). tf_shim+PEFT, K=4, temp 0.7,
+  workers=2, batch=2, MULT 4.0. LR r1=2.5e-5, r2/r3=2.0e-5.
+- Tasks: val3_plus6_captree_gated.json (9 tasks: 3 Val3 + 6 ledger) with the 4 captree process hints injected
+  (gated framing). select_active_tasks drops dead groups at runtime.
+- Mem = meeting_hints_captree (the 4 fix_lever=memory agentic-process hints). NOT the content mem.
+RATIONALE: gated_r1's tech 7:1 win came from POLICY-GATING during RL, not mem-alone quality (which ties). So
+mem-alone tie does not preclude RL+gated-mem working. The captree mem additionally cuts the overwork/timeouts
+that polluted earlier rollouts -> cleaner training signal.
+PREDICTION: captree-gated RL beats base (committee pairwise) on >=1 task per round, direction-robust across
+r1->r2->r3; timeouts in training rollouts stay low (captree effort/termination hints).
+EVAL: per-round committee pairwise vs base (and vs base+mem); plus held-out council check on the best ckpt.
+Status: r1 cold-start RUNNING (tf_shim).
