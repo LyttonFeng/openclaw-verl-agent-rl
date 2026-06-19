@@ -1,0 +1,48 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Mem validation — overnight 2026-06-19</title>
+<style>
+body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:860px;margin:32px auto;padding:0 20px;color:#1a1a1a;line-height:1.5}
+h1{font-size:24px} h2{font-size:18px;margin-top:28px;border-bottom:1px solid #ddd;padding-bottom:4px}
+table{border-collapse:collapse;width:100%;margin:12px 0} th,td{border:1px solid #ccc;padding:7px 10px;text-align:left;font-size:14px}
+th{background:#f4f4f4} .bad{color:#b00;font-weight:600} .neu{color:#a60;font-weight:600} .ok{color:#070;font-weight:600}
+.box{background:#f7f9fc;border-left:4px solid #36c;padding:10px 14px;margin:14px 0} code{background:#eee;padding:1px 4px;border-radius:3px;font-size:13px}
+.small{color:#666;font-size:13px}
+</style></head><body>
+<h1>Does the mem help base on Val3? — overnight verdict</h1>
+<p class="small">qwen3.5-4b · tf_shim backend (not vLLM) · committee pairwise (3 heterogeneous judges, order-consistency + deliberation + sign-test) · temp 0.3 · 2026-06-19</p>
+
+<div class="box"><b>Bottom line:</b> the mem (<code>meeting_hints_val3merged</code>, 9 generic per-task how-to hints distilled from the merged training rollouts) is <b>NOT effective</b>. It's a <b>tie</b> on the trained tasks and <b>actively hurts</b> on held-out tasks, and it inflates latency into timeouts. Per your rule (launch RL+mem only if base+mem helps), <b>RL+mem was NOT launched</b>. No GPU training spent.</div>
+
+<h2>The two-axis result</h2>
+<table>
+<tr><th>Axis</th><th>Tasks</th><th>Committee pairwise (base vs base+mem)</th><th>Verdict</th></tr>
+<tr><td><b>In-distribution</b><br><span class="small">the 3 trained Val3 tasks</span></td>
+<td>advisory / gov / tech</td>
+<td>advisory base 6 / mem 3 (p=.51) · tech mem 6 / base 4 (p=.75) · gov tie (sparse)</td>
+<td class="neu">TIE — no significant gain anywhere</td></tr>
+<tr><td><b>Held-out</b><br><span class="small">Tampa council — different meetings AND task types</span></td>
+<td>votes / upcoming / contact_info</td>
+<td>contact_info base 9 / mem 1 (<b>p=.021</b>) · upcoming base 3 / mem 0 · votes intractable<br>aggregate <b>base 13 / mem 2</b></td>
+<td class="bad">mem HURTS — wins no task</td></tr>
+</table>
+
+<h2>Mechanism (why)</h2>
+<ul>
+<li><b>In-dist tie:</b> the generic how-to ("identify owners+deadlines", "map stakeholder influence", "group by topic") is method the base already largely does on these tasks → no lift.</li>
+<li><b>Held-out harm:</b> those advisory/gov/tech hints are mismatched/distracting on council votes/upcoming/contacts; injected into a 4B model they degrade output.</li>
+<li><b>Latency cost:</b> the mem's prompt overhead makes rollouts overrun the time budget → timeouts (held-out upcoming 4/4, in-dist gov 3/4) even at a 6× (1080s) budget.</li>
+</ul>
+
+<h2>Where this fits the project story</h2>
+<p>Third independent confirmation of the core lesson: <b>signal derived in-distribution does not transfer</b> — shown earlier for RL (H-E synthetic → no Val3 transfer) and mem-from-synthetic; now also for mem-from-real-training-data → held-out. And here, even <i>in</i>-distribution, generic-how-to mem adds no reliable lift over base.</p>
+
+<h2>What I did NOT do (and why)</h2>
+<p>Did not launch gated RL+mem — the precondition (base+mem helps) is not met. Did not use vLLM for any measurement (your instruction; all rollouts on tf_shim to stay comparable to the historical chain). Held-out tasks were reconstructed from <code>data/train/tasks/council_*.md</code> since no task-JSON existed.</p>
+
+<h2>Options if you want to push further</h2>
+<ul>
+<li><b>Shorter/targeted mem</b> — cut the latency cost; test if a 1-2 hint mem avoids timeouts and still ties/helps.</li>
+<li><b>Larger-N on tech</b> — tech was the only weak mem-lean (6:4); more samples would show if a small real effect survives.</li>
+<li><b>Accept the negative</b> — fold into the paper as the mem-transfer ablation (strengthens "in-distribution is the lever" claim).</li>
+</ul>
+<p class="small">Full detail + numbers in <code>findings.md</code> (committed). Raw deliverables in <code>/tmp/{indist,council,council2}_{nomem,mem}.jsonl</code> on mac; rollouts under <code>/tmp/nma_round1/memtest_*</code> on pod.</p>
+</body></html>
