@@ -1,0 +1,8 @@
+# PinchBench / training — sourced by rl/train/run_reinforce_lora.sh, runpod_pull_and_train.sh, etc.
+# chmod 600 recommended
+export DASHSCOPE_API_KEY=<REDACTED>
+export OPENCLAW_HOST=<REDACTED_SET_YOUR_OWN>
+export OPENCLAW_PORT=<REDACTED_SET_YOUR_OWN>
+export OPENCLAW_USER=<REDACTED_SET_YOUR_OWN>
+export DEEPSEEK_API_KEY=<REDACTED>
+export MINIMAX_API_KEY=<REDACTED>

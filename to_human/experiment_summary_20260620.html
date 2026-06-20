@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Committee-Reward RL + mem0 (qwen3.5-4b) — Experiment Summary & Problems</title>
+<style>
+body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:920px;margin:30px auto;padding:0 20px;color:#1a1a1a;line-height:1.55}
+h1{font-size:25px} h2{font-size:19px;margin-top:30px;border-bottom:2px solid #36c;padding-bottom:4px} h3{font-size:16px;margin-top:20px}
+table{border-collapse:collapse;width:100%;margin:12px 0} th,td{border:1px solid #ccc;padding:6px 9px;text-align:left;font-size:13.5px} th{background:#f4f4f4}
+.ok{color:#070;font-weight:600}.bad{color:#b00;font-weight:600}.neu{color:#a60;font-weight:600}
+.box{background:#f7f9fc;border-left:4px solid #36c;padding:10px 14px;margin:14px 0}.warn{background:#fff7f0;border-left:4px solid #d80}
+code{background:#eee;padding:1px 4px;border-radius:3px;font-size:12.5px}.small{color:#666;font-size:12.5px}
+</style></head><body>
+<h1>Committee-Reward Agentic RL + mem0 — qwen3.5-4b meeting analysis</h1>
+<p class="small">Summary of progress &amp; problems · 2026-06-20 · benchmark = Val3 (advisory_stakeholders / gov_speaker_summary / tech_action_items) · eval = heterogeneous committee pairwise (deepseek-chat / qwen3-max / MiniMax-M3, order-consistency + deliberation + sign-test) · inference = transformers shim (tf_shim_batched), NOT vLLM for adapters.</p>
+
+<div class="box"><b>One-paragraph state.</b> Core story is solid and paper-ready: a stable heterogeneous <b>committee reward</b> (RULER-style relative) + the finding that <b>mem0-as-harness ≈ RL</b> as a vehicle for in-distribution signal, with <b>policy-gated RL</b> giving a directional tech win. This session pushed three new questions and got mostly clean negatives that sharpen the story: synthetic data doesn't transfer; mem helps only when Val3-grounded + well-curated; and a committee-only RL round on a swapped mem regressed.</p></div>
+
+<h2>1. Established core findings (paper-ready)</h2>
+<ul>
+<li><b>Committee reward works &amp; is stable</b>: 3 heterogeneous judges, pairwise + order-consistency + deliberation + sign-test. Judge stability measured: deepseek-chat &amp; qwen3-max std=0.000, minimax ~0.02.</li>
+<li><b>Automated-grader blindness</b>: deterministic rule graders have phrasing-sensitive false-negatives + are blind to verbosity/padding; the committee catches what automated metrics miss.</li>
+<li><b>mem0-as-harness ≈ RL</b>: injecting generic how-to hints (zero training) gives a directional lift comparable to RL on the dimensions RL can move.</li>
+<li><b>policy-gated RL</b>: cold-start base + policy-gated mem gave a directional tech win (historically ~7:1) via gating, not gradient. Magnitude is small &amp; sample-noisy throughout (the project-wide caveat).</li>
+</ul>
+
+<h2>2. This session — new experiments &amp; results</h2>
+
+<h3>2a. Synthetic data (H-E) does NOT transfer to Val3 — decisive negative</h3>
+<p>Built a generator for "completable + instance-specific" hard action-item tasks (implicit owners, retraction, revised deadlines). Despite the <b>strongest training gradient in the project</b> (within-group key-score std 0.172), neither RL nor mem distilled from H-E transferred to Val3:</p>
+<ul><li>RL on synthetic H-E → Val3 committee tie/base-lean (no transfer).</li>
+<li>Mem distilled from synthetic H-E → base+mem ties pure base on tech (dead even), hurts held-out.</li></ul>
+<p><b>Conclusion:</b> in-distribution signal moves Val3; out-of-distribution synthetic does not — via either RL or memory.</p>
+
+<h3>2b. mem source &amp; curation — the resolution (each base+mem vs PURE base; mem-wins:base-wins)</h3>
+<table>
+<tr><th>mem</th><th>advisory</th><th>gov</th><th>tech</th><th>read</th></tr>
+<tr><td><b>OLD curated (Val3)</b></td><td class="ok">8:2 (p=.11)</td><td class="ok">4:1</td><td>6:6</td><td>best — helps adv+gov, ties tech; reproduces historical lean</td></tr>
+<tr><td>Val3-grounded (new, diff-from-ref)</td><td class="ok">7:2</td><td class="bad">1:5</td><td class="bad">3:5</td><td>helps adv only; gov hint over-specified &amp; backfired</td></tr>
+<tr><td>captree (OOD, pinchbench-derived)</td><td class="bad">2:4</td><td>4:0*</td><td>5:4</td><td>lost the advisory benefit (cross-domain doesn't transfer)</td></tr>
+</table>
+<p class="small">*captree gov leaned mem but with heavy timeouts. All TIE by strict sign-test (N=9–12); leans are consistent &amp; directional.</p>
+<div class="box"><b>Findings:</b> (1) <b>SOURCE matters</b> — Val3-grounded mems revive the advisory lean that the OOD captree mem lost. (2) <b>mem is real, not useless</b> — the old curated mem reproduces its historical ~7:2 advisory lean (8:2) + gov 4:1 under matched conditions. (3) <b>CURATION also matters</b> — old curated &gt; new diff-grounded; the right non-obvious hint ("separate speakers / notable quotes") beats an over-specified one. Best lever on this substrate = a well-curated Val3-grounded mem (directional adv+gov gain), NOT RL.</div>
+
+<h3>2c. Capability tree reframed the mem lever (then RL broke it)</h3>
+<p>The <code>capability_tree_v2_clean.json</code> (built from qwen4b-vs-pro trajectory diff + committee gap) showed mem can only address 4 <code>fix_lever=memory</code> agentic-process capabilities (deliverable_emission [weakness 0.819], effort_calibration, tool_error_recovery, search_termination); <code>output_content_correctness</code> is <code>fix_lever=weights</code> (RL-only). The earlier content mem failed partly because it aimed at the weights lever. The captree process mem cut timeouts (mechanical win) but did not give a significant in-dist quality win.</p>
+<p><b>captree-gated committee-only RL (r1) REGRESSED all 3 tasks</b>: advisory/gov produced 0 valid deliverables (no-deliverable), tech base+mem beat r1 8:2. Mechanism: committee reward → verbosity/overwork → broke deliverable emission on long tasks. Swapping the mem into the proven gated recipe did NOT reproduce the tech-7:1 win — the win is a fragile mem×reward×task combination.</p>
+
+<h2>3. Problems encountered</h2>
+<div class="warn">
+<ul>
+<li><b>tf_shim is slow &amp; fragile</b> (the dominant time sink). Transformers backend (no paged-attention/continuous-batching) is ~10× slower than vLLM; long agentic rollouts (e.g. 206KB Tampa transcript, 44 tool-call turns) exceed the wall-clock budget. Most wall-time this session went to harness reliability, not science.</li>
+<li><b>Timeouts as a confound</b>: long tasks (council_votes, NASA-ledger) time out even at MULT 6 (1080s) → empty deliverables that look like "mem hurts" but are backend artifacts. Always separate timeout from quality. Healthcheck (drop all-dead groups) is essential before training.</li>
+<li><b>Backend comparability</b>: vLLM (non-think template + qwen3_coder parser) ≠ tf_shim output distribution → must NOT mix backends across a comparison. All measurements kept on tf_shim.</li>
+<li><b>Chain bugs</b> (fixed): NASA-ledger groups all-timeout → drop to 7 healthy groups; <code>${INIT:+LORA_ADAPTER=$INIT}</code> expanded to a literal command (use explicit <code>export LORA_ADAPTER</code>); <code>local RUN=.. ROLL=$RUN/..</code> on one line is unbound under <code>set -u</code>; advisory goes all-dead at r2 under the r1 policy → drop advisory (matches the original recover_gated_r2).</li>
+<li><b>mem circularity</b>: a mem distilled by "summarize good base outputs" feeds base its own competence → no gain. Extract from the <b>gap</b> (strong-ref vs base, or committee critique), not from success.</li>
+<li><b>Significance vs direction</b>: at N=9–12 pairwise, almost everything is "TIE" by sign-test; only consistent, reproduced leans are trustworthy. Magnitudes are small project-wide.</li>
+</ul></div>
+
+<h2>4. Bottom line &amp; next</h2>
+<p>On these (near-saturated for the 4B base) Val3 tasks, the reliable lever is a <b>well-curated, Val3-grounded mem</b> (directional adv+gov gain) — not RL, which regressed here. The core paper story (committee reward + automated-blindness + mem0≈RL + gated-RL) stands; this session adds strong ablations: <i>mem transfers only with in-distribution grounding + correct curation; synthetic generation doesn't transfer; committee-only RL can break deliverable emission via verbosity.</i> Future work: try harder/under-saturated substrates where base genuinely fails (mem/RL have headroom there), and a reward that penalizes no-deliverable/verbosity.</p>
+<p class="small">Reproduction artifacts under <code>repro/</code>: committee judge (<code>judge/committee_judge.py</code>, <code>judge/lib.py</code>), training reward (<code>scripts/tf_agentic/ruler_reward.py</code>, <code>inject_committee_reward.py</code>), transformers backend (<code>scripts/tf_agentic/tf_shim_batched.py</code>), serving (<code>scripts/start_qwen35_vllm.sh</code>), RL round recipe (<code>recipe/run_base_round.sh</code>), env (<code>env/pip_freeze.txt</code>, <code>env/pinchbench_env.template</code>). Full numeric detail in <code>findings.md</code>.</p>
+</body></html>
