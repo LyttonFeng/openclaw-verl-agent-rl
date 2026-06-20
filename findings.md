@@ -465,3 +465,23 @@ stopped). captree-gated RL with this reward is a NEGATIVE result.
 RELIABILITY NOTE: this round cost many tf_shim failures (NASA-ledger timeout, LORA_ADAPTER env bug, advisory
 all-dead at r2, a 32-min hung LoRA shim) — tf_shim is a slow/fragile rollout backend; most wall-time went to
 harness reliability, not science.
+
+## RESOLUTION (2026-06-20): mem works, but needs Val3-GROUNDING + good curation (source AND curation both matter)
+Tested 3 mems, each base+mem vs PURE base (committee pairwise, tf_shim temp 0.3, matched). Numbers = mem-wins:base-wins.
+                 advisory      gov        tech
+  OLD curated    8:2 (p=.11)   4:1        6:6      <- best; helps adv+gov, ties tech
+  Val3-grounded  7:2           1:5        3:5      <- helps adv only; gov hint backfired
+  captree (OOD)  2:4 (base)    4:0*       5:4      <- advisory base-lean (OOD lost the advisory benefit)
+  (*captree gov leaned mem but with heavy timeouts; OOD overall did not revive advisory)
+FINDINGS:
+1. SOURCE matters (user's hypothesis CONFIRMED): both Val3-grounded mems revive the advisory lean (8:2, 7:2);
+   the OOD pinchbench-derived captree mem did NOT (advisory base-lean 2:4). Cross-domain mem doesn't transfer.
+2. mem DOES work — NOT "useless": the OLD curated mem reproduces its historical ~7:2 advisory lean (8:2 here)
+   AND leans positive on gov (4:1) under matched conditions. The historical signal is REAL, not an artifact.
+3. CURATION also matters: old curated > new diff-grounded. The grounded gov hint ("structure by speaker +
+   abstract recommendations + flag data-quality") over-specified and HURT gov (1:5). Good extraction needs the
+   right non-obvious hint (old gov: "separate speakers / notable quotes"), not just Val3 source.
+4. Significance caveat: all TIE by strict sign-test (N=9-12); but leans are consistent and the old-mem lean
+   reproduces — directional-real, magnitude-small (the project-wide pattern).
+CONTRAST with RL: captree-gated RL (r1) REGRESSED all 3 (committee reward -> verbosity -> broke deliverable).
+So on this substrate: the best lever is a well-curated Val3-grounded mem (directional adv+gov gain), NOT RL.
